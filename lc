@@ -4,11 +4,17 @@ import argparse, os, subprocess, sys
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE/'bootstrap'))
+
+if len(sys.argv) > 1 and sys.argv[1] == 'analyze':
+    from analyze import main as analyze_main
+    raise SystemExit(analyze_main(sys.argv[2:]))
+
 from core import LangError
 from cli_common import VERSION, emit_lang_error
 from native_compile import build_user, compile_native
 
-p=argparse.ArgumentParser(prog='./lc',description='L bootstrap compiler — checked L -> native executable')
+p=argparse.ArgumentParser(prog='./lc',description='L bootstrap compiler — checked L -> native executable',
+                          epilog='source analysis: ./lc analyze SOURCE [options]')
 p.add_argument('--version',action='version',version=f'lc {VERSION} (Python-bootstrap frontend)')
 p.add_argument('source', nargs='?')
 p.add_argument('-o','--output')
