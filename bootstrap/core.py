@@ -649,9 +649,8 @@ class Checker:
     def contains_break(self,ss):
         for s in ss:
             if s.kind=='break':return True
-            if s.kind in ('if','while','for','forin'):
-                for x in s.a:
-                    if isinstance(x,tuple) and x and all(isinstance(y,N) for y in x) and self.contains_break(x):return True
+            if s.kind=='if':
+                if self.contains_break(s.a[1]) or self.contains_break(s.a[2]):return True
             if s.kind=='match':
                 if any(self.contains_break(b) for _,b in s.a[1]):return True
         return False
@@ -1057,17 +1056,17 @@ class Checker:
             if info.gps:return None
         et=name_ty(en,[m[g] for g in info.gps]); return et,tuple(substitute(x,m) for x in pts),m
     def anon_type(self,e,expected):
-        ps,rt,b=e.a; old_scopes=self.scopes; old_ret=self.ret; old_fn=self.current_fn; old_reserved=self.source_reserved
+        ps,rt,b=e.a; old_scopes=self.scopes; old_ret=self.ret; old_fn=self.current_fn; old_reserved=self.source_reserved; old_loop=self.loop
         # no runtime capture, and no shadowing of enclosing runtime names either.
         outer_names={n for scope in old_scopes for n in scope}
         self.source_reserved=set(old_reserved)|outer_names
-        self.scopes=[];self.push(); self.ret=self.resolve_ty(rt)
+        self.scopes=[];self.push(); self.ret=self.resolve_ty(rt); self.loop=0
         rps=[]
         for n,t in ps:
             t=self.resolve_ty(t);rps.append(t);self.bind(n,t,e)
         self.block(b,False)
         if self.ret!=UNIT and not self.block_returns(b):self.err('anonymous function may fall off end',e)
-        self.pop();self.scopes=old_scopes;self.ret=old_ret;self.current_fn=old_fn;self.source_reserved=old_reserved
+        self.pop();self.scopes=old_scopes;self.ret=old_ret;self.current_fn=old_fn;self.source_reserved=old_reserved;self.loop=old_loop
         t=fnty(rps,self.resolve_ty(rt)); self.anon_types[id(e)]=t;return t
     def fieldless_enum(self,t):
         if t.kind!='name' or len(t.a[0])!=1:return False

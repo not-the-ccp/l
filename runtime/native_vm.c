@@ -218,7 +218,7 @@ static LValue scalar_bin(LVM*vm,int op,LValue a,LValue b,int t){(void)vm;
         switch(op){case B_EQ:return v_bool(x==y);case B_NE:return v_bool(x!=y);case B_LT:return v_bool(sg?sx<sy:x<y);case B_LE:return v_bool(sg?sx<=sy:x<=y);case B_GT:return v_bool(sg?sx>sy:x>y);case B_GE:return v_bool(sg?sx>=sy:x>=y);
         case B_BAND:return v_int(mask_width(x&y,w));case B_BOR:return v_int(mask_width(x|y,w));case B_BXOR:return v_int(mask_width(x^y,w));case B_ADD:return v_int(mask_width(x+y,w));case B_SUB:return v_int(mask_width(x-y,w));case B_MUL:return v_int(mask_width(x*y,w));
         case B_SHL:if(b.as.u>=(uint64_t)w)die("invalid shift count");return v_int(mask_width(x<<b.as.u,w));
-        case B_SHR:if(b.as.u>=(uint64_t)w)die("invalid shift count");if(sg){int64_t z=sx>>b.as.u;return v_int(mask_width((uint64_t)z,w));}return v_int(x>>b.as.u);
+        case B_SHR:if(b.as.u>=(uint64_t)w)die("invalid shift count");if(sg&&b.as.u&&(x&(UINT64_C(1)<<(w-1)))){uint64_t z=(x>>b.as.u)|((~UINT64_C(0))<<(w-(int)b.as.u));return v_int(mask_width(z,w));}return v_int(x>>b.as.u);
         case B_DIV:if(y==0)die("division by zero");if(sg){__int128 q=(__int128)sx/(__int128)sy;return v_int(mask_width((uint64_t)q,w));}return v_int(x/y);
         case B_MOD:if(y==0)die("remainder by zero");if(sg){__int128 q=(__int128)sx/(__int128)sy;__int128 r=(__int128)sx-q*(__int128)sy;return v_int(mask_width((uint64_t)r,w));}return v_int(x%y);
         }}

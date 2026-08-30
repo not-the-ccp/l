@@ -4,33 +4,70 @@
 Deliberately provides no portable library modules and no host modules.
 """
 from __future__ import annotations
+import os
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "bootstrap"))
 
-from core import Program, LangError, TrapSig, UNITV, UnitVal
+from bytecode import BCCompiler, BCVM
+from core import Program, LangError, TrapSig, UNITV, UnitVal, internal_name
+from native_compile import compile_native
 
 PASS = 0
 FAIL = 0
 
 
-def run_source(src: str, fn: str = "main", module=("test",)):
-    p = Program({module: src}, host_modules={})
-    return p.run(module, fn)
+def value_matches(got, expected):
+    if isinstance(expected, str) and expected == "unit":
+        return got is UNITV or isinstance(got, UnitVal)
+    return got == expected
+
+
+def native_status(expected):
+    if isinstance(expected, str) and expected == "unit":
+        return 0
+    if isinstance(expected, bool):
+        return 0 if expected else 1
+    if isinstance(expected, int):
+        return expected & 255
+    raise AssertionError(f"native conformance cannot observe {expected!r} through process status")
+
+
+def run_backend(p: Program, module, fn: str, backend: str):
+    entry = internal_name(tuple(module), fn)
+    if backend == "tree":
+        return p.run(module, fn)
+    if backend == "bytecode":
+        return BCVM(BCCompiler(p.checked), p.host_modules).run(entry)
+    raise AssertionError(f"unknown in-process backend {backend}")
+
+
+def run_native(p: Program, module, fn: str):
+    entry = internal_name(tuple(module), fn)
+    with tempfile.TemporaryDirectory(prefix="l-conformance-") as td:
+        out = Path(td) / "program"
+        compile_native(p, entry, out, cc=os.environ.get("CC", "cc"))
+        proc = subprocess.run([str(out)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        return proc.returncode, proc.stderr
 
 
 def ok(name, src, expected):
     global PASS, FAIL
     try:
-        got = run_source(src)
-        if isinstance(expected, str) and expected == "unit":
-            match = got is UNITV or isinstance(got, UnitVal)
-        else:
-            match = got == expected
-        if not match:
-            raise AssertionError(f"expected {expected!r}, got {got!r}")
+        module = ("test",)
+        p = Program({module: src}, host_modules={})
+        for backend in ("tree", "bytecode"):
+            got = run_backend(p, module, "main", backend)
+            if not value_matches(got, expected):
+                raise AssertionError(f"{backend}: expected {expected!r}, got {got!r}")
+        status, stderr = run_native(p, module, "main")
+        want = native_status(expected)
+        if status != want:
+            raise AssertionError(f"native: expected status {want}, got {status}: {stderr.strip()}")
         print(f"PASS {name}")
         PASS += 1
     except Exception as e:
@@ -58,9 +95,17 @@ def compile_error(name, src, contains=None):
 def trap(name, src):
     global PASS, FAIL
     try:
-        run_source(src)
-        raise AssertionError("expected trap")
-    except TrapSig:
+        module = ("test",)
+        p = Program({module: src}, host_modules={})
+        for backend in ("tree", "bytecode"):
+            try:
+                run_backend(p, module, "main", backend)
+                raise AssertionError(f"{backend}: expected trap")
+            except TrapSig:
+                pass
+        status, stderr = run_native(p, module, "main")
+        if status != 70:
+            raise AssertionError(f"native: expected runtime-error status 70, got {status}: {stderr.strip()}")
         print(f"PASS {name}")
         PASS += 1
     except Exception as e:
@@ -74,9 +119,14 @@ def module_case(name, sources, module, fn, expected, should_error=False):
         p = Program(sources, host_modules={})
         if should_error:
             raise AssertionError("expected module/link error")
-        got = p.run(module, fn)
-        if got != expected:
-            raise AssertionError(f"expected {expected!r}, got {got!r}")
+        for backend in ("tree", "bytecode"):
+            got = run_backend(p, module, fn, backend)
+            if not value_matches(got, expected):
+                raise AssertionError(f"{backend}: expected {expected!r}, got {got!r}")
+        status, stderr = run_native(p, module, fn)
+        want = native_status(expected)
+        if status != want:
+            raise AssertionError(f"native: expected status {want}, got {status}: {stderr.strip()}")
         print(f"PASS {name}")
         PASS += 1
     except LangError as e:
@@ -94,6 +144,15 @@ def module_case(name, sources, module, fn, expected, should_error=False):
 ok("unit", "fn main() { return; }", "unit")
 ok("integer wrap", "fn main() -> i8 { var x: i8 = 127; x += 1; return x; }", -128)
 ok("signed min division wraps", "fn main() -> i8 { var x: i8 = -128; return x / -1; }", -128)
+ok("signed arithmetic right shift", r'''
+fn main() -> bool {
+    var a: i8 = -2;
+    var b: i16 = -32768;
+    var c: i32 = -2147483648;
+    var d: i64 = -9223372036854775808;
+    return (a >> 1) == -1 && (b >> 8) == -128 && (c >> 31) == -1 && (d >> 63) == -1;
+}
+''', True)
 ok("left-to-right evaluation", r'''
 struct Box { value: i64, }
 fn bump(b: ref Box, result: i64) -> i64 { b.value += 1; return result + b.value * 100; }
@@ -251,6 +310,15 @@ fn main() -> i64 {
 }
 ''', 9)
 
+ok("nested loop break does not escape outer infinite loop", r'''
+fn forever() -> i64 {
+    while (true) {
+        while (true) { break; }
+    }
+}
+fn main() -> i64 { return 0; }
+''', 0)
+
 trap("bounds trap", "fn main() -> i64 { var a: []i64 = [1]; return a[1]; }")
 trap("empty pop trap", "fn main() -> i64 { var a: []i64 = []; return pop(a); }")
 trap("divide zero trap", "fn main() -> i64 { var z: i64 = 0; return 1 / z; }")
@@ -266,6 +334,22 @@ compile_error("optional does not break layout recursion", "struct N { next: ?N, 
 compile_error("capturing anonymous function rejected", r'''
 fn main() { var x: i64 = 3; var f: fn(i64)->i64 = fn(y:i64)->i64 { return x+y; }; }
 ''', "unknown")
+compile_error("anonymous function cannot break enclosing loop", r'''
+fn main() {
+    while (true) {
+        var f: fn() = fn() { break; };
+        break;
+    }
+}
+''', "break outside loop")
+compile_error("anonymous function cannot continue enclosing loop", r'''
+fn main() {
+    while (true) {
+        var f: fn() = fn() { continue; };
+        break;
+    }
+}
+''', "continue outside loop")
 compile_error("expression statements restricted to calls", "fn main() { 1 + 2; }", "call")
 compile_error("comparison chains rejected", "fn main() -> bool { return 1 < 2 < 3; }")
 compile_error("shadowing rejected", "fn f() {} fn main() { var f: i64 = 1; }")
