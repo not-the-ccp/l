@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+import argparse, os, subprocess, sys
+from pathlib import Path
+HERE=Path(__file__).resolve().parent
+sys.path.insert(0,str(HERE/'bootstrap'))
+from core import LangError
+from cli_common import VERSION, emit_lang_error
+from native_compile import build_user, compile_native
+
+p=argparse.ArgumentParser(prog='./lc',description='L bootstrap compiler — checked L -> native executable')
+p.add_argument('--version',action='version',version=f'lc {VERSION} (Python-bootstrap frontend)')
+p.add_argument('source', nargs='?')
+p.add_argument('-o','--output')
+p.add_argument('--root')
+p.add_argument('--emit-c')
+p.add_argument('--check',action='store_true',help='parse, link, and type-check only')
+p.add_argument('--cc',default=os.environ.get('CC','cc'))
+ns=p.parse_args()
+if not ns.source:p.error('source is required')
+src=Path(ns.source).resolve();out=Path(ns.output).resolve() if ns.output else src.with_suffix('')
+try:
+    program,entry=build_user(src,Path(ns.root).resolve() if ns.root else None)
+    if ns.check:
+        print(f'{src}: ok');raise SystemExit(0)
+    compile_native(program,entry,out,Path(ns.emit_c).resolve() if ns.emit_c else None,ns.cc)
+except LangError as e:
+    emit_lang_error(e,src);raise SystemExit(1)
+except subprocess.CalledProcessError as e:
+    print(f'C compiler failed with status {e.returncode}',file=sys.stderr);raise SystemExit(e.returncode)
+print(out)

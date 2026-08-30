@@ -1,0 +1,5 @@
+{
+  "name": "L SDK demo",
+  "enabled": true,
+  "ports": [8080, 8081]
+}

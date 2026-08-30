@@ -1,0 +1,24 @@
+# Native/generated artifacts
+/build/
+*.lbc
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Editors / OS
+*~
+*.swp
+*.swo
+.DS_Store
+
+# Local scratch
+/tmp/
+/scratch/

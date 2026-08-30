@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ ! -x "$HERE/build/json-lsp" ]; then "$HERE/build.sh" "json-lsp" >/dev/null; fi
+exec "$HERE/build/json-lsp" "$@"

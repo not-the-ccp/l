@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ ! -x "$HERE/build/lace" ] || [ "$HERE/tools/lace/lace.l" -nt "$HERE/build/lace" ] || [ "$HERE/runtime/native_vm.c" -nt "$HERE/build/lace" ]; then
+  "$HERE/build.sh" lace >/dev/null
+fi
+# Lace locates adjacent LSP executables via its own executable path, so ensure them too.
+for s in l-lsp json-lsp ini-lsp; do
+  if [ ! -x "$HERE/build/$s" ]; then "$HERE/build.sh" "$s" >/dev/null; fi
+done
+exec "$HERE/build/lace" "$@"

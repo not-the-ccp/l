@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+import argparse, os, subprocess, sys, tempfile
+from pathlib import Path
+HERE=Path(__file__).resolve().parent
+sys.path.insert(0,str(HERE/'bootstrap'))
+from core import LangError
+from cli_common import VERSION, emit_lang_error
+from native_compile import build_user, compile_native
+
+p=argparse.ArgumentParser(prog='./lr',description='L compile-and-run driver')
+p.add_argument('--version',action='version',version=f'lr {VERSION}')
+p.add_argument('source',nargs='?')
+p.add_argument('--root')
+p.add_argument('--cc',default=os.environ.get('CC','cc'))
+p.add_argument('args',nargs=argparse.REMAINDER)
+ns=p.parse_args()
+if not ns.source:p.error('source is required')
+args=ns.args
+if args and args[0]=='--':args=args[1:]
+try:
+    program,entry=build_user(Path(ns.source).resolve(),Path(ns.root).resolve() if ns.root else None)
+    with tempfile.TemporaryDirectory(prefix='lr-') as td:
+        exe=Path(td)/'program';compile_native(program,entry,exe,None,ns.cc)
+        raise SystemExit(subprocess.call([str(exe),*args]))
+except LangError as e:
+    emit_lang_error(e,Path(ns.source).resolve());raise SystemExit(1)
+except subprocess.CalledProcessError as e:
+    print(f'C compiler failed with status {e.returncode}',file=sys.stderr);raise SystemExit(e.returncode)

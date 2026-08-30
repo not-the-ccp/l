@@ -1,0 +1,127 @@
+(* L Core review grammar. Semantic restrictions are specified elsewhere. *)
+
+module          = { declaration } ;
+
+declaration     = [ "pub" ],
+                  ( import_decl | const_decl | struct_decl | enum_decl | fn_decl ) ;
+
+import_decl     = "import", qname, [ "as", ident ], ";" ;
+const_decl      = "const", ident, ":", type, "=", expression, ";" ;
+
+struct_decl     = "struct", ident, type_params,
+                  "{", comma_list(struct_field), "}" ;
+struct_field    = [ "pub" ], ident, ":", type ;
+
+enum_decl       = "enum", ident, type_params,
+                  "{", comma_list(enum_variant), "}" ;
+enum_variant    = ident, [ "(", comma_list(type), ")" ] ;
+
+fn_decl         = "fn", ident, type_params, parameters,
+                  [ "->", type ], block ;
+
+type_params     = [ "[", comma_list(ident), "]" ] ;
+parameters      = "(", comma_list(parameter), ")" ;
+parameter       = ident, ":", type ;
+
+type            = "?", type
+                | "ref", type
+                | "[", "]", type
+                | "(", ")"
+                | "fn", "(", comma_list(type), ")", [ "->", type ]
+                | qname, [ "[", comma_list(type), "]" ] ;
+
+block           = "{", { statement }, "}" ;
+
+statement       = var_stmt
+                | if_stmt
+                | while_stmt
+                | for_stmt
+                | for_in_stmt
+                | match_stmt
+                | return_stmt
+                | "break", ";"
+                | "continue", ";"
+                | "trap", ";"
+                | assignment, ";"
+                | call_expression, ";" ;
+
+var_stmt        = "var", ident, [ ":", type ], "=", expression, ";" ;
+if_stmt         = "if", "(", condition, ")", block,
+                  [ "else", ( if_stmt | block ) ] ;
+while_stmt      = "while", "(", condition, ")", block ;
+
+for_stmt        = "for", "(", [ for_init ], ";",
+                  [ condition ], ";", [ assignment ], ")", block ;
+for_init        = ( "var", ident, [ ":", type ], "=", expression ) | assignment ;
+for_in_stmt     = "for", "(", ident, "in", expression, ")", block ;
+
+match_stmt      = "match", "(", expression, ")", "{",
+                  { pattern, block }, "}" ;
+return_stmt     = "return", [ expression ], ";" ;
+
+assignment      = expression, assign_op, expression ;
+assign_op       = "=" | "+=" | "-=" | "*=" | "/=" | "%="
+                | "<<=" | ">>=" | "&=" | "|=" | "^=" ;
+
+condition       = expression ;
+
+pattern         = "_"
+                | "none"
+                | "some", "(", payload_pattern, ")"
+                | "(", ")"
+                | "true" | "false"
+                | integer_literal | byte_literal
+                | qname, [ "(", comma_list(payload_pattern), ")" ] ;
+payload_pattern = ident | "_" ;
+
+expression      = logical_or ;
+logical_or      = logical_and, { "||", logical_and } ;
+logical_and     = comparison, { "&&", comparison } ;
+comparison      = bit_or, [ ( "==" | "!=" | "<" | "<=" | ">" | ">=" | "is" ),
+                            ( bit_or | pattern ) ] ;
+bit_or          = bit_xor, { "|", bit_xor } ;
+bit_xor         = bit_and, { "^", bit_and } ;
+bit_and         = shift, { "&", shift } ;
+shift           = additive, { ( "<<" | ">>" ), additive } ;
+additive        = multiplicative, { ( "+" | "-" ), multiplicative } ;
+multiplicative  = unary, { ( "*" | "/" | "%" ), unary } ;
+
+unary           = ( "!" | "~" | "-" | "*" ), unary
+                | "new", unary
+                | postfix ;
+
+postfix         = primary,
+                  { call_suffix | index_suffix | field_suffix | struct_literal_suffix },
+                  [ "as", type ] ;
+
+call_suffix     = "(", comma_list(expression), ")" ;
+index_suffix    = "[", expression, "]" ;
+field_suffix    = ".", ident ;
+struct_literal_suffix = "{", comma_list(struct_literal_field), "}" ;
+struct_literal_field = ident, ":", expression ;
+
+primary         = "(", [ expression ], ")"
+                | integer_literal | float_literal | byte_literal | string_literal
+                | "true" | "false" | "none"
+                | "some", "(", expression, ")"
+                | anonymous_fn
+                | array_literal
+                | qname ;
+
+anonymous_fn    = "fn", parameters, [ "->", type ], block ;
+array_literal   = "[", "]"
+                | "[", expression, ";", expression, "]"
+                | "[", comma_list(expression), "]" ;
+
+qname           = ident, { ".", ident } ;
+comma_list(X)   = [ X, { ",", X }, [ "," ] ] ;
+
+ident           = ASCII letter or "_", followed by ASCII letters/digits/"_" ;
+
+(* Lexical notes:
+   - source is UTF-8;
+   - only // line comments exist;
+   - string/byte literals may not cross a line;
+   - numeric '_' separators are only permitted between radix digits;
+   - decimal leading zeroes are allowed and never imply octal.
+*)
