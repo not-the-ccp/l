@@ -54,6 +54,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y graphviz
       - name: Full test suite
         run: ./test.sh
+      - name: L-written project resolver stress
+        run: |
+          ./lr examples/portable/resolver_demo.l
+          ./lc examples/portable/resolver_demo.l -o /tmp/resolver-demo
+          /tmp/resolver-demo
       - name: Build native tools
         run: ./build.sh tools
       - name: Analyze an example
