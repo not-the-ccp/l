@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ ! -x "$HERE/build/l-lsp" ]; then "$HERE/build.sh" "l-lsp" >/dev/null; fi
+exec "$HERE/build/l-lsp" "$@"
