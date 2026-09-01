@@ -15,87 +15,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: work/fix-generic-value-layouts
-      - name: Fix generic value-layout recursion and add conformance cases
+      - name: Apply semantic fix and regression cases
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          core = Path('bootstrap/core.py')
-          text = core.read_text()
-          start = text.index('    def validate_layouts(self):\n')
-          end = text.index('    def check_generic_recursion(self):\n', start)
-          replacement = '''    def validate_layouts(self):
-              # Value recursion is checked after generic substitution, not merely
-              # between nominal constructor names. ref/array are explicit storage
-              # indirections; optional is not. Re-entering the same nominal
-              # declaration on a by-value expansion path is necessarily infinite,
-              # even when its type arguments have changed.
-              def resolved_decl_type(t,gps):
-                  old=self.gparams; self.gparams=set(gps)
-                  try:return self.resolve_ty(t)
-                  finally:self.gparams=old
-              def decl_info(name):
-                  if name in self.structs:return self.structs[name]
-                  if name in self.enums:return self.enums[name]
-                  return None
-              def walk(t,env,path):
-                  t=substitute(t,env)
-                  if t.kind in ('ref','array','fn','unit','param'):return
-                  if t.kind=='opt':return walk(t.a[0],env,path)
-                  if t.kind!='name' or len(t.a[0])!=1:return
-                  name=t.a[0][0]; info=decl_info(name)
-                  if info is None:return
-                  if name in path:
-                      self.err('infinitely-sized recursive value type: '+' -> '.join(path+[name]))
-                  args=t.a[1]
-                  newenv=dict(zip(info.gps,args))
-                  newpath=path+[name]
-                  if name in self.structs:
-                      for _,_,field,_ in info.fields:
-                          walk(resolved_decl_type(field,info.gps),newenv,newpath)
-                  else:
-                      for _,payload in info.variants:
-                          for item in payload:
-                              walk(resolved_decl_type(item,info.gps),newenv,newpath)
-              for name,info in self.structs.items():
-                  env={gp:tparam(gp) for gp in info.gps}
-                  for _,_,field,_ in info.fields:
-                      walk(resolved_decl_type(field,info.gps),env,[name])
-              for name,info in self.enums.items():
-                  env={gp:tparam(gp) for gp in info.gps}
-                  for _,payload in info.variants:
-                      for item in payload:
-                          walk(resolved_decl_type(item,info.gps),env,[name])
-'''
-          core.write_text(text[:start] + replacement + text[end:])
-
-          conf = Path('conformance/core_conformance.py')
-          text = conf.read_text()
-          needle = 'compile_error("optional does not break layout recursion", "struct N { next: ?N, } fn main() {}", "recursive")\n'
-          if needle not in text:
-              raise SystemExit('conformance insertion point not found')
-          addition = needle + '''compile_error("generic wrapper does not hide value recursion", r\'\'\'
-struct Box[T] { value: T, }
-struct N { next: Box[N], }
-fn main() {}
-\'\'\', "recursive")
-compile_error("generic enum wrapper does not hide value recursion", r\'\'\'
-enum Box[T] { value(T), }
-struct N { next: Box[N], }
-fn main() {}
-\'\'\', "recursive")
-compile_error("type-changing generic value recursion rejected", r\'\'\'
-struct Grow[T] { next: Grow[[]T], }
-fn main() {}
-\'\'\', "recursive")
-ok("generic ref indirection breaks value recursion", r\'\'\'
-struct Box[T] { value: T, }
-struct N { next: Box[ref N], }
-fn main() -> i64 { return 0; }
-\'\'\', 0)
-'''
-          conf.write_text(text.replace(needle, addition, 1))
-          PY
+          python tools/dev/fix_generic_layout_once.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add bootstrap/core.py conformance/core_conformance.py
