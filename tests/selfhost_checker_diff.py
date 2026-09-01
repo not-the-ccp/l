@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Differential acceptance tests for the L-written semantic frontend.
 
-This intentionally covers only the semantic subset `slang_check` currently
-claims. Expanding this corpus is part of growing lcheck toward full Core
-conformance; unsupported features must not be silently treated as equivalent.
+This compares language acceptance, not diagnostic spelling.  The Python bootstrap
+checker remains the semantic oracle until the L-written frontend reaches full Core
+coverage.  Every case in this corpus must therefore be accepted by both checkers or
+rejected by both; adding a new checker feature should add representative cases here.
 """
 from __future__ import annotations
 
@@ -45,17 +46,55 @@ fn sum(head: ?ref Node) -> i64 {
         "fn main() -> i64 { var xs: []i64 = [1, 2, 3]; xs[1] = 7; return xs[1]; }",
     ),
     (
+        "nested array struct place",
+        """
+struct Pair { left: i64, right: i64, }
+fn main() -> i64 {
+    var xs: []Pair = [Pair { left: 1, right: 2 }, Pair { left: 3, right: 4 }];
+    xs[1].left += 10;
+    push(xs, Pair { left: 5, right: 6 });
+    return xs[1].left + pop(xs).right;
+}
+""",
+    ),
+    (
         "ref field place",
         "struct Box { value: i64, } fn main() -> i64 { var b = new Box { value: 1 }; b.value += 2; return b.value; }",
+    ),
+    (
+        "enum payload match",
+        """
+enum Result { ok(i64), err(u8), }
+fn get(x: Result) -> i64 {
+    match (x) {
+        Result.ok(value) { return value; }
+        Result.err(_) { return -1; }
+    }
+}
+""",
     ),
     (
         "ordinary function value",
         "fn add(a: i64, b: i64) -> i64 { return a + b; } fn main() -> i64 { var f: fn(i64, i64) -> i64 = add; return f(2, 3); }",
     ),
+    (
+        "noncapturing anonymous function",
+        """
+fn apply(f: fn(i64) -> i64, x: i64) -> i64 { return f(x); }
+fn main() -> i64 {
+    var inc: fn(i64) -> i64 = fn(x: i64) -> i64 { return x + 1; };
+    return apply(inc, 4);
+}
+""",
+    ),
     ("type mismatch", "fn main() -> i64 { var x: bool = 1; return 0; }"),
     ("assign constant", "const X: i64 = 1; fn main() -> i64 { X = 2; return 0; }"),
     ("unknown value", "fn main() -> i64 { return missing; }"),
     ("unknown field", "struct S { x: i64, } fn main() -> i64 { var s = new S { x: 1 }; return s.y; }"),
+    (
+        "temporary field is not a place",
+        "struct S { x: i64, } fn make() -> S { return S { x: 1 }; } fn main() { make().x = 2; }",
+    ),
     ("bad expression statement", "fn main() -> i64 { 1; return 0; }"),
     ("break outside loop", "fn main() -> i64 { break; return 0; }"),
     ("missing return", "fn main() -> i64 { var x: i64 = 1; }"),
@@ -81,6 +120,7 @@ def lcheck_accepts(source: str) -> tuple[bool, str]:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            timeout=30,
         )
         return proc.returncode == 0, proc.stdout
 
