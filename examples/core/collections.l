@@ -1,3 +1,4 @@
+import algorithms;
 import collections;
 
 fn require(ok: bool) {
@@ -23,6 +24,19 @@ fn less_i64(a: i64, b: i64) -> bool {
 }
 
 fn main() -> i64 {
+    var values: []i64 = [9, 2, 7, 1, 7, 3];
+    algorithms.sort_by(values, less_i64);
+    var sorted: []i64 = [1, 2, 3, 7, 7, 9];
+    require(algorithms.equal_by(values, sorted, equal_i64));
+    require(algorithms.contains_by(values, 7, equal_i64));
+    match (algorithms.find_by(values, 3, equal_i64)) {
+        none { trap; }
+        some(index) { require(index == 2); }
+    }
+    algorithms.reverse(values);
+    var reversed: []i64 = [9, 7, 7, 3, 2, 1];
+    require(algorithms.equal_by(values, reversed, equal_i64));
+
     var stack: ref collections.Stack[i64] = collections.stack_new();
     collections.stack_push(stack, 10);
     collections.stack_push(stack, 20);
