@@ -4,9 +4,11 @@
 
 > be serious enough for ordinary programs, while remaining unusually simple to parse, interpret, compile, embed, and tool.
 
-This repository contains the language specification, reference/bootstrap implementation, native runtime, portable libraries, conformance tests, LSP servers, and the **Lace** modal terminal editor.
+[![CI](https://github.com/not-the-ccp/l/actions/workflows/ci.yml/badge.svg)](https://github.com/not-the-ccp/l/actions/workflows/ci.yml)
 
-The project is intentionally layered. Implementing **L Core** does **not** require implementing the standard library, operating-system APIs, Lace, or any LSP.
+This repository contains the draft language specification, reference/bootstrap implementation, native runtime, portable libraries, conformance tests, source-analysis tooling, LSP servers, and the **Lace** modal terminal editor.
+
+The project is intentionally layered. Implementing **L Core** does **not** require implementing the portable library, operating-system APIs, Lace, or any LSP.
 
 ```text
 L Core
@@ -14,7 +16,7 @@ L Core
         |
         +-- optional portable libraries written in L
         +-- optional host modules / hosted environment
-        +-- optional tools (compiler, LSPs, Lace, ...)
+        +-- optional tools (compiler, analyzer, LSPs, Lace, ...)
 ```
 
 ## Try it
@@ -23,16 +25,19 @@ Requirements for the current bootstrap toolchain:
 
 - Python 3.11+
 - a C11 compiler available as `cc` (or set `CC`)
-- POSIX-like environment for Lace and the bundled host modules
+- a POSIX-like environment for Lace and the bundled host modules
 
 No PATH setup is required.
 
 ```sh
+# Run a hosted program.
 ./lr examples/hosted/hello.l -- hello world
 
+# Compile to a native executable using the bytecode + C runtime path.
 ./lc examples/hosted/hello.l -o hello
 ./hello hello world
 
+# Open files in Lace. The matching L/JSON/INI LSP is selected automatically.
 ./lace examples/hosted/hello.l
 ./lace examples/hosted/config.json
 ./lace examples/hosted/config.ini
@@ -44,7 +49,7 @@ No PATH setup is required.
 ./build.sh
 ```
 
-Run the test suite:
+Run the complete repository test suite:
 
 ```sh
 ./test.sh
@@ -56,7 +61,30 @@ Run only the freestanding Core conformance seed:
 python3 conformance/core_conformance.py
 ```
 
-## Current implementation status
+## Learn the language
+
+If you want to **write L**, start with the [language tour](docs/12-LANGUAGE-TOUR.md).
+
+If you want to **implement L**, start with the [documentation index](docs/README.md), then read the architecture, Core specification, grammar, semantics, and conformance documents.
+
+Useful entry points:
+
+- [Documentation index](docs/README.md)
+- [Language tour](docs/12-LANGUAGE-TOUR.md)
+- [Architecture / Core boundary](docs/00-ARCHITECTURE.md)
+- [Core language specification](docs/01-CORE-LANGUAGE.md)
+- [Draft EBNF grammar](docs/02-GRAMMAR.ebnf)
+- [Detailed Core semantics](docs/03-CORE-SEMANTICS.md)
+- [Conformance](docs/04-CONFORMANCE.md)
+- [Implementation guide](docs/07-IMPLEMENTATION-GUIDE.md)
+- [Design rationale](docs/09-DESIGN-RATIONALE.md)
+- [Open design questions](docs/10-OPEN-QUESTIONS.md)
+- [Code analysis and flowcharts](docs/11-CODE-ANALYSIS.md)
+- [Roadmap](docs/13-ROADMAP.md)
+
+The specification is still a draft. The implementation is evidence, not automatically normative; disagreements between implementation and specification are bugs worth reporting.
+
+## Current implementation
 
 The frontend used by `./lc` is still **bootstrapped in Python**. It parses, links, type-checks, compiles L to bytecode, embeds that bytecode into a native C VM/runtime, and invokes `cc -O3` to produce a native executable:
 
@@ -73,7 +101,27 @@ The resulting program does not execute through Python. The native runtime includ
 
 Lace and the bundled L/JSON/INI language servers are themselves written in L and are built through this path.
 
-A fully self-hosted compiler is a future milestone.
+A fully self-hosted compiler is a major pre-1.0 milestone rather than something the repository currently claims to have.
+
+## Source analysis and flowcharts
+
+The compiler frontend also exposes a reusable source-analysis pipeline:
+
+```sh
+# Human-readable metrics/findings.
+./lc analyze examples/core/linked_list.l
+
+# Mermaid CFG.
+./lc analyze examples/core/linked_list.l --flowchart -o linked-list.mmd
+
+# Graphviz CFG.
+./lc analyze examples/core/linked_list.l --view cfg --format dot -o linked-list.dot
+
+# Machine-readable project/function/CFG model.
+./lc analyze examples/core/linked_list.l --view model > analysis.json
+```
+
+It can emit CFGs, call graphs, metrics, parser ASTs, Mermaid, Graphviz DOT/SVG, and JSON. This is optional tooling, not part of L Core. See [the analysis documentation](docs/11-CODE-ANALYSIS.md).
 
 ## Repository layout
 
@@ -86,7 +134,7 @@ tools/lace/      Lace editor source, written in L
 tools/lsp/       L, JSON, and INI LSP servers, written in L
 conformance/     Core-only implementation tests
 tests/           toolchain/editor/LSP integration tests
-docs/            draft language specification and implementation guidance
+docs/            language specification, guides, roadmap, tooling docs
 review/          material for independent human/AI review
 examples/        Core and hosted examples
 notes/           historical implementation/user-study evidence
@@ -98,23 +146,13 @@ Generated native tools live in `build/` and are intentionally ignored by Git.
 
 The normative goal of L Core is deliberately small. A conforming Core implementation does not need:
 
-- JSON, UTF-8 helpers, maps, heaps, formatting, etc.
+- JSON, UTF-8 helpers, maps, heaps, formatting, etc.;
 - filesystem, process, terminal, networking, or stdin/stdout APIs;
 - a filesystem-based module resolver;
 - a `main` convention;
 - Lace or any LSP.
 
 Logical modules are part of Core; **how module names resolve to source/host modules is an implementation/embedding concern**.
-
-Start with:
-
-1. [`docs/00-ARCHITECTURE.md`](docs/00-ARCHITECTURE.md)
-2. [`docs/01-CORE-LANGUAGE.md`](docs/01-CORE-LANGUAGE.md)
-3. [`docs/02-GRAMMAR.ebnf`](docs/02-GRAMMAR.ebnf)
-4. [`docs/03-CORE-SEMANTICS.md`](docs/03-CORE-SEMANTICS.md)
-5. [`docs/04-CONFORMANCE.md`](docs/04-CONFORMANCE.md)
-
-The specification is still a draft. The implementation is evidence, not automatically normative; disagreements between implementation and specification are bugs worth reporting.
 
 ## Design snapshot
 
@@ -133,7 +171,7 @@ Some characteristic choices are:
 - line-independent lexing: no multiline strings/comments/continuations;
 - host capabilities enter through typed logical modules rather than a standardized C FFI.
 
-See [`docs/09-DESIGN-RATIONALE.md`](docs/09-DESIGN-RATIONALE.md) for reasoning and [`docs/10-OPEN-QUESTIONS.md`](docs/10-OPEN-QUESTIONS.md) for deliberately unsettled areas.
+The default policy is **not** to grow Core just because another language has a convenient feature. New mechanisms should be justified by recurring problems demonstrated in real L code and weighed against their cost to interpreters, compilers, formatters, LSPs, and independent implementations.
 
 ## Independent review
 
@@ -148,21 +186,12 @@ For an independent review, start with:
 
 Feedback is not expected to preserve current decisions. Concrete counterexamples, implementation experiments, spec/implementation mismatches, and user-code experience are especially useful.
 
-## Initialize a repository
+## Contributing
 
-This bundle is deliberately ready to become a new Git repository:
+See [CONTRIBUTING.md](CONTRIBUTING.md). Core changes should normally include conformance tests and corresponding specification changes.
 
-```sh
-git init
-git add .
-git commit -m 'Initial L language snapshot'
-git branch -M main
-git remote add origin git@github.com:YOU/l.git
-git push -u origin main
-```
+The project is licensed under the [MIT License](LICENSE).
 
-The project is licensed under the MIT License; see [LICENSE](LICENSE) for the full terms.
-
-## Project status
+## Status
 
 Experimental and pre-1.0. The design has been driven by implementation experiments, multiple execution backends, substantial L-written libraries/tooling, and actual editor/LSP usage, but neither the specification nor APIs should be considered stable yet.
