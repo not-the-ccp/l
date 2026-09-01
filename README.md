@@ -37,13 +37,16 @@ No PATH setup is required.
 ./lc examples/hosted/hello.l -o hello
 ./hello hello world
 
+# Run the first standalone frontend component written in L itself.
+./lsyntax examples/core/linked_list.l
+
 # Open files in Lace. The matching L/JSON/INI LSP is selected automatically.
 ./lace examples/hosted/hello.l
 ./lace examples/hosted/config.json
 ./lace examples/hosted/config.ini
 ```
 
-`./lace` builds the native `-O3` editor/LSP executables into `build/` on first use. To build them explicitly:
+`./lace` and `./lsyntax` build their native `-O3` executables into `build/` on first use. To build the bundled native tools explicitly:
 
 ```sh
 ./build.sh
@@ -81,6 +84,7 @@ Useful entry points:
 - [Open design questions](docs/10-OPEN-QUESTIONS.md)
 - [Code analysis and flowcharts](docs/11-CODE-ANALYSIS.md)
 - [Roadmap](docs/13-ROADMAP.md)
+- [Self-hosting progress](docs/14-SELF-HOSTING.md)
 
 The specification is still a draft. The implementation is evidence, not automatically normative; disagreements between implementation and specification are bugs worth reporting.
 
@@ -99,7 +103,7 @@ L source
 
 The resulting program does not execute through Python. The native runtime includes tracing garbage collection.
 
-Lace and the bundled L/JSON/INI language servers are themselves written in L and are built through this path.
+Lace, the bundled L/JSON/INI language servers, and `lsyntax` are themselves written in L and are built through this path. `lsyntax` is deliberately the first promoted self-hosting slice: it uses the L-written lexer/parser at runtime and is tested against real and malformed L source. It is a syntax checker, not yet a replacement for the Python semantic frontend.
 
 A fully self-hosted compiler is a major pre-1.0 milestone rather than something the repository currently claims to have.
 
@@ -132,6 +136,7 @@ lib/portable/    optional portable libraries written in L
 lib/hosted/      optional libraries that depend on host modules
 tools/lace/      Lace editor source, written in L
 tools/lsp/       L, JSON, and INI LSP servers, written in L
+tools/syntax/    standalone L-written syntax frontend tool
 conformance/     Core-only implementation tests
 tests/           toolchain/editor/LSP integration tests
 docs/            language specification, guides, roadmap, tooling docs
