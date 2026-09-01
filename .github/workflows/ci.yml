@@ -31,10 +31,16 @@ jobs:
           cc --version | head -n 1
       - name: Core conformance
         run: python conformance/core_conformance.py
-      - name: Check Core examples
+      - name: Parse/link/type-check freestanding examples without a main convention
         run: |
-          ./lc --check examples/core/linked_list.l
-          ./lc --check examples/core/generic_queue.l
+          PYTHONPATH=bootstrap python - <<'PY'
+          from pathlib import Path
+          from core import Program
+
+          for path in sorted(Path('examples/core').glob('*.l')):
+              Program({('example',): path.read_text(encoding='utf-8')}, host_modules={})
+              print(f'{path}: ok')
+          PY
 
   full:
     name: Full toolchain and tooling suite
