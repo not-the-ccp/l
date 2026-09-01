@@ -1,5 +1,6 @@
 import bytes;
 import fs;
+import slang_index;
 import slang_syntax;
 import stdio;
 import strconv;
@@ -39,17 +40,73 @@ fn write_location(path: []u8, loc: Location) {
 }
 
 fn write_usage() {
-    stdio.write("usage: lsyntax FILE\n");
+    stdio.write("usage: lsyntax [--outline] FILE\n");
+}
+
+fn write_kind(kind: slang_index.DeclKind) {
+    if (kind is slang_index.DeclKind.constant) { stdio.write("const"); return; }
+    if (kind is slang_index.DeclKind.structure) { stdio.write("struct"); return; }
+    if (kind is slang_index.DeclKind.enumeration) { stdio.write("enum"); return; }
+    stdio.write("fn");
+}
+
+fn write_outline(module: slang_index.ModuleIndex) {
+    for (item in module.imports) {
+        stdio.write("import ");
+        stdio.write(item.path);
+        match (item.alias) {
+            none { }
+            some(alias) {
+                stdio.write(" as ");
+                stdio.write(alias);
+            }
+        }
+        stdio.write("\n");
+    }
+
+    for (decl in module.declarations) {
+        if (decl.exported) {
+            stdio.write("pub ");
+        }
+        write_kind(decl.kind);
+        stdio.write(" ");
+        stdio.write(decl.name);
+        stdio.write("\n");
+    }
+}
+
+fn report_errors(path: []u8, source: []u8, errors: []slang_syntax.Error) {
+    for (error in errors) {
+        var loc = location(source, error.start);
+        write_location(path, loc);
+        stdio.write(": error: ");
+        stdio.write(error.message);
+        stdio.write("\n");
+
+        var start = bytes.line_start(source, error.start);
+        var end = bytes.line_end(source, error.start);
+        if (end > start) {
+            stdio.write("  ");
+            stdio.write(bytes.slice(source, start, end));
+            stdio.write("\n");
+        }
+    }
 }
 
 fn main() -> i64 {
     var args = sys.args();
-    if (len(args) != 1) {
+    var outline = false;
+    var path: []u8 = [];
+    if (len(args) == 1) {
+        path = args[0];
+    } else if (len(args) == 2 && bytes.equal(args[0], "--outline")) {
+        outline = true;
+        path = args[1];
+    } else {
         write_usage();
         return 2;
     }
 
-    var path = args[0];
     var source_opt = fs.read(path);
     match (source_opt) {
         none {
@@ -58,27 +115,15 @@ fn main() -> i64 {
             return 2;
         }
         some(source) {
-            var errors = slang_syntax.errors(source);
-            if (len(errors) == 0) {
-                return 0;
+            var module = slang_index.index(source);
+            if (len(module.errors) > 0) {
+                report_errors(path, source, module.errors);
+                return 1;
             }
-
-            for (error in errors) {
-                var loc = location(source, error.start);
-                write_location(path, loc);
-                stdio.write(": error: ");
-                stdio.write(error.message);
-                stdio.write("\n");
-
-                var start = bytes.line_start(source, error.start);
-                var end = bytes.line_end(source, error.start);
-                if (end > start) {
-                    stdio.write("  ");
-                    stdio.write(bytes.slice(source, start, end));
-                    stdio.write("\n");
-                }
+            if (outline) {
+                write_outline(module);
             }
-            return 1;
+            return 0;
         }
     }
 }
