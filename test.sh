@@ -7,6 +7,11 @@ PYTHON=${PYTHON:-python3}
 "$HERE/lc" --check "$HERE/examples/hosted/project/main.l" >/dev/null
 "$HERE/lr" "$HERE/examples/hosted/hello.l" -- smoke >/dev/null
 
+# Portable-library stress: this runs through the bytecode VM and exercises
+# generic stack/queue/heap/map/set code including queue compaction and map
+# rehashing. It deliberately uses no host APIs itself.
+"$HERE/lr" "$HERE/examples/core/collections.l" >/dev/null
+
 # First self-hosting slice: the syntax frontend is written in L and runs as a
 # native executable. Check both acceptance and rejection so this cannot regress
 # into a build-only demo.
