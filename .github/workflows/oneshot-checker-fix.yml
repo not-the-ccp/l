@@ -1,0 +1,35 @@
+name: One-shot checker fix
+
+on:
+  push:
+    branches: ['work/selfhost-basic-checker']
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/selfhost-basic-checker
+      - name: Apply surgical enum comparison fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lib/portable/slang_check.l')
+          text = path.read_text()
+          old = text
+          text = text.replace('if (!(a.kind is b.kind)) { return false; }', 'if (a.kind != b.kind) { return false; }')
+          text = text.replace('if (symbol.kind is kind && bytes.equal(symbol.name, name) && symbol.start == start) {', 'if (symbol.kind == kind && bytes.equal(symbol.name, name) && symbol.start == start) {')
+          if text == old:
+              raise SystemExit('expected checker comparison patterns were not found')
+          path.write_text(text)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/portable/slang_check.l
+          git commit -m 'Fix dynamic enum comparisons in L checker'
+          git push origin HEAD:work/selfhost-basic-checker
