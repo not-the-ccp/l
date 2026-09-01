@@ -12,11 +12,15 @@ PYTHON=${PYTHON:-python3}
 # rehashing. It deliberately uses no host APIs itself.
 "$HERE/lr" "$HERE/examples/portable/collections_demo.l" >/dev/null
 
-# First self-hosting slice: the syntax frontend is written in L and runs as a
-# native executable. Check both acceptance and rejection so this cannot regress
-# into a build-only demo.
+# First self-hosting slices: the syntax frontend and structured module index are
+# written in L and run as a native executable. Check acceptance, structure, and
+# rejection so this cannot regress into a build-only demo.
 "$HERE/build/lsyntax" "$HERE/examples/core/linked_list.l" >/dev/null
 "$HERE/build/lsyntax" "$HERE/tools/lace/lace.l" >/dev/null
+outline=$("$HERE/build/lsyntax" --outline "$HERE/examples/core/linked_list.l")
+printf '%s\n' "$outline" | grep -q '^struct Node$'
+printf '%s\n' "$outline" | grep -q '^fn prepend$'
+printf '%s\n' "$outline" | grep -q '^fn sum$'
 bad=$(mktemp)
 trap 'rm -f "$bad"' EXIT HUP INT TERM
 printf 'fn broken( {\n' >"$bad"
