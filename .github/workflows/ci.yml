@@ -64,6 +64,11 @@ jobs:
           ./lr examples/portable/signatures_demo.l
           ./lc examples/portable/signatures_demo.l -o /tmp/signatures-demo
           /tmp/signatures-demo
+      - name: L-written type resolver stress
+        run: |
+          ./lr examples/portable/type_resolution_demo.l
+          ./lc examples/portable/type_resolution_demo.l -o /tmp/type-resolution-demo
+          /tmp/type-resolution-demo
       - name: Build native tools
         run: ./build.sh tools
       - name: Analyze an example
