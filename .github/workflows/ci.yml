@@ -59,6 +59,11 @@ jobs:
           ./lr examples/portable/resolver_demo.l
           ./lc examples/portable/resolver_demo.l -o /tmp/resolver-demo
           /tmp/resolver-demo
+      - name: L-written declaration/type parser stress
+        run: |
+          ./lr examples/portable/signatures_demo.l
+          ./lc examples/portable/signatures_demo.l -o /tmp/signatures-demo
+          /tmp/signatures-demo
       - name: Build native tools
         run: ./build.sh tools
       - name: Analyze an example
