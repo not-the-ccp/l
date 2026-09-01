@@ -79,6 +79,11 @@ jobs:
           ./lr examples/portable/name_resolution_demo.l
           ./lc examples/portable/name_resolution_demo.l -o /tmp/name-resolution-demo
           /tmp/name-resolution-demo
+      - name: L-written basic semantic checker stress
+        run: |
+          ./lr examples/portable/checker_demo.l
+          ./lc examples/portable/checker_demo.l -o /tmp/checker-demo
+          /tmp/checker-demo
       - name: Build native tools
         run: ./build.sh tools
       - name: Analyze an example
