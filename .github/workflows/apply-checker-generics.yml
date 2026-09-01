@@ -1,0 +1,41 @@
+name: Apply generic checker rewrite
+
+on:
+  push:
+    branches: [work/lcheck-differential]
+    paths:
+      - tools/dev/apply_checker_generics.py
+      - .github/workflows/apply-checker-generics.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/lcheck-differential
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply rewrite
+        run: python tools/dev/apply_checker_generics.py
+      - name: Build L-written checker
+        run: ./build.sh lcheck
+      - name: Check real generic Core source
+        run: ./build/lcheck examples/core/generic_queue.l
+      - name: Differential semantic corpus
+        run: python tests/selfhost_checker_diff.py
+      - name: Remove one-shot machinery
+        run: rm tools/dev/apply_checker_generics.py .github/workflows/apply-checker-generics.yml
+      - name: Commit validated result
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Add generic semantics to L-written checker'
+          git push origin HEAD:work/lcheck-differential
