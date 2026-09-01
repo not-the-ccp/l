@@ -69,6 +69,11 @@ jobs:
           ./lr examples/portable/type_resolution_demo.l
           ./lc examples/portable/type_resolution_demo.l -o /tmp/type-resolution-demo
           /tmp/type-resolution-demo
+      - name: L-written body AST parser stress
+        run: |
+          ./lr examples/portable/body_ast_demo.l
+          ./lc examples/portable/body_ast_demo.l -o /tmp/body-ast-demo
+          /tmp/body-ast-demo
       - name: Build native tools
         run: ./build.sh tools
       - name: Analyze an example
