@@ -74,6 +74,11 @@ jobs:
           ./lr examples/portable/body_ast_demo.l
           ./lc examples/portable/body_ast_demo.l -o /tmp/body-ast-demo
           /tmp/body-ast-demo
+      - name: L-written lexical resolver stress
+        run: |
+          ./lr examples/portable/name_resolution_demo.l
+          ./lc examples/portable/name_resolution_demo.l -o /tmp/name-resolution-demo
+          /tmp/name-resolution-demo
       - name: Build native tools
         run: ./build.sh tools
       - name: Analyze an example
