@@ -9,7 +9,7 @@ The project deliberately separates **L Core** from optional libraries, host capa
 Start here:
 
 1. [`12-LANGUAGE-TOUR.md`](12-LANGUAGE-TOUR.md) — a compact user-oriented tour.
-2. [`../examples/core/linked_list.l`](../examples/core/linked_list.l) and [`../examples/core/generic_queue.l`](../examples/core/generic_queue.l) — small freestanding programs.
+2. [`../examples/core/linked_list.l`](../examples/core/linked_list.l), [`../examples/core/generic_queue.l`](../examples/core/generic_queue.l), and [`../examples/core/collections.l`](../examples/core/collections.l) — freestanding examples from linked data structures through reusable generics.
 3. [`../README.md`](../README.md) — commands for `./lc`, `./lr`, Lace, and the bundled tools.
 
 For the exact language rules, continue with [`01-CORE-LANGUAGE.md`](01-CORE-LANGUAGE.md) and [`03-CORE-SEMANTICS.md`](03-CORE-SEMANTICS.md).
@@ -34,6 +34,15 @@ python3 conformance/core_conformance.py
 ```
 
 The conformance suite is still growing. Passing the current seed is evidence, not a claim that every unspecified corner has been standardized.
+
+## I want to use or extend the portable library
+
+Read:
+
+- [`06-LIBRARIES.md`](06-LIBRARIES.md) — layering/policy;
+- [`15-PORTABLE-LIBRARY.md`](15-PORTABLE-LIBRARY.md) — current source-level modules, collections, algorithms, semantics, and tests.
+
+The portable library is ordinary L and remains optional for Core implementations.
 
 ## I want to embed L or provide host APIs
 
