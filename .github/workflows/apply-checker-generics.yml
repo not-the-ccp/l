@@ -5,6 +5,7 @@ on:
     branches: [work/lcheck-differential]
     paths:
       - tools/dev/apply_checker_generics.py
+      - tools/dev/apply_checker_generics_fix.py
       - .github/workflows/apply-checker-generics.yml
 
 permissions:
@@ -23,7 +24,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Apply rewrite
-        run: python tools/dev/apply_checker_generics.py
+        run: |
+          python tools/dev/apply_checker_generics.py
+          python tools/dev/apply_checker_generics_fix.py
       - name: Build L-written checker
         run: ./build.sh lcheck
       - name: Check real generic Core source
@@ -31,7 +34,7 @@ jobs:
       - name: Differential semantic corpus
         run: python tests/selfhost_checker_diff.py
       - name: Remove one-shot machinery
-        run: rm tools/dev/apply_checker_generics.py .github/workflows/apply-checker-generics.yml
+        run: rm tools/dev/apply_checker_generics.py tools/dev/apply_checker_generics_fix.py .github/workflows/apply-checker-generics.yml
       - name: Commit validated result
         run: |
           git config user.name 'github-actions[bot]'
