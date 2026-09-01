@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Core conformance (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Toolchain versions
+        run: |
+          python --version
+          cc --version | head -n 1
+      - name: Core conformance
+        run: python conformance/core_conformance.py
+      - name: Check Core examples
+        run: |
+          ./lc --check examples/core/linked_list.l
+          ./lc --check examples/core/generic_queue.l
+
+  full:
+    name: Full toolchain and tooling suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install optional graph tooling
+        run: sudo apt-get update && sudo apt-get install -y graphviz
+      - name: Full test suite
+        run: ./test.sh
+      - name: Build native tools
+        run: ./build.sh tools
+      - name: Analyze an example
+        run: |
+          ./lc analyze examples/core/linked_list.l --view cfg --format dot -o /tmp/linked-list.dot
+          test -s /tmp/linked-list.dot
