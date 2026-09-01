@@ -127,7 +127,7 @@ fn function_type(parameters: []ref slang_types.ResolvedType,
 }
 
 fn same(a: ref slang_types.ResolvedType, b: ref slang_types.ResolvedType) -> bool {
-    if (!(a.kind is b.kind)) { return false; }
+    if (a.kind != b.kind) { return false; }
     if (!bytes.equal(a.module, b.module) || !bytes.equal(a.name, b.name)) { return false; }
     if (a.parameter_count != b.parameter_count || len(a.children) != len(b.children)) { return false; }
     for (var i: u64 = 0; i < len(a.children); i += 1) {
@@ -200,7 +200,7 @@ fn find_symbol(checker: ref Checker, kind: slang_names.SymbolKind, name: []u8,
     start: u64) -> ?u64 {
     for (var i: u64 = 0; i < len(checker.names.symbols); i += 1) {
         var symbol = checker.names.symbols[i];
-        if (symbol.kind is kind && bytes.equal(symbol.name, name) && symbol.start == start) {
+        if (symbol.kind == kind && bytes.equal(symbol.name, name) && symbol.start == start) {
             return some(i);
         }
     }
