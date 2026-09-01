@@ -562,29 +562,47 @@ class Checker:
         if len(q)>=2:return Ty('name',(q,args))
         self.err(f'unknown type {".".join(q)}')
     def validate_layouts(self):
-        # Constructor-level cycle check. ref/array break storage recursion; opt/unit/fn do not introduce storage indirection.
-        graph={n:set() for n in self.structs|self.enums}
-        def walk(owner,t,gps):
+        # Value recursion is checked after generic substitution, not merely
+        # between nominal constructor names. ref/array are explicit storage
+        # indirections; optional is not. Re-entering the same nominal
+        # declaration on a by-value expansion path is necessarily infinite,
+        # even when its type arguments have changed.
+        def resolved_decl_type(t,gps):
             old=self.gparams; self.gparams=set(gps)
-            try:t=self.resolve_ty(t)
+            try:return self.resolve_ty(t)
             finally:self.gparams=old
+        def decl_info(name):
+            if name in self.structs:return self.structs[name]
+            if name in self.enums:return self.enums[name]
+            return None
+        def walk(t,env,path):
+            t=substitute(t,env)
             if t.kind in ('ref','array','fn','unit','param'):return
-            if t.kind=='opt':return walk(owner,t.a[0],gps)
-            if t.kind=='name' and len(t.a[0])==1 and t.a[0][0] in graph:graph[owner].add(t.a[0][0])
-        for n,s in self.structs.items():
-            for _,_,t,_ in s.fields:walk(n,t,s.gps)
-        for n,e in self.enums.items():
-            for _,ts in e.variants:
-                for t in ts:walk(n,t,e.gps)
-        state={}
-        def dfs(n,path):
-            state[n]=1
-            for m in graph[n]:
-                if state.get(m)==1:self.err('infinitely-sized recursive value type: '+' -> '.join(path+[m]))
-                if not state.get(m):dfs(m,path+[m])
-            state[n]=2
-        for n in graph:
-            if not state.get(n):dfs(n,[n])
+            if t.kind=='opt':return walk(t.a[0],env,path)
+            if t.kind!='name' or len(t.a[0])!=1:return
+            name=t.a[0][0]; info=decl_info(name)
+            if info is None:return
+            if name in path:
+                self.err('infinitely-sized recursive value type: '+' -> '.join(path+[name]))
+            args=t.a[1]
+            newenv=dict(zip(info.gps,args))
+            newpath=path+[name]
+            if name in self.structs:
+                for _,_,field,_ in info.fields:
+                    walk(resolved_decl_type(field,info.gps),newenv,newpath)
+            else:
+                for _,payload in info.variants:
+                    for item in payload:
+                        walk(resolved_decl_type(item,info.gps),newenv,newpath)
+        for name,info in self.structs.items():
+            env={gp:tparam(gp) for gp in info.gps}
+            for _,_,field,_ in info.fields:
+                walk(resolved_decl_type(field,info.gps),env,[name])
+        for name,info in self.enums.items():
+            env={gp:tparam(gp) for gp in info.gps}
+            for _,payload in info.variants:
+                for item in payload:
+                    walk(resolved_decl_type(item,info.gps),env,[name])
     def check_generic_recursion(self):
         # Approximation on source call graph, sufficient for explicit self/mutual references. Calls through fn values aren't generic polymorphic calls.
         generic={n for n,f in self.funcs.items() if f.gps}

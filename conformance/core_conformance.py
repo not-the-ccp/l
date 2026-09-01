@@ -331,6 +331,25 @@ fn main() { var n = new N { x: 1 }; var o: ?ref N = n; }
 ''')
 compile_error("direct recursive value layout rejected", "struct N { next: N, } fn main() {}", "recursive")
 compile_error("optional does not break layout recursion", "struct N { next: ?N, } fn main() {}", "recursive")
+compile_error("generic wrapper does not hide value recursion", r'''
+struct Box[T] { value: T, }
+struct N { next: Box[N], }
+fn main() {}
+''', "recursive")
+compile_error("generic enum wrapper does not hide value recursion", r'''
+enum Box[T] { value(T), }
+struct N { next: Box[N], }
+fn main() {}
+''', "recursive")
+compile_error("type-changing generic value recursion rejected", r'''
+struct Grow[T] { next: Grow[[]T], }
+fn main() {}
+''', "recursive")
+ok("generic ref indirection breaks value recursion", r'''
+struct Box[T] { value: T, }
+struct N { next: Box[ref N], }
+fn main() -> i64 { return 0; }
+''', 0)
 compile_error("capturing anonymous function rejected", r'''
 fn main() { var x: i64 = 3; var f: fn(i64)->i64 = fn(y:i64)->i64 { return x+y; }; }
 ''', "unknown")
