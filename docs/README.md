@@ -10,7 +10,7 @@ Start here:
 
 1. [`12-LANGUAGE-TOUR.md`](12-LANGUAGE-TOUR.md) — a compact user-oriented tour.
 2. [`../examples/core/linked_list.l`](../examples/core/linked_list.l) and [`../examples/core/generic_queue.l`](../examples/core/generic_queue.l) — small freestanding programs.
-3. [`../README.md`](../README.md) — commands for `./lc`, `./lr`, and Lace.
+3. [`../README.md`](../README.md) — commands for `./lc`, `./lr`, Lace, and the bundled tools.
 
 For the exact language rules, continue with [`01-CORE-LANGUAGE.md`](01-CORE-LANGUAGE.md) and [`03-CORE-SEMANTICS.md`](03-CORE-SEMANTICS.md).
 
@@ -53,8 +53,9 @@ Read:
 - [`08-TOOLCHAIN-AND-STATUS.md`](08-TOOLCHAIN-AND-STATUS.md)
 - [`11-CODE-ANALYSIS.md`](11-CODE-ANALYSIS.md)
 - [`13-ROADMAP.md`](13-ROADMAP.md)
+- [`14-SELF-HOSTING.md`](14-SELF-HOSTING.md)
 
-The current bootstrap frontend is Python. Native executables use the C VM/runtime with tracing GC. Lace and the bundled L/JSON/INI language servers are written in L.
+The current bootstrap frontend is Python. Native executables use the C VM/runtime with tracing GC. Lace and the bundled L/JSON/INI language servers are written in L. The standalone `lsyntax` checker is the first L-written compiler-frontend component promoted into a native command-line tool.
 
 ## I want to review the design
 
