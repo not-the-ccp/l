@@ -1,22 +1,20 @@
 # Self-hosting progress
 
-The production/bootstrap frontend used by `./lc` is still Python, but self-hosting is being developed incrementally rather than as a flag-day compiler rewrite.
+The production `./lc` frontend is still Python, but the replacement frontend is being built incrementally in L rather than as a flag-day rewrite.
 
 The rule for this work is:
 
 > each self-hosting slice should become an independently useful, tested L-written component before it replaces bootstrap code.
 
-That lets the project compare the L implementation against the mature bootstrap frontend and keeps failures localized.
+The Python implementation remains an independent semantic oracle until the L-written compiler can compile itself.
 
-## Current layers
-
-The L-written frontend is now split into reusable layers:
+## Current frontend
 
 ```text
 source bytes
    |
    v
-slang_syntax     lexer + syntax parser/recovery
+slang_syntax     lexer + syntax validation/recovery
    |
    +---------> slang_index      imports + top-level identities/spans
    |                |
@@ -24,132 +22,117 @@ slang_syntax     lexer + syntax parser/recovery
    |           slang_project    logical modules + module-scope resolution
    |
    v
-slang_decls      structured declaration signatures + recursive type syntax
+slang_decls      declarations + types + complete executable body AST
+   |
+   +---------> slang_names      lexical value-name/scope resolution
    |
    v
-slang_types      semantic type-name resolution + stable type identities
+slang_types      semantic type identities
+   |
+   v
+slang_check      value/place/body semantic checking
+   |
+   v
+lcheck           native-running L-written checker CLI
 ```
 
-These are ordinary portable L modules. They are currently compiled by the Python bootstrap frontend, so this is **self-hosting progress**, not yet a self-hosted compiler.
+All of these frontend layers are ordinary L modules. They are currently compiled by the Python bootstrap compiler, so this is **self-hosting progress**, not yet a self-hosted compiler.
 
-### 1. Syntax frontend: `slang_syntax`
+## Syntax and structure
 
-`lib/portable/slang_syntax.l` contains the L-written lexer and recursive-descent/precedence syntax parser. It was originally developed for the L language server and is now shared with compiler-front-end work.
+`lib/portable/slang_syntax.l` contains the L-written lexer and syntax validator/recovery parser. `lib/portable/slang_index.l` builds the stable top-level import/declaration view used by later tooling.
 
-`tools/syntax/lsyntax.l` exposes it through a standalone native-running command:
+`./lsyntax` exposes these layers as a native-running tool:
 
 ```sh
 ./lsyntax source.l
+./lsyntax --outline source.l
+./lsyntax --ast source.l
 ```
 
-`./lsyntax` builds on demand to `build/lsyntax` through the same native path used for Lace and the language servers:
+The repository tests require the compiled tool to parse substantial real source including Lace, not only synthetic parser examples.
 
-```text
-L frontend source
-  -> Python bootstrap checker/bytecode compiler
-  -> generated C + native VM/runtime
-  -> cc -O3
-  -> native tool
-```
+`lib/portable/slang_decls.l` now carries the complete structured syntax needed for semantic checking: declaration generic parameters, recursive type syntax, constant initializers, function bodies, expressions, statements and patterns, all with source spans. This includes calls/indexing, operators, casts, `new`/dereference, struct literals, anonymous functions, assignments, loops, conditionals and matches.
 
-At runtime, `lsyntax` itself does not use Python. Successful input exits 0, syntax errors exit 1, and usage/read failures exit 2.
+## Project and name resolution
 
-The repository tests require the compiled tool to accept real L source including Lace and reject malformed input.
+`lib/portable/slang_project.l` resolves already-loaded **logical modules**. Filesystem/package lookup deliberately remains outside the portable frontend and outside L Core.
 
-### 2. Structured module index: `slang_index`
+It handles import bindings and aliases, duplicate module/module-scope names, builtin collisions, unresolved modules, import cycles and source visibility.
 
-`lib/portable/slang_index.l` builds a stable top-level view from the shared token stream. It records logical imports and aliases, top-level declaration kind/name, `pub` status, declaration/import source extents, and parser errors.
+`lib/portable/slang_names.l` resolves runtime names inside executable bodies. It represents parameters, locals, loop and pattern bindings, anonymous-function parameters, top-level values, imports and builtins with stable identities. It enforces L's no-shadowing rule and the noncapturing anonymous-function rule, including the prohibition on silently shadowing an enclosing runtime name inside an anonymous function.
 
-This intentionally remains smaller than a compiler AST. It gives tools stable declaration identities without introducing a second lexer.
+## Type identities
 
-The native checker exposes the index for inspection:
+`lib/portable/slang_types.l` resolves syntax types into semantic `ResolvedType` trees. It handles primitives, generic parameters, local nominal types, imported source types, visibility, type arity, function types and explicit host opaque types supplied by the embedding environment.
+
+Generic parameters remain abstract semantic types. This is important: generic declarations are checked once under abstract `T`, rather than being accepted or rejected only after a particular monomorphization.
+
+## Semantic checker and `lcheck`
+
+`lib/portable/slang_check.l` is now a real value/place/body checker rather than a syntax demo. `./lcheck FILE` exposes it as a native-running command:
 
 ```sh
-./lsyntax --outline source.l
+./lcheck examples/core/linked_list.l
+./lcheck examples/core/generic_queue.l
 ```
 
-### 3. Project/module resolver: `slang_project`
+The checker currently covers the core value/place machinery needed by substantial programs: contextual numeric literals, arrays, optionals, refs, struct fields, builtins, function values, noncapturing anonymous functions, assignments and compound assignments, loops, returns, pattern bindings and nominal enum values.
 
-`lib/portable/slang_project.l` is the first semantic project layer. It operates on already-loaded **logical modules**, keeping filesystem/package lookup outside portable frontend semantics.
+Generic semantics are implemented structurally over semantic type trees:
 
-It currently checks or exposes:
+- generic function bodies are checked abstractly;
+- generic function calls infer arguments from call arguments and, when available, the expected result type;
+- generic struct literals infer type arguments from fields and/or an expected nominal type;
+- generic enum payloads and patterns substitute their subject/constructor arguments;
+- generic nominal field access substitutes the receiver's actual type arguments;
+- conflicting or incomplete inference is rejected;
+- direct recursive generic calls may not change their type parameters;
+- generic functions remain non-first-class values.
 
-- import-local names (`import a.b` binds `b`, unless aliased);
-- duplicate logical module names;
-- duplicate module-scope declarations/import bindings;
-- collision with Core builtin names (`len`, `push`, `pop`, `splice`);
-- unresolved source/host modules;
-- source-module import cycles;
-- public/private source member lookup;
-- distinct missing-module, missing-member, and private-member results.
+This is exercised by the real `examples/core/generic_queue.l` and by `tests/selfhost_checker_diff.py`.
 
-The resolver receives the host-module set explicitly. It does not hard-code POSIX files, package paths, repository layout, or the bundled hosted profile into Core semantics.
+### Differential testing
 
-`examples/portable/resolver_demo.l` exercises these cases and CI runs it through both the bytecode VM and native runtime.
+The Python checker is intentionally used as an oracle while the L checker is incomplete. The differential suite compares **accept/reject semantics**, not diagnostic wording, for representative programs and failure cases.
 
-### 4. Structured declarations and type syntax: `slang_decls`
+The corpus includes refs/optionals, nested places, arrays, enums/patterns, ordinary and anonymous function values, bad assignments/returns/arity/captures, generic identity/result inference, generic structs/enums, the generic queue example, conflicting/unconstrained inference and type-changing recursive generic calls.
 
-`lib/portable/slang_decls.l` parses the portions of top-level declarations needed for semantic checking rather than treating declarations as source extents only.
+A new semantic feature should normally add differential cases before it is considered complete.
 
-It represents:
+## Runtime status
 
-- declaration generic parameters;
-- struct fields and field visibility;
-- enum variants and payload types;
-- function parameters and return types;
-- constant declared types;
-- recursive type syntax for unit, named/generic, optional, `ref`, arrays, and function types;
-- source spans throughout.
+The frontend tools themselves run natively through the existing path:
 
-Recursive type syntax is represented with managed `ref Type` nodes, which also gives the self-hosting effort useful pressure on L's managed graph semantics.
+```text
+L tool/frontend source
+  -> Python bootstrap checker + bytecode compiler
+  -> bytecode embedded in generated C + native VM/runtime
+  -> cc -O3
+  -> native executable
+```
 
-Function bodies remain deliberately opaque in this layer. `examples/portable/signatures_demo.l` validates declaration/type parsing under both backends.
+Python is therefore still required to **build** the current L-written frontend, but not to execute the produced `lsyntax`, `lcheck`, Lace or LSP binaries.
 
-### 5. Type-name resolver: `slang_types`
+## Remaining route to self-hosting
 
-`lib/portable/slang_types.l` resolves structured type syntax to semantic identities. It handles:
+The highest-value remaining semantic work is to close the gap between `lcheck` and the Python Core checker rather than add unrelated language features. In particular:
 
-- scalar primitive types;
-- declaration generic parameters;
-- local struct/enum types;
-- qualified imported source types and import aliases;
-- source visibility;
-- generic/type arity;
-- explicit host opaque types supplied by the embedding environment;
-- non-type declarations used in type position;
-- unknown types and duplicate generic parameters.
+1. **Complete checker semantics** — match exhaustiveness, remaining generic-recursion restrictions, imported source/host value members, constants, visibility details, and exact numeric/cast edge rules.
+2. **Project-level `lcheck`** — feed multiple logical source modules and host declarations through the already-portable project/type/name layers instead of checking only one source module from the CLI.
+3. **Checked IR** — lower the resolved AST to a representation in which symbol identity, types, places and generic instantiations are decided once. Backends should not repeat source lookup/type inference.
+4. **Bytecode emitter in L** — target the existing bytecode/VM model first. Self-hosting should not depend on simultaneously inventing a second native backend.
+5. **Bootstrap comparison** — use the Python compiler to build compiler C1; use C1 to compile the compiler again into C2; compare behavior and, where practical, deterministic artifacts across the conformance corpus.
+6. **Tool convergence** — progressively move the LSP/analyzer onto the same syntax/symbol/type frontend so approximate duplicate parsers/resolvers can be deleted.
 
-Resolved type nodes retain their semantic module/name identity, resolved child types, function arity where applicable, and source spans. Later body/type checking should consume these identities rather than repeat string-based lookup.
-
-`examples/portable/type_resolution_demo.l` exercises both valid resolution and the principal failure modes under the VM and native runtime.
-
-## Why develop it in layers?
-
-The frontend is deliberately being built as reusable semantic infrastructure rather than a second monolithic compiler.
-
-The existing slices already exercise byte-oriented source processing, arrays/structs/enums/optionals/managed refs, recursive managed graphs, parser state, diagnostic recovery, source spans, logical modules/visibility, generic identities, and explicit host-environment boundaries.
-
-They also create useful convergence pressure: the compiler, LSP, formatter, analyzer, and editor should progressively share syntax/symbol identity rather than each maintaining approximate private logic.
-
-## Next slices
-
-The next progression is roughly:
-
-1. **Expression/statement AST** — promote the validating parser into the reusable structured representation required for body checking while retaining source spans and recovery.
-2. **Lexical/name resolution inside functions** — locals, parameters, pattern bindings, imports, top-level symbols, no-shadowing, and place identity.
-3. **Type checker** — expected-type propagation, numeric literals/casts, calls, generic declaration checking, exact generic-call inference, assignments/places, return analysis, and match exhaustiveness.
-4. **Checked intermediate representation** — execution/codegen consumes identities/types resolved once by the frontend rather than redoing lookup at runtime.
-5. **Bytecode emitter in L** — target the existing bytecode model first so self-hosting is not coupled to inventing another backend.
-6. **Bootstrap comparison** — compile the L compiler with the Python bootstrap compiler, then use that compiler to compile itself and compare behavior/artifacts across the conformance corpus.
-
-A filesystem/project loader for the reference command-line profile can be built around these portable layers, but filesystem naming is not itself part of L Core.
+A direct C/native backend can remain a later independent backend. The existing VM is useful for bootstrapping, differential testing, teaching and debugging.
 
 ## What does not count as self-hosting
 
 The project uses precise terminology:
 
-- A tool **written in L and compiled by the Python bootstrap frontend** is an L-written/native-running tool, not evidence that the compiler is self-hosted.
-- The current `L -> bytecode -> generated C + C VM -> executable` path is native execution, but the frontend is still bootstrapped.
-- Self-hosting is reached when the L-written compiler can compile the language implementation itself without requiring the Python frontend for ordinary builds.
+- A tool **written in L and compiled by the Python bootstrap frontend** is L-written/native-running, not proof that the compiler is self-hosted.
+- `L -> bytecode -> generated C + C VM -> executable` is native execution, but today the frontend producing that bytecode is still bootstrapped.
+- Self-hosting is reached when the L-written compiler can compile the language implementation itself without the Python frontend for ordinary builds.
 
-Until then, the Python implementation remains a useful independent oracle for differential testing rather than something to delete prematurely.
+Until then, keeping the Python implementation is useful: it gives the project an independent oracle instead of letting the emerging self-hosted implementation silently define semantics by its own bugs.
