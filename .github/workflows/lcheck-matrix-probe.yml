@@ -1,0 +1,26 @@
+name: Lcheck differential matrix probe
+
+on:
+  push:
+    branches: [work/lcheck-matrix-probe]
+    paths:
+      - tools/dev/lcheck_matrix_probe.py
+      - .github/workflows/lcheck-matrix-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/lcheck-matrix-probe
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build L-written checker
+        run: ./build.sh lcheck
+      - name: Run generated semantic matrix
+        run: python tools/dev/lcheck_matrix_probe.py
