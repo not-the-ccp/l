@@ -81,6 +81,9 @@ fn write_check_error(kind: slang_check.ErrorKind) {
     if (kind is slang_check.ErrorKind.bad_pattern) { stdio.write("pattern does not match the subject type"); return; }
     if (kind is slang_check.ErrorKind.break_outside_loop) { stdio.write("break outside loop"); return; }
     if (kind is slang_check.ErrorKind.continue_outside_loop) { stdio.write("continue outside loop"); return; }
+    if (kind is slang_check.ErrorKind.generic_inference) { stdio.write("cannot infer generic type arguments"); return; }
+    if (kind is slang_check.ErrorKind.duplicate_pattern) { stdio.write("duplicate match arm"); return; }
+    if (kind is slang_check.ErrorKind.non_exhaustive_match) { stdio.write("non-exhaustive match"); return; }
     stdio.write("function may fall off the end");
 }
 

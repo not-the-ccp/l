@@ -151,6 +151,38 @@ fn main() -> i64 {
         "type-changing generic recursion rejected",
         "fn bad[T](x: T) { bad([x]); } fn main() { bad(1); }",
     ),
+    (
+        "exhaustive bool match",
+        "fn f(x: bool) -> i64 { match (x) { true { return 1; } false { return 0; } } }",
+    ),
+    (
+        "non-exhaustive bool match",
+        "fn f(x: bool) -> i64 { match (x) { true { return 1; } } }",
+    ),
+    (
+        "non-exhaustive optional match",
+        "fn f(x: ?i64) -> i64 { match (x) { some(v) { return v; } } }",
+    ),
+    (
+        "non-exhaustive enum match",
+        "enum Color { red, green, blue, } fn f(x: Color) -> i64 { match (x) { red { return 1; } green { return 2; } } }",
+    ),
+    (
+        "integer match requires catchall",
+        "fn f(x: i64) -> i64 { match (x) { 0 { return 0; } 1 { return 1; } } }",
+    ),
+    (
+        "integer binding catchall",
+        "fn f(x: i64) -> i64 { match (x) { 0 { return 0; } other { return other; } } }",
+    ),
+    (
+        "duplicate bool arm",
+        "fn f(x: bool) -> i64 { match (x) { true { return 1; } true { return 2; } false { return 0; } } }",
+    ),
+    (
+        "unit match exhaustive",
+        "fn f(x: ()) -> i64 { match (x) { () { return 1; } } }",
+    ),
 ]
 
 

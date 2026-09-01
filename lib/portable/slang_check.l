@@ -35,6 +35,8 @@ pub enum ErrorKind {
     continue_outside_loop,
     missing_return,
     generic_inference,
+    duplicate_pattern,
+    non_exhaustive_match,
 }
 
 pub struct Error {
@@ -1185,6 +1187,121 @@ fn check_condition(checker: ref Checker, expr: ref slang_decls.Expr, allow_bindi
     require_same(checker, primitive_type("bool"), expr_type(checker, expr, some(primitive_type("bool"))), expr.start, expr.end);
 }
 
+struct PatternCoverage {
+    wildcard: bool,
+    key: []u8,
+}
+
+fn coverage_key(pattern: ref slang_decls.Pattern, key: []u8) -> PatternCoverage {
+    return PatternCoverage { wildcard: false, key: bytes.clone(key) };
+}
+
+fn pattern_coverage(checker: ref Checker, pattern: ref slang_decls.Pattern,
+    subject: ref slang_types.ResolvedType) -> PatternCoverage {
+    if (pattern.kind is slang_decls.PatternKind.wildcard) {
+        return PatternCoverage { wildcard: true, key: [] };
+    }
+    if (pattern.kind is slang_decls.PatternKind.unit) { return coverage_key(pattern, "()"); }
+    if (pattern.kind is slang_decls.PatternKind.none_value) { return coverage_key(pattern, "none"); }
+    if (pattern.kind is slang_decls.PatternKind.some_value) { return coverage_key(pattern, "some"); }
+    if (pattern.kind is slang_decls.PatternKind.boolean ||
+        pattern.kind is slang_decls.PatternKind.integer ||
+        pattern.kind is slang_decls.PatternKind.byte) {
+        return coverage_key(pattern, pattern.name);
+    }
+    if (pattern.kind is slang_decls.PatternKind.constructor) {
+        var name = pattern.name;
+        match (tail_start(name)) { none { } some(pos) { name = bytes.slice(name, pos, len(name)); } }
+        return coverage_key(pattern, name);
+    }
+    if (pattern.kind is slang_decls.PatternKind.binding) {
+        // A bare name is a closed enum case only when it names a fieldless
+        // variant of the subject enum. Otherwise it is a binding catch-all.
+        if (subject.kind is slang_types.ResolvedKind.nominal && bytes.equal(subject.module, "main")) {
+            match (find_decl(checker, subject.name)) {
+                none { }
+                some(decl) {
+                    if (decl.kind is slang_decls.DeclKind.enumeration) {
+                        match (enum_variant(checker, decl, pattern.name)) {
+                            none { }
+                            some(variant) {
+                                if (len(variant.payload) == 0) { return coverage_key(pattern, pattern.name); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return PatternCoverage { wildcard: true, key: [] };
+    }
+    return PatternCoverage { wildcard: false, key: [] };
+}
+
+fn coverage_contains(seen: [][]u8, key: []u8) -> bool {
+    for (item in seen) { if (bytes.equal(item, key)) { return true; } }
+    return false;
+}
+
+fn require_coverage(checker: ref Checker, seen: [][]u8, key: []u8,
+    start: u64, end: u64) {
+    if (!coverage_contains(seen, key)) {
+        push_error(checker, ErrorKind.non_exhaustive_match, key, start, end);
+    }
+}
+
+fn check_match_coverage(checker: ref Checker, stmt: ref slang_decls.Stmt,
+    subject: ref slang_types.ResolvedType) {
+    if (subject.kind is slang_types.ResolvedKind.invalid) { return; }
+    var seen: [][]u8 = [];
+    var wildcard = false;
+    for (arm in stmt.arms) {
+        var coverage = pattern_coverage(checker, arm.pattern, subject);
+        if (coverage.wildcard) {
+            wildcard = true;
+        } else if (len(coverage.key) > 0) {
+            if (coverage_contains(seen, coverage.key)) {
+                push_error(checker, ErrorKind.duplicate_pattern, coverage.key,
+                    arm.pattern.start, arm.pattern.end);
+            } else {
+                push(seen, coverage.key);
+            }
+        }
+    }
+    if (wildcard) { return; }
+
+    if (subject.kind is slang_types.ResolvedKind.unit) {
+        require_coverage(checker, seen, "()", stmt.start, stmt.end);
+        return;
+    }
+    if (is_primitive(subject, "bool")) {
+        require_coverage(checker, seen, "true", stmt.start, stmt.end);
+        require_coverage(checker, seen, "false", stmt.start, stmt.end);
+        return;
+    }
+    if (subject.kind is slang_types.ResolvedKind.optional) {
+        require_coverage(checker, seen, "none", stmt.start, stmt.end);
+        require_coverage(checker, seen, "some", stmt.start, stmt.end);
+        return;
+    }
+    if (subject.kind is slang_types.ResolvedKind.nominal && bytes.equal(subject.module, "main")) {
+        match (find_decl(checker, subject.name)) {
+            none { }
+            some(decl) {
+                if (decl.kind is slang_decls.DeclKind.enumeration) {
+                    for (variant in decl.variants) {
+                        require_coverage(checker, seen, variant.name, stmt.start, stmt.end);
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
+    // Integer, byte, float, refs, arrays, function values and future open
+    // domains cannot be enumerated by a finite literal-arm list.
+    push_error(checker, ErrorKind.non_exhaustive_match, [], stmt.start, stmt.end);
+}
+
 fn check_stmt(checker: ref Checker, stmt: ref slang_decls.Stmt) {
     if (stmt.kind is slang_decls.StmtKind.variable) {
         var expected: ?ref slang_types.ResolvedType = none;
@@ -1276,6 +1393,7 @@ fn check_stmt(checker: ref Checker, stmt: ref slang_decls.Stmt) {
             check_block(checker, arm.body);
             pop_candidate_scope(checker);
         }
+        check_match_coverage(checker, stmt, subject);
         return;
     }
 
