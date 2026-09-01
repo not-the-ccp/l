@@ -6,7 +6,7 @@ fn require(ok: bool) {
 
 fn has_error(errors: []slang_check.Error, kind: slang_check.ErrorKind) -> bool {
     for (error in errors) {
-        if (error.kind is kind) { return true; }
+        if (error.kind == kind) { return true; }
     }
     return false;
 }
