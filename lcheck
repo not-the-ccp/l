@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ ! -x "$HERE/build/lcheck" ] || [ "$HERE/tools/check/lcheck.l" -nt "$HERE/build/lcheck" ] || [ "$HERE/lib/portable/slang_check.l" -nt "$HERE/build/lcheck" ] || [ "$HERE/lib/portable/slang_names.l" -nt "$HERE/build/lcheck" ] || [ "$HERE/lib/portable/slang_types.l" -nt "$HERE/build/lcheck" ] || [ "$HERE/lib/portable/slang_decls.l" -nt "$HERE/build/lcheck" ] || [ "$HERE/lib/portable/slang_syntax.l" -nt "$HERE/build/lcheck" ] || [ "$HERE/runtime/native_vm.c" -nt "$HERE/build/lcheck" ]; then
+  "$HERE/build.sh" lcheck >/dev/null
+fi
+exec "$HERE/build/lcheck" "$@"
