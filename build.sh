@@ -14,6 +14,9 @@ build_syntax() {
 build_check() {
     CC="$CC" "$HERE/lc" "$HERE/tools/check/lcheck.l" -o "$HERE/build/lcheck" >/dev/null
 }
+build_shell() {
+    CC="$CC" "$HERE/lc" "$HERE/tools/shell/lsh.l" --root "$HERE/tools/shell" -o "$HERE/build/lsh-lab" >/dev/null
+}
 case "${1:-all}" in
   all|tools)
     build_one editor lace
@@ -22,6 +25,7 @@ case "${1:-all}" in
     build_one lsp-ini ini-lsp
     build_syntax
     build_check
+    build_shell
     ;;
   lace) build_one editor lace ;;
   l-lsp) build_one lsp-l l-lsp ;;
@@ -29,6 +33,7 @@ case "${1:-all}" in
   ini-lsp) build_one lsp-ini ini-lsp ;;
   lsyntax) build_syntax ;;
   lcheck) build_check ;;
+  lsh-lab) build_shell ;;
   clean) rm -rf "$HERE/build" ;;
-  *) echo "usage: ./build.sh [all|tools|lace|l-lsp|json-lsp|ini-lsp|lsyntax|lcheck|clean]" >&2; exit 2 ;;
+  *) echo "usage: ./build.sh [all|tools|lace|l-lsp|json-lsp|ini-lsp|lsyntax|lcheck|lsh-lab|clean]" >&2; exit 2 ;;
 esac
