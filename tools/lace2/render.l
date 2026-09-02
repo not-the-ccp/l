@@ -20,6 +20,17 @@ fn append_spaces(out: []u8, count: u64) {
     for (var i: u64 = 0; i < count; i += 1) { push(out, ' '); }
 }
 
+fn safe_inline(value: []u8) -> []u8 {
+    var out: []u8 = [];
+    var offset: u64 = 0;
+    while (offset < len(value)) {
+        var unit = display.next_unit(value, offset);
+        bytes.append(out, display.representation(value, unit));
+        offset = unit.end;
+    }
+    return out;
+}
+
 fn append_move(out: []u8, row: u64, col: u64) {
     bytes.append(out, "\x1b[");
     strconv.append_u64(out, row);
@@ -131,14 +142,15 @@ fn render_line(
 }
 
 fn append_status(out: []u8, editor: ref model.Editor, path: []u8, cols: u64) {
+    var safe_path = safe_inline(path);
     bytes.append(out, "\x1b[2K\x1b[7m ");
     bytes.append(out, mode_name(editor));
     bytes.append(out, "  ");
     if (model.dirty(editor)) { bytes.append(out, "[+] "); }
-    bytes.append(out, path);
+    bytes.append(out, safe_path);
     bytes.append(out, "  byte ");
     strconv.append_u64(out, model.cursor(editor));
-    var visible = term.text_width(mode_name(editor)) + term.text_width(path) + 16;
+    var visible = term.text_width(mode_name(editor)) + term.text_width(safe_path) + 16;
     if (model.dirty(editor)) { visible += 4; }
     if (visible < cols) { append_spaces(out, cols - visible); }
     bytes.append(out, "\x1b[0m");
@@ -197,7 +209,7 @@ pub fn draw(
         append_status(out, editor, path, cols);
         append_move(out, rows, 1);
         bytes.append(out, "\x1b[2K");
-        bytes.append(out, message);
+        bytes.append(out, safe_inline(message));
     }
 
     if (frame.cursor_visible) {
