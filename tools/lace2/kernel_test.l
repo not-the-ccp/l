@@ -22,6 +22,7 @@ fn test_round_trip_bytes() {
     for (var i: u64 = 0; i < len(raw); i += 1) {
         expect(text.byte_at(doc, i) == raw[i]);
     }
+    text.validate(doc);
 
     expect_bytes(display.render_debug(raw), "^@^A<TAB><LF>^[^?<80><FF>");
 }
@@ -66,6 +67,21 @@ fn test_piece_tree_basic() {
 
     text.replace(doc, 2, 4, []);
     expect_bytes(text.to_bytes(doc), "abQf\n012345\nxyz");
+    text.validate(doc);
+}
+
+fn test_piece_tree_sequential_appends() {
+    var doc = text.from_bytes([]);
+    for (var i: u64 = 0; i < 10000; i += 1) {
+        var value: []u8 = [(i & 0xff) as u8];
+        text.replace(doc, text.byte_len(doc), text.byte_len(doc), value);
+        if (i % 97 == 0) { text.validate(doc); }
+    }
+    text.validate(doc);
+    var stats = text.stats(doc);
+    expect(stats.byte_len == 10000);
+    expect(stats.pieces == 10000);
+    expect(stats.height < 32);
 }
 
 fn rng_next(state: ref u64) -> u64 {
@@ -109,9 +125,11 @@ fn test_piece_tree_random_edits() {
         if (step % 31 == 0) {
             expect_bytes(text.to_bytes(doc), flat);
             expect(text.byte_len(doc) == len(flat));
+            text.validate(doc);
         }
     }
     expect_bytes(text.to_bytes(doc), flat);
+    text.validate(doc);
 }
 
 fn test_transaction_and_bias() {
@@ -127,6 +145,7 @@ fn test_transaction_and_bias() {
     var undo_tx = transaction.apply(doc, inverse);
     expect(len(undo_tx.edits) == 2);
     expect_bytes(text.to_bytes(doc), "abcdef");
+    text.validate(doc);
 
     var insert_doc = text.from_bytes("abc");
     var insert_tx = transaction.apply(insert_doc, [
@@ -194,12 +213,14 @@ fn test_branching_history() {
     var redo_second = history.redo(h, doc, 1);
     expect(redo_second is some(_));
     expect_bytes(text.to_bytes(doc), "abc2");
+    text.validate(doc);
 }
 
 fn main() {
     test_round_trip_bytes();
     test_strict_utf8_units();
     test_piece_tree_basic();
+    test_piece_tree_sequential_appends();
     test_piece_tree_random_edits();
     test_transaction_and_bias();
     test_branching_history();
