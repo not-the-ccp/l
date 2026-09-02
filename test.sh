@@ -31,10 +31,12 @@ printf '%s\n' "$ast" | grep -q '^[[:space:]]*return$'
 # parser is written in L, and its direct execution path passes an argv vector
 # to proc.spawn rather than evaluating command text through /bin/sh.
 "$HERE/build/lsh-lab" --self-test >/dev/null
-plan=$("$HERE/build/lsh-lab" --plan 'printf "hello world"|wc -c')
+plan=$("$HERE/build/lsh-lab" --plan 'printf "hello world" | wc -c')
 test "$plan" = 'foreground: [printf] [hello world] | [wc] [-c]'
-plan=$("$HERE/build/lsh-lab" --plan 'build err>errors.log all>everything.log >output.log &')
+plan=$("$HERE/build/lsh-lab" --plan 'build err> errors.log all> everything.log > output.log &')
 test "$plan" = 'background: [build] err> [errors.log] all> [everything.log] > [output.log]'
+plan=$("$HERE/build/lsh-lab" --plan 'echo a|b x>y foo&bar')
+test "$plan" = 'foreground: [echo] [a|b] [x>y] [foo&bar]'
 direct=$("$HERE/build/lsh-lab" --run 'printf shell-direct-ok')
 test "$direct" = 'shell-direct-ok'
 
