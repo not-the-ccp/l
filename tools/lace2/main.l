@@ -5,6 +5,7 @@ import sys;
 import term;
 import tools.lace2.display_bytes as display;
 import tools.lace2.editor_model as model;
+import tools.lace2.linewise as linewise;
 import tools.lace2.navigation as nav;
 import tools.lace2.piece_tree as text;
 import tools.lace2.render as render;
@@ -32,6 +33,40 @@ fn set_message(ui: ref Ui, value: []u8) {
 
 fn key_is(key: []u8, value: u8) -> bool {
     return len(key) == 1 && key[0] == value;
+}
+
+fn key_sequence(key: []u8, sequence: []u8) -> bool {
+    return bytes.equal(key, sequence);
+}
+
+fn key_left(key: []u8) -> bool {
+    return key_sequence(key, "\x1b[D") || key_sequence(key, "\x1bOD");
+}
+
+fn key_right(key: []u8) -> bool {
+    return key_sequence(key, "\x1b[C") || key_sequence(key, "\x1bOC");
+}
+
+fn key_up(key: []u8) -> bool {
+    return key_sequence(key, "\x1b[A") || key_sequence(key, "\x1bOA");
+}
+
+fn key_down(key: []u8) -> bool {
+    return key_sequence(key, "\x1b[B") || key_sequence(key, "\x1bOB");
+}
+
+fn key_home(key: []u8) -> bool {
+    return key_sequence(key, "\x1b[H") || key_sequence(key, "\x1bOH") ||
+        key_sequence(key, "\x1b[1~") || key_sequence(key, "\x1b[7~");
+}
+
+fn key_end(key: []u8) -> bool {
+    return key_sequence(key, "\x1b[F") || key_sequence(key, "\x1bOF") ||
+        key_sequence(key, "\x1b[4~") || key_sequence(key, "\x1b[8~");
+}
+
+fn key_delete(key: []u8) -> bool {
+    return key_sequence(key, "\x1b[3~");
 }
 
 fn line_number_at(doc: ref text.Text, start: u64) -> u64 {
@@ -168,8 +203,8 @@ fn prompt(ui: ref Ui, prefix: []u8) -> ?[]u8 {
                 }
                 if (key_is(key, 0x7f) || key_is(key, 0x08)) {
                     drop_prompt_atom(value);
-                } else if (len(key) == 1 && key[0] >= 0x20) {
-                    push(value, key[0]);
+                } else if (len(key) > 0 && key[0] >= 0x20 && key[0] != 0x7f) {
+                    bytes.append(value, key);
                 }
             }
         }
@@ -245,16 +280,16 @@ fn recenter(ui: ref Ui) {
 }
 
 fn do_motion(ui: ref Ui, key: []u8, count: u64) -> bool {
-    if (key_is(key, 'h')) { model.move_left(ui.editor, count); return true; }
-    if (key_is(key, 'l')) { model.move_right(ui.editor, count); return true; }
-    if (key_is(key, 'j')) { model.move_vertical(ui.editor, true, count); return true; }
-    if (key_is(key, 'k')) { model.move_vertical(ui.editor, false, count); return true; }
+    if (key_is(key, 'h') || key_left(key)) { model.move_left(ui.editor, count); return true; }
+    if (key_is(key, 'l') || key_right(key)) { model.move_right(ui.editor, count); return true; }
+    if (key_is(key, 'j') || key_down(key)) { model.move_vertical(ui.editor, true, count); return true; }
+    if (key_is(key, 'k') || key_up(key)) { model.move_vertical(ui.editor, false, count); return true; }
     if (key_is(key, 'w')) { model.move_word_forward(ui.editor, count); return true; }
     if (key_is(key, 'b')) { model.move_word_backward(ui.editor, count); return true; }
     if (key_is(key, 'e')) { model.move_word_end(ui.editor, count); return true; }
-    if (key_is(key, '0')) { model.move_line_start(ui.editor, false); return true; }
+    if (key_is(key, '0') || key_home(key)) { model.move_line_start(ui.editor, false); return true; }
     if (key_is(key, '^')) { model.move_line_start(ui.editor, true); return true; }
-    if (key_is(key, '$')) { model.move_line_end(ui.editor); return true; }
+    if (key_is(key, '$') || key_end(key)) { model.move_line_end(ui.editor); return true; }
     if (key_is(key, 'G')) { model.move_document_end(ui.editor); return true; }
     return false;
 }
@@ -265,10 +300,10 @@ fn operator_command(ui: ref Ui, op: u8) {
         none { return; }
         some(second) {
             var span_opt: ?model.Span = none;
-            var linewise = false;
+            var is_linewise = false;
             if (key_is(second, op)) {
                 span_opt = some(model.current_line_span(ui.editor));
-                linewise = true;
+                is_linewise = true;
             } else if (len(second) == 1) {
                 span_opt = model.motion_span(ui.editor, second[0]);
             }
@@ -276,13 +311,15 @@ fn operator_command(ui: ref Ui, op: u8) {
                 none { return; }
                 some(span) {
                     if (op == 'y') {
-                        model.yank_span(ui.editor, span, linewise);
+                        model.yank_span(ui.editor, span, is_linewise);
                         model.set_cursor(ui.editor, span.start);
                         set_message(ui, "yanked");
+                    } else if (op == 'c' && is_linewise) {
+                        linewise.change_current_line(ui.editor);
                     } else if (op == 'c') {
-                        model.delete_span(ui.editor, span, linewise, true);
+                        model.delete_span(ui.editor, span, false, true);
                     } else {
-                        model.delete_span(ui.editor, span, linewise, false);
+                        model.delete_span(ui.editor, span, is_linewise, false);
                     }
                 }
             }
@@ -312,15 +349,15 @@ fn visual_command(ui: ref Ui, key: []u8, count: u64) {
         match (span_opt) {
             none { return; }
             some(span) {
-                var linewise = ui.editor.mode is model.Mode.visual_line;
+                var is_linewise = ui.editor.mode is model.Mode.visual_line;
                 if (key_is(key, 'y')) {
-                    model.yank_span(ui.editor, span, linewise);
+                    model.yank_span(ui.editor, span, is_linewise);
                     model.set_cursor(ui.editor, span.start);
                     model.leave_visual(ui.editor);
                     set_message(ui, "yanked");
                 } else {
                     var change = key_is(key, 'c');
-                    model.delete_span(ui.editor, span, linewise, change);
+                    model.delete_span(ui.editor, span, is_linewise, change);
                 }
             }
         }
@@ -337,10 +374,7 @@ fn read_utf8_tail(first: u8) -> []u8 {
         var next_opt = term.read_key_timeout(10);
         match (next_opt) {
             none { break; }
-            some(next) {
-                if (len(next) == 0) { break; }
-                push(out, next[0]);
-            }
+            some(next) { bytes.append(out, next); }
         }
     }
     return out;
@@ -371,8 +405,8 @@ fn literal_insert(ui: ref Ui) {
                         }
                     }
                 }
-            } else if (len(next) == 1) {
-                model.insert_byte(ui.editor, next[0]);
+            } else if (len(next) > 0 && next[0] != 0x1b) {
+                model.insert_bytes(ui.editor, next);
             }
         }
     }
@@ -383,10 +417,21 @@ fn insert_command(ui: ref Ui, key: []u8) {
         model.leave_insert(ui.editor);
         return;
     }
+    if (key_left(key)) { model.move_left(ui.editor, 1); return; }
+    if (key_right(key)) { model.move_right(ui.editor, 1); return; }
+    if (key_up(key)) { model.move_vertical(ui.editor, false, 1); return; }
+    if (key_down(key)) { model.move_vertical(ui.editor, true, 1); return; }
+    if (key_home(key)) { model.move_line_start(ui.editor, false); return; }
+    if (key_end(key)) { model.move_line_end(ui.editor); return; }
+    if (key_delete(key)) { model.delete_forward(ui.editor, 1); return; }
     if (key_is(key, 0x7f) || key_is(key, 0x08)) { model.backspace(ui.editor); return; }
     if (key_is(key, '\r') || key_is(key, '\n')) { model.insert_newline(ui.editor); return; }
     if (key_is(key, '\t')) { model.insert_byte(ui.editor, '\t'); return; }
     if (key_is(key, 0x16)) { literal_insert(ui); return; }
+    if (len(key) > 1 && key[0] != 0x1b) {
+        model.insert_bytes(ui.editor, key);
+        return;
+    }
     if (len(key) == 1 && key[0] >= 0x20) {
         model.insert_bytes(ui.editor, read_utf8_tail(key[0]));
     }
@@ -440,7 +485,7 @@ fn colon_command(ui: ref Ui) {
                 return;
             }
             if (bytes.equal(command, "help")) {
-                set_message(ui, "i/a/o edit · hjkl/wbe move · d/y/c ops · v/V select · / search · :w :q · ^VxFF raw byte");
+                set_message(ui, "i/a/o edit · hjkl/arrows/wbe move · d/y/c ops · v/V select · / search · :w :q · ^VxFF raw byte");
                 return;
             }
             set_message(ui, "unknown command");
@@ -454,7 +499,7 @@ fn normal_command(ui: ref Ui, first: []u8) {
     var key = parsed.key;
     if (len(key) == 0) { return; }
     if (do_motion(ui, key, count)) { return; }
-    if (key_is(key, 0x03)) { set_message(ui, ""); return; }
+    if (key_is(key, 0x03) || key_is(key, 0x1b)) { set_message(ui, ""); return; }
 
     if (key_is(key, 'g')) {
         var second_opt = term.read_key();
@@ -487,7 +532,18 @@ fn normal_command(ui: ref Ui, first: []u8) {
     }
     if (key_is(key, 'o')) { model.open_line(ui.editor, true); return; }
     if (key_is(key, 'O')) { model.open_line(ui.editor, false); return; }
-    if (key_is(key, 'x')) { model.delete_forward(ui.editor, count); return; }
+    if (key_is(key, 'x') || key_delete(key)) { model.delete_forward(ui.editor, count); return; }
+    if (key_is(key, 's')) {
+        var pos = model.cursor(ui.editor);
+        var end = pos;
+        var n: u64 = 0;
+        var line_end = nav.line_end(ui.editor.doc, pos);
+        while (n < count && end < line_end) { end = nav.next_atom(ui.editor.doc, end); n += 1; }
+        if (end > pos) { model.delete_span(ui.editor, model.Span { start: pos, end: end }, false, true); }
+        else { model.enter_insert(ui.editor, pos); }
+        return;
+    }
+    if (key_is(key, 'S')) { linewise.change_current_line(ui.editor); return; }
     if (key_is(key, 'X')) {
         var pos = model.cursor(ui.editor);
         var start = pos;
@@ -500,6 +556,7 @@ fn normal_command(ui: ref Ui, first: []u8) {
         var pos = model.cursor(ui.editor);
         var end = nav.line_end(ui.editor.doc, pos);
         if (end > pos) { model.delete_span(ui.editor, model.Span { start: pos, end: end }, false, key_is(key, 'C')); }
+        else if (key_is(key, 'C')) { model.enter_insert(ui.editor, pos); }
         return;
     }
     if (key_is(key, 'd') || key_is(key, 'y') || key_is(key, 'c')) { operator_command(ui, key[0]); return; }
@@ -509,8 +566,8 @@ fn normal_command(ui: ref Ui, first: []u8) {
         set_message(ui, "yanked line");
         return;
     }
-    if (key_is(key, 'p')) { model.paste(ui.editor, true); return; }
-    if (key_is(key, 'P')) { model.paste(ui.editor, false); return; }
+    if (key_is(key, 'p')) { linewise.paste(ui.editor, true); return; }
+    if (key_is(key, 'P')) { linewise.paste(ui.editor, false); return; }
     if (key_is(key, 'u')) { model.undo(ui.editor); return; }
     if (key_is(key, 0x12)) { model.redo(ui.editor); return; }
     if (key_is(key, 'r')) {
