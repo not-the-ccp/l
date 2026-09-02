@@ -41,6 +41,13 @@ test "$plan" = 'foreground: [echo] [a|b] [x>y] [foo&bar]'
 direct=$("$HERE/build/lsh-lab" --run 'printf shell-direct-ok')
 test "$direct" = 'shell-direct-ok'
 
+# Linux-only process substrate probe: build a three-process pipeline directly
+# from L using explicit file descriptors and one process group. No command text
+# is delegated to another shell. Correct output also checks that the parent did
+# not retain a write end that would prevent EOF from reaching downstream.
+linux_pipeline=$("$HERE/lr" "$HERE/tools/shell/linux_probe.l")
+test "$linux_pipeline" = '3'
+
 bad=$(mktemp)
 trap 'rm -f "$bad"' EXIT HUP INT TERM
 printf 'fn broken( {\n' >"$bad"
