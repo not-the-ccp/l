@@ -27,6 +27,17 @@ printf '%s\n' "$ast" | grep -q '^[[:space:]]*return$'
 "$HERE/build/lsyntax" --ast "$HERE/tools/lace/lace.l" >/dev/null
 "$HERE/build/lcheck" "$HERE/examples/core/linked_list.l" >/dev/null
 
+# The shell language lab is deliberately not POSIX-shell compatible. Its
+# parser is written in L, and its direct execution path passes an argv vector
+# to proc.spawn rather than evaluating command text through /bin/sh.
+"$HERE/build/lsh-lab" --self-test >/dev/null
+plan=$("$HERE/build/lsh-lab" --plan 'printf "hello world"|wc -c')
+test "$plan" = 'foreground: [printf] [hello world] | [wc] [-c]'
+plan=$("$HERE/build/lsh-lab" --plan 'build err>errors.log all>everything.log >output.log &')
+test "$plan" = 'background: [build] err> [errors.log] all> [everything.log] > [output.log]'
+direct=$("$HERE/build/lsh-lab" --run 'printf shell-direct-ok')
+test "$direct" = 'shell-direct-ok'
+
 bad=$(mktemp)
 trap 'rm -f "$bad"' EXIT HUP INT TERM
 printf 'fn broken( {\n' >"$bad"
