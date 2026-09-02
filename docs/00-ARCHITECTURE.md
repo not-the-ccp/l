@@ -9,11 +9,11 @@
 - static name/type checking;
 - logical source modules and visibility rules;
 - fixed-width scalar semantics;
-- structs, enums, optionals, dynamic arrays, managed references, functions, and unit;
+- structs, enums, optionals, dynamic arrays with mutable and shallow-const handles, managed references, functions, and unit;
 - unconstrained parametric generics;
 - deterministic left-to-right evaluation;
 - bounds/trap semantics;
-- managed reachability semantics for `ref T` and `[]T`;
+- managed reachability semantics for `ref T`, `[]T`, and `const []T`;
 - the four core dynamic-array operations `len`, `push`, `pop`, and `splice`.
 
 L Core does **not** define:

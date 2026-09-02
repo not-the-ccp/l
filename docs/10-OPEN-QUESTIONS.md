@@ -29,13 +29,19 @@ Mutual generic recursion is rejected largely to guarantee trivial finite monomor
 
 Explicit tagged-result matching is verbose. We have intentionally rejected `try`/`?` so far. Review larger real programs and decide whether the cost eventually crosses the line.
 
-## Array identity/equality and immutable data
+## Frozen/value arrays
 
-Arrays are mutable aliasing objects and have no built-in value equality. Strings are therefore mutable arrays too. Is this acceptable long term for map keys/configuration APIs, or does a separate immutable byte-string/value-array concept eventually earn itself?
+`const []T` provides shallow read-only access through one handle, but mutable aliases may still change the same array object. It therefore does not make an array a stable content-hashed key or immutable value.
 
-## Const scope
+Do real map-key, configuration, concurrency, interning, or persistence use cases eventually justify a separate frozen/value-array concept? If so, the design must make its construction cost and aliasing consequences explicit rather than silently turning qualification into copying or runtime freezing.
 
-Scalar-only `const` avoids a compile-time language. Is it too restrictive? Could immutable aggregate constants be added without deep-const semantics and initialization complexity?
+## Const-array ergonomics
+
+Mutable arrays implicitly qualify to `const []T`, and string literals infer `const []u8` unless the literal itself is contextually required to be mutable. Review dogfooded APIs for cases where preserving or returning the caller's array capability would require qualifier polymorphism. Avoid adding permission-generic machinery until concrete APIs demonstrate the need.
+
+## Module `const` scope
+
+Module `const` declarations remain scalar-only and are separate from the `const []T` type qualifier. Scalar-only declarations avoid introducing a compile-time language. Is that too restrictive? Could aggregate module constants be added without deep-const semantics and initialization complexity?
 
 ## Source/module visibility model
 
