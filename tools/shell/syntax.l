@@ -47,20 +47,34 @@ enum LexResult {
     error([]u8),
 }
 
-fn at(input: []u8, start: u64, text: []u8) -> bool {
-    if (start + len(text) > len(input)) {
-        return false;
-    }
-    for (var i: u64 = 0; i < len(text); i += 1) {
-        if (input[start + i] != text[i]) {
-            return false;
-        }
-    }
-    return true;
-}
-
 fn push_operator(tokens: []Token, kind: TokenKind, start: u64, end: u64) {
     push(tokens, Token { kind: kind, text: [], start: start, end: end });
+}
+
+fn push_word_or_operator(tokens: []Token, word: []u8, quoted: bool, start: u64, end: u64) {
+    if (!quoted) {
+        if (bytes.equal(word, "|")) {
+            push_operator(tokens, TokenKind.pipe, start, end);
+            return;
+        }
+        if (bytes.equal(word, ">")) {
+            push_operator(tokens, TokenKind.redirect_out, start, end);
+            return;
+        }
+        if (bytes.equal(word, "err>")) {
+            push_operator(tokens, TokenKind.redirect_err, start, end);
+            return;
+        }
+        if (bytes.equal(word, "all>")) {
+            push_operator(tokens, TokenKind.redirect_all, start, end);
+            return;
+        }
+        if (bytes.equal(word, "&")) {
+            push_operator(tokens, TokenKind.background, start, end);
+            return;
+        }
+    }
+    push(tokens, Token { kind: TokenKind.word, text: word, start: start, end: end });
 }
 
 fn lex(input: []u8) -> LexResult {
@@ -76,41 +90,14 @@ fn lex(input: []u8) -> LexResult {
         }
 
         var start = i;
-        if (at(input, i, "err>")) {
-            push_operator(tokens, TokenKind.redirect_err, i, i + 4);
-            i += 4;
-            continue;
-        }
-        if (at(input, i, "all>")) {
-            push_operator(tokens, TokenKind.redirect_all, i, i + 4);
-            i += 4;
-            continue;
-        }
-        if (input[i] == '>') {
-            push_operator(tokens, TokenKind.redirect_out, i, i + 1);
-            i += 1;
-            continue;
-        }
-        if (input[i] == '|') {
-            push_operator(tokens, TokenKind.pipe, i, i + 1);
-            i += 1;
-            continue;
-        }
-        if (input[i] == '&') {
-            push_operator(tokens, TokenKind.background, i, i + 1);
-            i += 1;
-            continue;
-        }
-
         var word: []u8 = [];
         var saw = false;
-        while (i < len(input)) {
-            if (bytes.is_ascii_space(input[i]) || input[i] == '|' || input[i] == '&' || input[i] == '>') {
-                break;
-            }
+        var quoted = false;
 
+        while (i < len(input) && !bytes.is_ascii_space(input[i])) {
             if (input[i] == '"') {
                 saw = true;
+                quoted = true;
                 i += 1;
                 var closed = false;
                 while (i < len(input)) {
@@ -128,7 +115,27 @@ fn lex(input: []u8) -> LexResult {
                     }
                 }
                 if (!closed) {
-                    return LexResult.error("unterminated quoted argument");
+                    return LexResult.error("unterminated double-quoted argument");
+                }
+                continue;
+            }
+
+            if (input[i] == 39) {
+                saw = true;
+                quoted = true;
+                i += 1;
+                var closed = false;
+                while (i < len(input)) {
+                    if (input[i] == 39) {
+                        i += 1;
+                        closed = true;
+                        break;
+                    }
+                    push(word, input[i]);
+                    i += 1;
+                }
+                if (!closed) {
+                    return LexResult.error("unterminated single-quoted argument");
                 }
                 continue;
             }
@@ -141,7 +148,7 @@ fn lex(input: []u8) -> LexResult {
         if (!saw) {
             return LexResult.error("unexpected shell syntax");
         }
-        push(tokens, Token { kind: TokenKind.word, text: word, start: start, end: i });
+        push_word_or_operator(tokens, word, quoted, start, i);
     }
 
     return LexResult.ok(tokens);
@@ -320,7 +327,7 @@ pub fn self_test() {
     require_bytes(simple.commands[0].argv[0], "git");
     require_bytes(simple.commands[0].argv[1], "status");
 
-    var quoted = expect_ok("printf \"hello world\"|wc -c");
+    var quoted = expect_ok("printf \"hello world\" | wc -c");
     require(len(quoted.commands) == 2);
     require_bytes(quoted.commands[0].argv[1], "hello world");
     require_bytes(quoted.commands[1].argv[0], "wc");
@@ -330,7 +337,28 @@ pub fn self_test() {
     require(len(joined.commands[0].argv) == 2);
     require_bytes(joined.commands[0].argv[1], "premiddle spacepost");
 
-    var redirected = expect_ok("build err>errors.log all>everything.log >output.log &");
+    var raw = expect_ok("jq '.foo | .bar > \"x\"' data.json");
+    require(len(raw.commands) == 1);
+    require(len(raw.commands[0].argv) == 3);
+    require_bytes(raw.commands[0].argv[1], ".foo | .bar > \"x\"");
+
+    var punctuation = expect_ok("echo a|b x>y foo&bar err>nope all>data >output");
+    require(len(punctuation.commands) == 1);
+    require(len(punctuation.commands[0].argv) == 7);
+    require_bytes(punctuation.commands[0].argv[1], "a|b");
+    require_bytes(punctuation.commands[0].argv[2], "x>y");
+    require_bytes(punctuation.commands[0].argv[3], "foo&bar");
+    require_bytes(punctuation.commands[0].argv[4], "err>nope");
+    require_bytes(punctuation.commands[0].argv[5], "all>data");
+    require_bytes(punctuation.commands[0].argv[6], ">output");
+
+    var quoted_operator = expect_ok("echo \"|\" '&' \"err>\"");
+    require(len(quoted_operator.commands[0].argv) == 4);
+    require_bytes(quoted_operator.commands[0].argv[1], "|");
+    require_bytes(quoted_operator.commands[0].argv[2], "&");
+    require_bytes(quoted_operator.commands[0].argv[3], "err>");
+
+    var redirected = expect_ok("build err> errors.log all> everything.log > output.log &");
     require(redirected.background);
     require(len(redirected.commands[0].redirects) == 3);
     require(redirected.commands[0].redirects[0].kind == RedirectKind.err);
@@ -347,4 +375,5 @@ pub fn self_test() {
     expect_error("cat >");
     expect_error("cat & next");
     expect_error("echo \"unterminated");
+    expect_error("echo 'unterminated");
 }
