@@ -19,11 +19,13 @@ Function arguments, local assignment, and returns use value semantics.
 - scalars copy their scalar value;
 - structs/enums copy their value recursively;
 - `ref T` copies a reference handle, preserving object identity;
-- `[]T` copies an array handle, preserving array identity;
+- `[]T` and `const []T` copy an array handle, preserving array identity and the static capability of that handle;
 - function values copy the callable value;
 - optionals copy their contained value according to the same rules.
 
 Thus copying a struct containing an array produces two independent structs that refer to the same array object.
+
+`[]T` and `const []T` have the same runtime representation. A mutable handle may be implicitly qualified as `const []T` without allocation or copying. Qualification cannot be removed from an existing const handle.
 
 ## Places and mutation
 
@@ -37,6 +39,8 @@ array[i].field += 1;
 ```
 
 The intermediate value-struct fields must not be accidentally copied and mutated as temporaries.
+
+An element reached through `const []T` is not an assignable place. The qualifier is shallow: if reading an element yields a mutable `[]U` or a `ref U`, that value retains its own mutation capability. Thus `rows[0][0] = x` is valid for `rows: const [][]T`, while `rows[0] = other` is not. Likewise, a field reached through a `ref` stored in a const array may be mutated.
 
 For compound assignment, place-identifying subexpressions are evaluated once. For example, `a[f()] += g()` calls `f()` once.
 
@@ -80,13 +84,31 @@ A fully normative floating-point section is still an area reviewers are invited 
 
 ## Arrays
 
-Arrays are non-null mutable objects.
+Arrays are non-null shared managed objects. A handle has either mutable capability `[]T` or shallow read-only capability `const []T`.
+
+The implicit qualification conversion is exactly:
+
+```text
+[]T -> const []T
+```
+
+It is zero-cost and preserves array identity. There is no general inverse conversion.
+
+Constness applies to only the qualified array layer. It does not recursively alter `T`. In particular, `const []ref Node` contains ordinary `ref Node` values, and `const [][]u8` contains ordinary mutable `[]u8` values.
+
+A const handle does not freeze the underlying object. If mutable and const handles alias the same array, mutation through the mutable handle is visible through the const handle. Consequently, an implementation must not treat reads through `const []T` as invariant across calls or other operations that may mutate an alias.
+
+`push`, `pop`, indexed assignment, compound indexed assignment, and the target of `splice` require a mutable array handle. `len`, indexing for value, `for` iteration, and the replacement argument of `splice` accept const arrays; mutable arrays can satisfy those read-only uses through qualification.
 
 `push` and `splice` mutate the array object visible through all aliases. `pop` removes and returns the last element.
 
-`[expr; n]` evaluates `expr` once and copies that value `n` times. If `expr` is a `ref` or `[]T`, all repeated entries therefore share the same referenced object/array.
+`[expr; n]` evaluates `expr` once and copies that value `n` times. If `expr` is a `ref`, `[]T`, or `const []T`, all repeated entries therefore share the same referenced object/array.
 
 Indexing is bounds checked and traps on failure.
+
+Ordinary array literals infer mutable arrays. A string literal has default/inferred type `const []u8`. When the expected type at the literal itself is mutable `[]u8`, the literal may materialize directly as a fresh mutable array. This contextual literal rule does not permit an existing `const []u8` value to become mutable.
+
+`const []T` provides read-only access, not global immutability. It does not establish stable content hashing, uniqueness, absence of aliases, or thread-safety guarantees.
 
 ## Managed memory
 
@@ -109,11 +131,12 @@ struct AlsoBad { next: ?AlsoBad }
 
 `?T` does not add storage indirection.
 
-`ref` and `[]` break layout recursion:
+`ref`, `[]`, and `const []` break layout recursion:
 
 ```text
 struct Node { next: ?ref Node }
 struct Tree { children: []Tree }
+struct ReadTree { children: const []ReadTree }
 ```
 
 ## Optionals and patterns
@@ -147,7 +170,9 @@ Anonymous functions are noncapturing. Referencing an enclosing runtime local is 
 
 A generic declaration is checked while type parameters are abstract. Validity does not depend on particular instantiations.
 
-Inference is structural and exact. If a type parameter cannot be determined from arguments and expected result type, the call is invalid; Core currently has no explicit generic-call type-argument syntax as an escape hatch.
+Inference is structural. Mutable and const array capabilities remain distinct types, with `[]T -> const []T` available when satisfying a read-only array parameter. Qualification does not flow in the opposite direction.
+
+If a type parameter cannot be determined from arguments and expected result type, the call is invalid; Core currently has no explicit generic-call type-argument syntax as an escape hatch.
 
 Because Core intentionally permits simple monomorphizing native implementations, mutually recursive generic functions are rejected, and direct generic recursion must use the same type parameters unchanged.
 

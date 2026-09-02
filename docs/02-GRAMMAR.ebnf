@@ -26,6 +26,7 @@ parameter       = ident, ":", type ;
 type            = "?", type
                 | "ref", type
                 | "[", "]", type
+                | "const", "[", "]", type
                 | "(", ")"
                 | "fn", "(", comma_list(type), ")", [ "->", type ]
                 | qname, [ "[", comma_list(type), "]" ] ;

@@ -18,9 +18,23 @@ Normal educational/real programs need linked lists, trees, graphs, ASTs, shared 
 
 There is deliberately no force unwrap; pattern matching keeps the distinction explicit.
 
-## Why strings are `[]u8`?
+## Why strings are `const []u8`?
 
-The language core does not need Unicode semantics to support byte/text processing. UTF-8 operations can be portable library code. Real tooling (LSP, JSON, editor, terminal handling) has so far remained practical with bytes plus libraries.
+The language core does not need Unicode semantics to support byte/text processing. UTF-8 operations can be portable library code, so text does not justify a separate privileged string object.
+
+Treating inferred string literals as mutable `[]u8` made read-only text APIs accidentally expose mutation. `const []T` solves that problem generally rather than special-casing bytes: a string literal normally has type `const []u8`, while the same qualifier can describe read-only arrays of any element type.
+
+The qualifier is deliberately shallow. `const []ref Node` prevents replacing array slots but does not remove mutation capability from the referenced nodes. Likewise, `const [][]u8` leaves each inner `[]u8` mutable. This matches the capability being expressed—the array layer itself is read-only—without introducing transitive const through arbitrary object graphs.
+
+Mutable arrays implicitly qualify to const arrays without copying. A const handle may therefore alias a mutable handle, and mutations through the mutable alias remain visible. L does not claim that `const []T` is globally frozen data.
+
+A string literal can materialize directly as mutable `[]u8` when the literal itself occurs in an explicitly mutable context. This is contextual construction of a fresh array, not a conversion from an existing const value. It preserves simple uses such as passing a literal directly to an API that explicitly asks for a mutable buffer while keeping inferred text read-only.
+
+## Why not transitive or globally immutable arrays?
+
+L has ordinary shared aliasing for managed arrays and refs. Guaranteeing that data can never change through any alias would require copying, runtime freezing, copy-on-write, or an ownership/borrow discipline. Each would substantially change the language and runtime model.
+
+The useful low-cost property is narrower: code with `const []T` cannot mutate that array layer through that handle. True frozen/value arrays can be considered separately if stable hashing, cross-thread sharing, or another concrete use case eventually justifies them.
 
 ## Why generics after initially rejecting them?
 

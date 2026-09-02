@@ -6,7 +6,7 @@ fn require(ok: bool) {
 }
 
 fn main() -> i64 {
-    var source = "const SCALE: i64 = 1 + 2 * 3;\nfn choose[T](xs: []T, pred: fn(T) -> bool) -> ?T { var i: u64 = 0; while (i < len(xs)) { if (pred(xs[i])) { return some(xs[i]); } else { i += 1; } } return none; }\nfn walk(xs: []i64) -> i64 { var total: i64 = 0; for (value in xs) { total += value; } for (var i: i64 = 0; i < 3; i += 1) { total += i; } match (total) { 0 { return 0; } other { return other; } } }\nfn forms(x: i64) -> i64 { var f: fn(i64) -> i64 = fn(v: i64) -> i64 { return v + 1; }; var p = Point { x: x, y: f(x), }; var ys = [x, p.x, f(x)]; var zs = [x; 3]; if (x is 0) { return ys[0] as i64; } return *new x; }\n";
+    var source: []u8 = "const SCALE: i64 = 1 + 2 * 3;\nfn choose[T](xs: []T, pred: fn(T) -> bool) -> ?T { var i: u64 = 0; while (i < len(xs)) { if (pred(xs[i])) { return some(xs[i]); } else { i += 1; } } return none; }\nfn walk(xs: []i64) -> i64 { var total: i64 = 0; for (value in xs) { total += value; } for (var i: i64 = 0; i < 3; i += 1) { total += i; } match (total) { 0 { return 0; } other { return other; } } }\nfn forms(x: i64) -> i64 { var f: fn(i64) -> i64 = fn(v: i64) -> i64 { return v + 1; }; var p = Point { x: x, y: f(x), }; var ys = [x, p.x, f(x)]; var zs = [x; 3]; if (x is 0) { return ys[0] as i64; } return *new x; }\n";
     var module = slang_decls.parse(source);
     require(len(module.errors) == 0);
     require(len(module.declarations) == 4);
