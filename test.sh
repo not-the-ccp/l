@@ -16,6 +16,7 @@ PYTHON=${PYTHON:-python3}
 "$HERE/lr" --root "$HERE" "$HERE/tools/lace2/kernel_test.l" >/dev/null
 "$HERE/lr" --root "$HERE" "$HERE/tools/lace2/navigation_test.l" >/dev/null
 "$HERE/lr" --root "$HERE" "$HERE/tools/lace2/editor_model_test.l" >/dev/null
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/render_test.l" >/dev/null
 "$HERE/lc" --check --root "$HERE" "$HERE/tools/lace2/main.l" >/dev/null
 
 # Self-hosting frontend slices run as native executables. Check syntax,
