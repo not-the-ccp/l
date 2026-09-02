@@ -12,10 +12,10 @@ PYTHON=${PYTHON:-python3}
 # rehashing. It deliberately uses no host APIs itself.
 "$HERE/lr" "$HERE/examples/portable/collections_demo.l" >/dev/null
 
-# Lace rewrite kernel: byte-preserving text storage, selection mapping,
-# transactions, branching history, invalid-text display, and navigation.
+# Lace rewrite kernel and v1 editor semantics.
 "$HERE/lr" --root "$HERE" "$HERE/tools/lace2/kernel_test.l" >/dev/null
 "$HERE/lr" --root "$HERE" "$HERE/tools/lace2/navigation_test.l" >/dev/null
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/editor_model_test.l" >/dev/null
 
 # Self-hosting frontend slices run as native executables. Check syntax,
 # top-level identity, full body-AST traversal on small and substantial real
