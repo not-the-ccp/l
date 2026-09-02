@@ -14,6 +14,7 @@ sys.path.insert(0, str(HERE))
 
 from core import Program, Parser, LangError, TrapSig, UnitVal, UNITV, internal_name
 from bytecode import BCCompiler, BCVM
+from linux_host import LinuxProcessHost
 from run_lang import (
     REPO, PORTABLE_LIB, HOSTED_LIB,
     stdio_host,
@@ -34,7 +35,14 @@ def stdlib_sources() -> dict[tuple[str, ...], str]:
     return out
 
 
-HOST_MODULES = {("stdio",), ("fs",), ("sys",), ("proc",), ("term",)}
+HOST_MODULES = {
+    ("stdio",),
+    ("fs",),
+    ("sys",),
+    ("proc",),
+    ("term",),
+    ("linux", "proc"),
+}
 
 def module_name(root: Path, path: Path) -> tuple[str, ...]:
     rel = path.resolve().relative_to(root.resolve())
@@ -95,12 +103,15 @@ def project_sources(entry: Path, root: Path) -> tuple[dict[tuple[str, ...], str]
 def make_hosts(argv: list[str]):
     ph = ProcessHost()
     th = TermHost()
+    lph = LinuxProcessHost()
+    ph._linux_process_host = lph
     hosts = {
         ("stdio",): stdio_host(),
         ("fs",): fs_host(),
         ("sys",): sys_host(argv),
         ("proc",): ph.module(),
         ("term",): th.module(),
+        ("linux", "proc"): lph.module(),
     }
     return hosts, ph, th
 
@@ -109,7 +120,12 @@ def cleanup(ph: ProcessHost, th: TermHost):
     try:
         th.leave()
     finally:
-        ph.cleanup()
+        try:
+            ph.cleanup()
+        finally:
+            lph = getattr(ph, "_linux_process_host", None)
+            if lph is not None:
+                lph.cleanup()
 
 
 def build_program(entry: Path, root: Path, argv: list[str]):
