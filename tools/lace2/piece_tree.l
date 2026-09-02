@@ -31,6 +31,13 @@ pub struct Text {
     root: ?ref Node,
 }
 
+pub struct Stats {
+    pub height: u64,
+    pub pieces: u64,
+    pub byte_len: u64,
+    pub newline_count: u64,
+}
+
 struct Split {
     left: ?ref Node,
     right: ?ref Node,
@@ -76,6 +83,53 @@ fn make_node(piece: Piece, left: ?ref Node, right: ?ref Node) -> ref Node {
         newline_count: node_newlines(left) + piece.newlines + node_newlines(right),
         height: 1 + max_u64(node_height(left), node_height(right)),
     };
+}
+
+fn rebalance(piece: Piece, left: ?ref Node, right: ?ref Node) -> ref Node {
+    var left_height = node_height(left);
+    var right_height = node_height(right);
+
+    if (left_height > right_height + 1) {
+        match (left) {
+            none { trap; }
+            some(left_root) {
+                if (node_height(left_root.left) >= node_height(left_root.right)) {
+                    var new_right = make_node(piece, left_root.right, right);
+                    return make_node(left_root.piece, left_root.left, some(new_right));
+                }
+                match (left_root.right) {
+                    none { trap; }
+                    some(pivot) {
+                        var new_left = make_node(left_root.piece, left_root.left, pivot.left);
+                        var new_right = make_node(piece, pivot.right, right);
+                        return make_node(pivot.piece, some(new_left), some(new_right));
+                    }
+                }
+            }
+        }
+    }
+
+    if (right_height > left_height + 1) {
+        match (right) {
+            none { trap; }
+            some(right_root) {
+                if (node_height(right_root.right) >= node_height(right_root.left)) {
+                    var new_left = make_node(piece, left, right_root.left);
+                    return make_node(right_root.piece, some(new_left), right_root.right);
+                }
+                match (right_root.left) {
+                    none { trap; }
+                    some(pivot) {
+                        var new_left = make_node(piece, left, pivot.left);
+                        var new_right = make_node(right_root.piece, pivot.right, right_root.right);
+                        return make_node(pivot.piece, some(new_left), some(new_right));
+                    }
+                }
+            }
+        }
+    }
+
+    return make_node(piece, left, right);
 }
 
 fn piece_source(text: ref Text, source: Source) -> []u8 {
@@ -126,26 +180,29 @@ fn tree_for_range(text: ref Text, source: Source, start: u64, length: u64) -> ?r
 }
 
 fn join(left: ?ref Node, piece: Piece, right: ?ref Node) -> ref Node {
-    var lh = node_height(left);
-    var rh = node_height(right);
-    if (lh > rh + 1) {
+    var left_height = node_height(left);
+    var right_height = node_height(right);
+
+    if (left_height > right_height + 1) {
         match (left) {
             none { trap; }
             some(root) {
                 var joined = join(root.right, piece, right);
-                return make_node(root.piece, root.left, some(joined));
+                return rebalance(root.piece, root.left, some(joined));
             }
         }
     }
-    if (rh > lh + 1) {
+
+    if (right_height > left_height + 1) {
         match (right) {
             none { trap; }
             some(root) {
                 var joined = join(left, piece, root.left);
-                return make_node(root.piece, some(joined), root.right);
+                return rebalance(root.piece, some(joined), root.right);
             }
         }
     }
+
     return make_node(piece, left, right);
 }
 
@@ -156,7 +213,7 @@ fn pop_first(root: ref Node) -> PopFirst {
         }
         some(left) {
             var first = pop_first(left);
-            var rest = join(first.rest, root.piece, root.right);
+            var rest = rebalance(root.piece, first.rest, root.right);
             return PopFirst { piece: first.piece, rest: some(rest) };
         }
     }
@@ -261,6 +318,39 @@ fn collect_range(text: ref Text, root_opt: ?ref Node, start: u64, end: u64, out:
     }
 }
 
+fn check_node(text: ref Text, node_opt: ?ref Node) -> Stats {
+    match (node_opt) {
+        none {
+            return Stats { height: 0, pieces: 0, byte_len: 0, newline_count: 0 };
+        }
+        some(node) {
+            if (node.piece.length == 0) { trap; }
+            var src = piece_source(text, node.piece.source);
+            if (node.piece.start > len(src) || node.piece.length > len(src) - node.piece.start) { trap; }
+            var actual_piece_newlines = count_newlines(src, node.piece.start, node.piece.length);
+            if (actual_piece_newlines != node.piece.newlines) { trap; }
+
+            var left = check_node(text, node.left);
+            var right = check_node(text, node.right);
+            if (left.height > right.height + 1 || right.height > left.height + 1) { trap; }
+
+            var expected_height = 1 + max_u64(left.height, right.height);
+            var expected_bytes = left.byte_len + node.piece.length + right.byte_len;
+            var expected_newlines = left.newline_count + node.piece.newlines + right.newline_count;
+            if (node.height != expected_height) { trap; }
+            if (node.byte_len != expected_bytes) { trap; }
+            if (node.newline_count != expected_newlines) { trap; }
+
+            return Stats {
+                height: expected_height,
+                pieces: left.pieces + 1 + right.pieces,
+                byte_len: expected_bytes,
+                newline_count: expected_newlines,
+            };
+        }
+    }
+}
+
 pub fn from_bytes(data: []u8) -> ref Text {
     var text = new Text {
         original: bytes.clone(data),
@@ -277,6 +367,16 @@ pub fn byte_len(text: ref Text) -> u64 {
 
 pub fn newline_count(text: ref Text) -> u64 {
     return node_newlines(text.root);
+}
+
+pub fn stats(text: ref Text) -> Stats {
+    return check_node(text, text.root);
+}
+
+pub fn validate(text: ref Text) {
+    var checked = check_node(text, text.root);
+    if (checked.byte_len != byte_len(text)) { trap; }
+    if (checked.newline_count != newline_count(text)) { trap; }
 }
 
 pub fn slice(text: ref Text, start: u64, end: u64) -> []u8 {
