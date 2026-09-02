@@ -14,8 +14,8 @@ def install(core):
 
         ``kind`` remains ``array`` so the interpreter, bytecode compiler, native
         backend, GC/layout code, and host boundary keep the same runtime
-        representation. The distinct Python class gives the static checker a
-        distinct type identity without adding runtime state.
+        representation. Static compatibility checks explicitly distinguish this
+        class from ordinary mutable array types.
         """
 
         __slots__ = ()
@@ -27,6 +27,12 @@ def install(core):
         def __str__(self):
             return "const []" + str(self.a[0])
 
+        def __eq__(self, other):
+            return isinstance(other, ConstArrayTy) and self.a == other.a
+
+        def __hash__(self):
+            return hash(("const-array", self.a))
+
     def const_arr(element):
         return ConstArrayTy(element)
 
@@ -36,10 +42,41 @@ def install(core):
     def is_mutable_array(ty):
         return isinstance(ty, Ty) and ty.kind == "array" and not is_const_array(ty)
 
+    def same_type(a, b):
+        """Structural type identity including array capability at every layer."""
+        if not isinstance(a, Ty) or not isinstance(b, Ty):
+            return a == b
+        if a.kind != b.kind:
+            return False
+        if a.kind == "array":
+            if is_const_array(a) != is_const_array(b):
+                return False
+            return same_type(a.a[0], b.a[0])
+        if a.kind in ("opt", "ref"):
+            return same_type(a.a[0], b.a[0])
+        if a.kind == "fn":
+            aps, ar = a.a
+            bps, br = b.a
+            return (
+                len(aps) == len(bps)
+                and all(same_type(x, y) for x, y in zip(aps, bps))
+                and same_type(ar, br)
+            )
+        if a.kind == "name":
+            aq, aa = a.a
+            bq, ba = b.a
+            return (
+                aq == bq
+                and len(aa) == len(ba)
+                and all(same_type(x, y) for x, y in zip(aa, ba))
+            )
+        return a == b
+
     core.ConstArrayTy = ConstArrayTy
     core.const_arr = const_arr
     core.is_const_array = is_const_array
     core.is_mutable_array = is_mutable_array
+    core.same_type = same_type
 
     original_parser_type = core.Parser.type
 
@@ -76,17 +113,16 @@ def install(core):
 
     Checker.resolve_ty = resolve_ty
 
-    original_req = Checker.req
-
     def req(self, expected, actual, node=None):
-        # The sole implicit qualification conversion is shallow []T -> const []T.
-        if (
-            is_const_array(expected)
-            and is_mutable_array(actual)
-            and expected.a[0] == actual.a[0]
-        ):
+        # Qualification is deliberately available only at the outer array layer.
+        # It is not lifted through optionals, nominal generic arguments, refs, or
+        # nested arrays.
+        if is_const_array(expected):
+            if actual.kind == "array" and same_type(expected.a[0], actual.a[0]):
+                return
+        elif same_type(expected, actual):
             return
-        return original_req(self, expected, actual, node)
+        self.err(f"type mismatch: expected {expected}, got {actual}", node)
 
     Checker.req = req
 
@@ -101,7 +137,7 @@ def install(core):
             if (
                 expected is not None
                 and is_mutable_array(expected)
-                and expected.a[0] == u8
+                and same_type(expected.a[0], u8)
             ):
                 ty = core.arr(u8)
             else:

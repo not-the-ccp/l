@@ -134,6 +134,18 @@ fn main() {
 )
 
 expect_compile_error(
+    "const view cannot regain mutability",
+    r'''
+fn main() {
+    var source: []i64 = [1];
+    var view: const []i64 = source;
+    var writable: []i64 = view;
+}
+''',
+    "type mismatch",
+)
+
+expect_compile_error(
     "push through const handle",
     r'''
 fn main() {
