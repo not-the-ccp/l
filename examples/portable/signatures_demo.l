@@ -10,7 +10,7 @@ fn named(type: ref slang_decls.Type, name: []u8) -> bool {
 }
 
 fn main() -> i64 {
-    var source = "pub const LIMIT: u64 = 10;\npub struct Pair[A, B] { pub left: A, right: ?ref pkg.Node[B], }\npub enum Result[T] { ok(T), err([]u8), }\npub fn map[T, U](value: T, f: fn(T) -> U) -> U { return f(value); }\n";
+    var source: []u8 = "pub const LIMIT: u64 = 10;\npub struct Pair[A, B] { pub left: A, right: ?ref pkg.Node[B], }\npub enum Result[T] { ok(T), err([]u8), }\npub fn map[T, U](value: T, f: fn(T) -> U) -> U { return f(value); }\n";
     var module = slang_decls.parse(source);
     require(len(module.errors) == 0);
     require(len(module.declarations) == 4);
