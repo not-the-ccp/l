@@ -1,8 +1,15 @@
 import arrays;
 
+pub enum Bias { before, after }
+
+pub struct Point {
+    pub offset: u64,
+    pub bias: Bias,
+}
+
 pub struct Range {
-    pub anchor: u64,
-    pub head: u64,
+    pub anchor: Point,
+    pub head: Point,
 }
 
 pub struct Set {
@@ -10,23 +17,50 @@ pub struct Set {
     pub primary: u64,
 }
 
-pub fn range_start(range: Range) -> u64 {
-    if (range.anchor < range.head) { return range.anchor; }
-    return range.head;
+pub fn point(offset: u64, bias: Bias) -> Point {
+    return Point { offset: offset, bias: bias };
 }
 
-pub fn range_end(range: Range) -> u64 {
-    if (range.anchor > range.head) { return range.anchor; }
-    return range.head;
+pub fn cursor(pos: u64, bias: Bias) -> Range {
+    var p = point(pos, bias);
+    return Range { anchor: p, head: p };
 }
 
-pub fn range_reversed(range: Range) -> bool {
-    return range.head < range.anchor;
+pub fn range(anchor: u64, head: u64) -> Range {
+    if (anchor == head) { return cursor(anchor, Bias.after); }
+    if (anchor < head) {
+        return Range {
+            anchor: point(anchor, Bias.after),
+            head: point(head, Bias.before),
+        };
+    }
+    return Range {
+        anchor: point(anchor, Bias.before),
+        head: point(head, Bias.after),
+    };
+}
+
+pub fn range_start(value: Range) -> u64 {
+    if (value.anchor.offset < value.head.offset) { return value.anchor.offset; }
+    return value.head.offset;
+}
+
+pub fn range_end(value: Range) -> u64 {
+    if (value.anchor.offset > value.head.offset) { return value.anchor.offset; }
+    return value.head.offset;
+}
+
+pub fn range_reversed(value: Range) -> bool {
+    return value.head.offset < value.anchor.offset;
+}
+
+pub fn range_empty(value: Range) -> bool {
+    return value.anchor.offset == value.head.offset;
 }
 
 pub fn single(pos: u64) -> Set {
     return Set {
-        ranges: [Range { anchor: pos, head: pos }],
+        ranges: [cursor(pos, Bias.after)],
         primary: 0,
     };
 }
@@ -41,8 +75,8 @@ pub fn clone(set: Set) -> Set {
 pub fn validate(set: Set, byte_len: u64) {
     if (len(set.ranges) == 0) { trap; }
     if (set.primary >= len(set.ranges)) { trap; }
-    for (range in set.ranges) {
-        if (range.anchor > byte_len || range.head > byte_len) { trap; }
+    for (value in set.ranges) {
+        if (value.anchor.offset > byte_len || value.head.offset > byte_len) { trap; }
     }
 }
 
@@ -54,49 +88,60 @@ fn range_less(a: Range, b: Range) -> bool {
     return range_end(a) < range_end(b);
 }
 
-pub fn sort_by_position(set: ref Set) {
-    var old_primary = set.ranges[set.primary];
-    for (var i: u64 = 1; i < len(set.ranges); i += 1) {
-        var value = set.ranges[i];
-        var j = i;
-        while (j > 0 && range_less(value, set.ranges[j - 1])) {
-            set.ranges[j] = set.ranges[j - 1];
-            j -= 1;
-        }
-        set.ranges[j] = value;
-    }
-
-    for (var i: u64 = 0; i < len(set.ranges); i += 1) {
-        var range = set.ranges[i];
-        if (range.anchor == old_primary.anchor && range.head == old_primary.head) {
-            set.primary = i;
-            return;
-        }
-    }
-    set.primary = 0;
+fn same_range(a: Range, b: Range) -> bool {
+    return a.anchor.offset == b.anchor.offset &&
+        a.anchor.bias == b.anchor.bias &&
+        a.head.offset == b.head.offset &&
+        a.head.bias == b.head.bias;
 }
 
-pub fn merge_overlaps(set: ref Set) {
-    sort_by_position(set);
-    if (len(set.ranges) < 2) { return; }
+pub fn sorted(set: Set) -> Set {
+    var out = clone(set);
+    var old_primary = out.ranges[out.primary];
+    for (var i: u64 = 1; i < len(out.ranges); i += 1) {
+        var value = out.ranges[i];
+        var j = i;
+        while (j > 0 && range_less(value, out.ranges[j - 1])) {
+            out.ranges[j] = out.ranges[j - 1];
+            j -= 1;
+        }
+        out.ranges[j] = value;
+    }
+
+    for (var i: u64 = 0; i < len(out.ranges); i += 1) {
+        if (same_range(out.ranges[i], old_primary)) {
+            out.primary = i;
+            return out;
+        }
+    }
+    out.primary = 0;
+    return out;
+}
+
+pub fn merged(set: Set) -> Set {
+    var ordered = sorted(set);
+    if (len(ordered.ranges) < 2) { return ordered; }
 
     var out: []Range = [];
-    var current = set.ranges[0];
-    for (var i: u64 = 1; i < len(set.ranges); i += 1) {
-        var next = set.ranges[i];
+    var current = ordered.ranges[0];
+    for (var i: u64 = 1; i < len(ordered.ranges); i += 1) {
+        var next = ordered.ranges[i];
         var current_end = range_end(current);
         var next_start = range_start(next);
-        if (next_start <= current_end) {
+        var should_merge = next_start < current_end;
+        if (range_empty(next) && next_start == current_end) { should_merge = true; }
+        if (should_merge) {
             var merged_start = range_start(current);
             var merged_end = range_end(next);
             if (range_end(current) > merged_end) { merged_end = range_end(current); }
-            current = Range { anchor: merged_start, head: merged_end };
+            current = range(merged_start, merged_end);
         } else {
             push(out, current);
             current = next;
         }
     }
     push(out, current);
-    set.ranges = out;
-    if (set.primary >= len(set.ranges)) { set.primary = len(set.ranges) - 1; }
+    var primary = ordered.primary;
+    if (primary >= len(out)) { primary = len(out) - 1; }
+    return Set { ranges: out, primary: primary };
 }
