@@ -113,6 +113,18 @@ def install(core):
 
     Checker.resolve_ty = resolve_ty
 
+    # Program links logical source modules by rebuilding their AST types. The
+    # historical array branch reconstructs every array as plain Ty("array"), so
+    # preserve the capability explicitly when a const layer reaches the linker.
+    original_program_ty = core.Program._ty
+
+    def program_ty(self, module, ty, gps=frozenset()):
+        if is_const_array(ty):
+            return const_arr(self._ty(module, ty.a[0], gps))
+        return original_program_ty(self, module, ty, gps)
+
+    core.Program._ty = program_ty
+
     def req(self, expected, actual, node=None):
         # Qualification is deliberately available only at the outer array layer.
         # It is not lifted through optionals, nominal generic arguments, refs, or
