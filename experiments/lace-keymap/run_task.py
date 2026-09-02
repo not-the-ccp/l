@@ -27,6 +27,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Run one Lace keymap dogfood task in Vim")
     ap.add_argument("task")
     ap.add_argument("--vim", default=os.environ.get("VIM", "vim"))
+    ap.add_argument("--clean", action="store_true", help="run without user vimrc/plugins/viminfo")
     ap.add_argument("--keep", action="store_true", help="keep the working directory")
     ap.add_argument("--log", type=Path, help="telemetry output path")
     ns = ap.parse_args()
@@ -51,7 +52,12 @@ def main() -> int:
     print("Finish by saving and quitting Vim. The result is checked byte-for-byte.")
     print(f"Telemetry: {log}")
 
-    rc = subprocess.call([ns.vim, "-S", str(LOGGER), str(work)], env=env)
+    command = [ns.vim]
+    if ns.clean:
+        command += ["-Nu", "NONE", "-i", "NONE", "--noplugin", "-n"]
+    command += ["-S", str(LOGGER), str(work)]
+
+    rc = subprocess.call(command, env=env)
     if rc != 0:
         print(f"Vim exited with status {rc}", file=sys.stderr)
         if not ns.keep:
