@@ -92,16 +92,16 @@ fn test_piece_tree_random_edits() {
 
     var flat = bytes.clone(initial);
     var doc = text.from_bytes(initial);
-    var state: u64 = 0x123456789abcdef0;
+    var state: ref u64 = new 0x123456789abcdef0;
 
     for (var step: u64 = 0; step < 5000; step += 1) {
         var start: u64 = 0;
-        if (len(flat) > 0) { start = rng_next(new state) % (len(flat) + 1); }
+        if (len(flat) > 0) { start = rng_next(state) % (len(flat) + 1); }
         var max_remove = len(flat) - start;
         if (max_remove > 19) { max_remove = 19; }
         var remove_len: u64 = 0;
-        if (max_remove > 0) { remove_len = rng_next(new state) % (max_remove + 1); }
-        var replacement = random_bytes(new state, 23);
+        if (max_remove > 0) { remove_len = rng_next(state) % (max_remove + 1); }
+        var replacement = random_bytes(state, 23);
 
         splice(flat, start, start + remove_len, replacement);
         text.replace(doc, start, start + remove_len, replacement);
