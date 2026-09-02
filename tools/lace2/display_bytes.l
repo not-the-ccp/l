@@ -142,7 +142,7 @@ fn append_hex_u32(out: []u8, value: u32) {
     var shift: i64 = 28;
     var started = false;
     while (shift >= 0) {
-        var digit = ((value >> (shift as u32)) & 0x0f) as u8;
+        var digit = ((value >> (shift as u64)) & 0x0f) as u8;
         if (digit != 0 || started || shift == 0) {
             push(out, hex_digit(digit));
             started = true;
