@@ -59,6 +59,14 @@ def spawn(path: Path) -> tuple[int, int, bytes]:
     return pid, fd, drain(fd, timeout=3)
 
 
+def edit(path: Path, keys: bytes) -> bytes:
+    pid, fd, transcript = spawn(path)
+    os.write(fd, keys)
+    transcript += wait_exit(pid, fd)
+    os.close(fd)
+    return transcript
+
+
 def run() -> None:
     assert LACE.is_file(), "build/lace-next was not built"
     with tempfile.TemporaryDirectory() as td:
@@ -87,6 +95,35 @@ def run() -> None:
         os.close(fd)
         assert path.read_bytes() == b"alpha!\n", path.read_bytes()
 
+        # Native term.read_key returns one complete UTF-8 scalar. Verify the
+        # editor accepts that event directly rather than silently dropping it.
+        unicode_path = root / "unicode.txt"
+        unicode_path.write_bytes(b"x\n")
+        edit(unicode_path, "A λ€\x1b:wq\r".encode("utf-8").replace(b"\\x1b", b"\x1b").replace(b"\\r", b"\r"))
+        assert unicode_path.read_bytes() == "x λ€\n".encode("utf-8")
+
+        # Cursor-key CSI sequences are a single command event, including in
+        # Insert mode. A left arrow here moves within Insert instead of being
+        # interpreted as Escape followed by stray Normal-mode bytes.
+        arrow = root / "arrow.txt"
+        arrow.write_bytes(b"ab\n")
+        edit(arrow, b"A\x1b[DX\x1b:wq\r")
+        assert arrow.read_bytes() == b"aXb\n", arrow.read_bytes()
+
+        # `cc` must preserve the line boundary and indentation, and the whole
+        # delete+insert should undo as one Insert change.
+        changed = root / "change-line.txt"
+        changed.write_bytes(b"    alpha\nbeta\n")
+        edit(changed, b"ccgamma\x1b:wq\r")
+        assert changed.read_bytes() == b"    gamma\nbeta\n", changed.read_bytes()
+
+        # A linewise put after an unterminated final line introduces a line
+        # boundary instead of concatenating bytes.
+        put = root / "linewise-put.txt"
+        put.write_bytes(b"one\ntwo")
+        edit(put, b"yyGp:wq\r")
+        assert put.read_bytes() == b"one\ntwo\none\n", put.read_bytes()
+
         # A malicious file payload must never become terminal control output.
         hostile = root / "hostile.bin"
         hostile.write_bytes(b"A\x1b[2JB\n")
@@ -100,10 +137,7 @@ def run() -> None:
 
         # Missing paths start empty and become real files on first write.
         created = root / "new-file.txt"
-        pid, fd, transcript = spawn(created)
-        os.write(fd, b"ihello\x1b:wq\r")
-        transcript += wait_exit(pid, fd)
-        os.close(fd)
+        edit(created, b"ihello\x1b:wq\r")
         assert created.read_bytes() == b"hello"
 
     print("rewritten Lace native PTY dogfood PASS")
