@@ -2,8 +2,6 @@ import bytes;
 import tools.lace2.piece_tree as text;
 import tools.lace2.selection as selection;
 
-pub enum Bias { before, after }
-
 pub struct EditSpec {
     pub start: u64,
     pub end: u64,
@@ -58,7 +56,7 @@ fn shifted(value: u64, removed: u64, inserted: u64) -> u64 {
     return value - (removed - inserted);
 }
 
-pub fn map_position(tx: Transaction, original: u64, bias: Bias) -> u64 {
+pub fn map_position(tx: Transaction, original: u64, bias: selection.Bias) -> u64 {
     var mapped = original;
     for (edit in tx.edits) {
         var removed_len = len(edit.removed);
@@ -73,33 +71,29 @@ pub fn map_position(tx: Transaction, original: u64, bias: Bias) -> u64 {
         }
 
         var mapped_start = mapped - (original - edit.start);
-        if (bias is Bias.after) { return mapped_start + inserted_len; }
+        if (bias is selection.Bias.after) { return mapped_start + inserted_len; }
         return mapped_start;
     }
     return mapped;
 }
 
+fn map_point(tx: Transaction, point: selection.Point) -> selection.Point {
+    return selection.Point {
+        offset: map_position(tx, point.offset, point.bias),
+        bias: point.bias,
+    };
+}
+
 pub fn map_selections(tx: Transaction, set: selection.Set) -> selection.Set {
     var out = selection.clone(set);
     for (var i: u64 = 0; i < len(out.ranges); i += 1) {
-        var range = out.ranges[i];
-        if (range.anchor == range.head) {
-            var pos = map_position(tx, range.anchor, Bias.after);
-            out.ranges[i] = selection.Range { anchor: pos, head: pos };
-        } else if (range.anchor < range.head) {
-            out.ranges[i] = selection.Range {
-                anchor: map_position(tx, range.anchor, Bias.before),
-                head: map_position(tx, range.head, Bias.after),
-            };
-        } else {
-            out.ranges[i] = selection.Range {
-                anchor: map_position(tx, range.anchor, Bias.after),
-                head: map_position(tx, range.head, Bias.before),
-            };
-        }
+        var value = out.ranges[i];
+        out.ranges[i] = selection.Range {
+            anchor: map_point(tx, value.anchor),
+            head: map_point(tx, value.head),
+        };
     }
-    selection.merge_overlaps(new out);
-    return out;
+    return selection.merged(out);
 }
 
 pub fn inverse_specs(tx: Transaction) -> []EditSpec {
