@@ -42,10 +42,12 @@ direct=$("$HERE/build/lsh-lab" --run 'printf shell-direct-ok')
 test "$direct" = 'shell-direct-ok'
 
 # Linux-only process substrate probe: build a three-process pipeline directly
-# from L using explicit file descriptors and one process group. No command text
-# is delegated to another shell. Correct output also checks that the parent did
-# not retain a write end that would prevent EOF from reaching downstream.
-linux_pipeline=$("$HERE/lr" "$HERE/tools/shell/linux_probe.l")
+# from L using explicit file descriptors and one process group. This currently
+# exercises the Python reference host through the bytecode VM; the matching
+# native host is a separate implementation step. No command text is delegated
+# to another shell. Correct output also checks that the parent did not retain a
+# write end that would prevent EOF from reaching downstream.
+linux_pipeline=$("$PYTHON" "$HERE/bootstrap/sdk_cli.py" run --root "$HERE/tools/shell" "$HERE/tools/shell/linux_probe.l")
 test "$linux_pipeline" = '3'
 
 bad=$(mktemp)
