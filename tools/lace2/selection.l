@@ -81,10 +81,10 @@ pub fn validate(set: Set, byte_len: u64) {
 }
 
 fn range_less(a: Range, b: Range) -> bool {
-    var as = range_start(a);
-    var bs = range_start(b);
-    if (as < bs) { return true; }
-    if (as > bs) { return false; }
+    var a_start = range_start(a);
+    var b_start = range_start(b);
+    if (a_start < b_start) { return true; }
+    if (a_start > b_start) { return false; }
     return range_end(a) < range_end(b);
 }
 
