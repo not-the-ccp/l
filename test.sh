@@ -4,6 +4,7 @@ HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PYTHON=${PYTHON:-python3}
 "$HERE/build.sh" tools
 "$PYTHON" "$HERE/conformance/core_conformance.py"
+"$PYTHON" "$HERE/tests/const_arrays.py"
 "$HERE/lc" --check "$HERE/examples/hosted/project/main.l" >/dev/null
 "$HERE/lr" "$HERE/examples/hosted/hello.l" -- smoke >/dev/null
 
