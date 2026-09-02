@@ -94,7 +94,18 @@ def install(core):
 
     def expr(self, node, expected=None):
         if node.kind == "string":
-            ty = const_arr(core.name_ty("u8"))
+            u8 = core.name_ty("u8")
+            # With no mutable context, strings infer as const []u8. An explicit
+            # mutable []u8 context materializes this fresh literal as mutable;
+            # this is literal contextual typing, not const-to-mutable conversion.
+            if (
+                expected is not None
+                and is_mutable_array(expected)
+                and expected.a[0] == u8
+            ):
+                ty = core.arr(u8)
+            else:
+                ty = const_arr(u8)
             node.ty = ty
             self.expr_types[id(node)] = ty
             if expected is not None:

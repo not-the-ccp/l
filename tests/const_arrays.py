@@ -70,6 +70,11 @@ fn first[T](items: const []T) -> T {
     return items[0];
 }
 
+fn mutate_literal(bytes: []u8) -> u8 {
+    bytes[0] = 'z';
+    return bytes[0];
+}
+
 fn main() -> i64 {
     var mutable: []i64 = [1, 2, 3];
     var view: const []i64 = mutable;
@@ -95,6 +100,11 @@ fn main() -> i64 {
     rebound = mutable;
     if (rebound[0] != 9) { return 6; }
 
+    var mutable_literal: []u8 = "xy";
+    mutable_literal[0] = 'q';
+    if (mutable_literal[0] != 'q') { return 7; }
+    if (mutate_literal("xy") != 'z') { return 8; }
+
     return 42;
 }
 ''',
@@ -102,7 +112,7 @@ fn main() -> i64 {
 )
 
 expect_compile_error(
-    "string literal mutation",
+    "inferred string literal mutation",
     r'''
 fn main() {
     var text = "abc";
@@ -210,14 +220,15 @@ fn main() -> i64 {
 )
 
 expect_compile_error(
-    "const cannot satisfy mutable generic parameter",
+    "inferred const string cannot satisfy mutable generic parameter",
     r'''
 fn mutate[T](items: []T, value: T) {
     items[0] = value;
 }
 
 fn main() {
-    mutate("abc", 'x');
+    var text = "abc";
+    mutate(text, 'x');
 }
 ''',
 )
