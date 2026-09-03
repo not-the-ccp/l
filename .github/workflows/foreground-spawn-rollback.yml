@@ -1,0 +1,38 @@
+name: Foreground launch rollback
+
+on:
+  push:
+    branches:
+      - fix/foreground-spawn-race
+    paths:
+      - .github/workflows/foreground-spawn-rollback.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test-push:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/foreground-spawn-race
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply rollback guarantee
+        run: python3 .github/apply_foreground_rollback.py
+      - name: Reference/native PTY regression
+        run: python3 tests/linux_job_control_pty.py
+      - name: Full repository suite
+        run: ./test.sh
+      - name: Commit tested rollback
+        shell: bash
+        run: |
+          rm .github/apply_foreground_rollback.py .github/workflows/foreground-spawn-rollback.yml
+          git config user.name 'not-the-ccp'
+          git config user.email '315506978+not-the-ccp@users.noreply.github.com'
+          git add -A
+          git commit -m 'Restore tty ownership when foreground exec fails'
+          git push origin HEAD:fix/foreground-spawn-race
