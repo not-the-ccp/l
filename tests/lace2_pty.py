@@ -143,6 +143,10 @@ def run() -> None:
         os.write(fd, b"j")
         moved = drain(fd, timeout=.4)
         assert last_cursor(moved) == (2, 8), moved[-1500:]
+        # A final terminating newline must not create a third phantom line.
+        os.write(fd, b"j")
+        moved = drain(fd, timeout=.4)
+        assert last_cursor(moved) == (2, 8), moved[-1500:]
         os.write(fd, b":q\r")
         transcript += wait_exit(pid, fd)
         os.close(fd)
@@ -172,6 +176,18 @@ def run() -> None:
         os.write(fd, b":q!\r")
         transcript += wait_exit(pid, fd)
         os.close(fd)
+
+        # `G` is Lace's document-end motion. A terminating newline must not
+        # make it target the non-character EOF insertion boundary.
+        document_end = root / "document-end.txt"
+        document_end.write_bytes(b"one\ntwo\n")
+        edit(document_end, b"Gx:wq\r")
+        assert document_end.read_bytes() == b"one\ntw\n", document_end.read_bytes()
+
+        last_line_delete = root / "last-line-delete.txt"
+        last_line_delete.write_bytes(b"one\ntwo\n")
+        edit(last_line_delete, b"Gdd:wq\r")
+        assert last_line_delete.read_bytes() == b"one\n", last_line_delete.read_bytes()
 
         # Status and message rows are single terminal rows. Long paths/help
         # strings must be clipped instead of wrapping back into the buffer.
