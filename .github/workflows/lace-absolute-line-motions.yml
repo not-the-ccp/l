@@ -1,0 +1,39 @@
+name: Lace absolute-line motions
+
+on:
+  push:
+    branches:
+      - work/lace-absolute-line-motions
+    paths:
+      - .github/workflows/lace-absolute-line-motions.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test-push:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/lace-absolute-line-motions
+          fetch-depth: 0
+      - name: Apply motion implementation
+        run: python3 .github/apply_lace_absolute_lines.py
+      - name: Build editor
+        run: ./build.sh tools
+      - name: Focused model regression
+        run: ./lr --root . tools/lace2/editor_model_test.l
+      - name: Focused operator PTY regression
+        run: python3 tests/lace_operator_pty.py
+      - name: Full repository suite
+        run: ./test.sh
+      - name: Commit tested implementation
+        shell: bash
+        run: |
+          rm .github/apply_lace_absolute_lines.py .github/workflows/lace-absolute-line-motions.yml
+          git config user.name 'not-the-ccp'
+          git config user.email '315506978+not-the-ccp@users.noreply.github.com'
+          git add -A
+          git commit -m 'Add absolute-line G and gg motions to Lace'
+          git push origin HEAD:work/lace-absolute-line-motions
