@@ -3,6 +3,7 @@ from __future__ import annotations
 import fcntl, os, pty, select, signal, struct, tempfile, termios, time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+LEGACY=ROOT/'build'/'lace-legacy'
 
 def drain(fd,t=.18):
     out=b''; end=time.monotonic()+t
@@ -15,7 +16,7 @@ def drain(fd,t=.18):
 
 def spawn(path):
     pid,fd=pty.fork()
-    if pid==0: os.execv(str(ROOT/'lace'),[str(ROOT/'lace'),str(path)])
+    if pid==0: os.execv(str(LEGACY),[str(LEGACY),str(path)])
     fcntl.ioctl(fd,termios.TIOCSWINSZ,struct.pack('HHHH',24,100,0,0))
     time.sleep(.12);drain(fd,.3);return pid,fd
 
@@ -55,5 +56,6 @@ def test_insert_controls_and_line_indent():
         assert p.read_text()=='    a\nb\n',repr(p.read_text())
 
 def main():
-    test_visual_and_indent();test_insert_controls_and_line_indent();print('lace usability PTY PASS')
+    assert LEGACY.is_file(), 'build/lace-legacy was not built'
+    test_visual_and_indent();test_insert_controls_and_line_indent();print('legacy Lace usability PTY PASS')
 if __name__=='__main__':main()
