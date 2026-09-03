@@ -43,6 +43,9 @@ HOST={
 (('linux','process'),'sigterm'):44, (('linux','process'),'sigkill'):45,
 (('linux','process'),'sigstop'):46, (('linux','process'),'sigtstp'):47,
 (('linux','process'),'sigcont'):48, (('linux','process'),'sighup'):49,
+(('linux','fs'),'cwd'):50, (('linux','fs'),'chdir'):51,
+(('linux','env'),'get'):52, (('linux','env'),'entries'):53,
+(('linux','env'),'set'):54, (('linux','env'),'unset'):55,
 }
 
 class NativeEmitter:
