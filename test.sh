@@ -14,22 +14,27 @@ PYTHON=${PYTHON:-python3}
 "$HERE/lr" "$HERE/examples/portable/bytes_demo.l" >/dev/null
 "$HERE/lr" "$HERE/examples/portable/const_readers_demo.l" >/dev/null
 
-# Linux hosted-profile parity. Exercise the exact same L program once through
+# Linux hosted-profile parity. Exercise the exact same L programs once through
 # the Python reference host and once through the generated native runtime.
-# The probe covers owned/duplicated FDs, partial I/O + EOF, synchronous exec
-# failure, explicit stdio wiring, process groups, pidfd-backed waits when
-# available, and a real three-process byte-stream pipeline.
+# The process probe covers owned/duplicated FDs, partial I/O + EOF, synchronous
+# exec failure, explicit stdio wiring, process groups, signals, waits, and a
+# real three-process byte-stream pipeline. The context probe covers cwd changes
+# plus raw byte environment lookup/enumeration/mutation and error paths.
 if [ "$(uname -s)" = Linux ]; then
   linux_ref=$("$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_process_probe.l")
   test "$linux_ref" = '3'
+  "$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_context_probe.l"
 
   linux_bin=$(mktemp)
-  rm -f "$linux_bin"
-  trap 'rm -f "$linux_bin"' EXIT HUP INT TERM
+  context_bin=$(mktemp)
+  rm -f "$linux_bin" "$context_bin"
+  trap 'rm -f "$linux_bin" "$context_bin"' EXIT HUP INT TERM
   "$HERE/lc" "$HERE/examples/hosted/linux_process_probe.l" -o "$linux_bin" >/dev/null
   linux_native=$("$linux_bin")
   test "$linux_native" = '3'
-  rm -f "$linux_bin"
+  "$HERE/lc" "$HERE/examples/hosted/linux_context_probe.l" -o "$context_bin" >/dev/null
+  "$context_bin"
+  rm -f "$linux_bin" "$context_bin"
   trap - EXIT HUP INT TERM
 fi
 

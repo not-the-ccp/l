@@ -48,6 +48,8 @@ HOST_MODULES = {
 if IS_LINUX:
     HOST_MODULES |= {
         ("linux", "fd"),
+        ("linux", "fs"),
+        ("linux", "env"),
         ("linux", "process"),
     }
 
