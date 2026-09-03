@@ -32,7 +32,7 @@ enum StringParse {
 }
 
 struct Reader {
-    data: []u8,
+    data: const []u8,
     pos: u64,
 }
 
@@ -142,7 +142,7 @@ fn parse_string(reader: ref Reader) -> StringParse {
     return StringParse.error(make_error("unterminated string", reader.pos));
 }
 
-fn match_bytes_at(data: []u8, pos: u64, text: []u8) -> bool {
+fn match_bytes_at(data: const []u8, pos: u64, text: const []u8) -> bool {
     if (pos + len(text) > len(data)) { return false; }
     for (var i: u64 = 0; i < len(text); i += 1) {
         if (data[pos + i] != text[i]) { return false; }
@@ -258,7 +258,7 @@ fn parse_value(reader: ref Reader) -> Parse {
     }
 }
 
-pub fn parse(src: []u8) -> Parse {
+pub fn parse(src: const []u8) -> Parse {
     var reader = new Reader { data: src, pos: 0 };
     var result = parse_value(reader);
     match (result) {
@@ -276,7 +276,7 @@ fn hex_digit(value: u8) -> u8 {
     return 'a' + (value - 10);
 }
 
-fn write_string(out: []u8, value: []u8) {
+fn write_string(out: []u8, value: const []u8) {
     push(out, '"');
     for (ch in value) {
         if (ch == '"' || ch == '\\') {
@@ -331,7 +331,7 @@ pub fn array() -> Json { return Json.array([]); }
 pub fn u64_value(value: u64) -> Json { return Json.number(strconv.format_u64(value)); }
 pub fn i64_value(value: i64) -> Json { return Json.number(strconv.format_i64(value)); }
 
-pub fn put(object_value: Json, key: []u8, value: Json) {
+pub fn put(object_value: Json, key: const []u8, value: Json) {
     match (object_value) {
         Json.object(members) {
             for (var i: u64 = 0; i < len(members); i += 1) {
@@ -353,7 +353,7 @@ pub fn append(array_value: Json, value: Json) {
     }
 }
 
-pub fn get(object_value: Json, key: []u8) -> ?Json {
+pub fn get(object_value: Json, key: const []u8) -> ?Json {
     match (object_value) {
         Json.object(members) {
             for (member in members) {
@@ -400,17 +400,17 @@ pub fn as_object(value: Json) -> ?[]Member {
     }
 }
 
-pub fn get_string(object_value: Json, key: []u8) -> ?[]u8 {
+pub fn get_string(object_value: Json, key: const []u8) -> ?[]u8 {
     var value_opt = get(object_value, key);
     match (value_opt) { none { return none; } some(value) { return as_string(value); } }
 }
 
-pub fn get_u64(object_value: Json, key: []u8) -> ?u64 {
+pub fn get_u64(object_value: Json, key: const []u8) -> ?u64 {
     var value_opt = get(object_value, key);
     match (value_opt) { none { return none; } some(value) { return as_u64(value); } }
 }
 
-pub fn get_i64(object_value: Json, key: []u8) -> ?i64 {
+pub fn get_i64(object_value: Json, key: const []u8) -> ?i64 {
     var value_opt = get(object_value, key);
     match (value_opt) { none { return none; } some(value) { return as_i64(value); } }
 }
