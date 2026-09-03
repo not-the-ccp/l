@@ -26,7 +26,7 @@ pub struct Snapshot {
 }
 
 pub struct Text {
-    original: []u8,
+    original: const []u8,
     added: []u8,
     root: ?ref Node,
 }
@@ -132,12 +132,12 @@ fn rebalance(piece: Piece, left: ?ref Node, right: ?ref Node) -> ref Node {
     return make_node(piece, left, right);
 }
 
-fn piece_source(text: ref Text, source: Source) -> []u8 {
+fn piece_source(text: ref Text, source: Source) -> const []u8 {
     if (source is Source.original) { return text.original; }
     return text.added;
 }
 
-fn count_newlines(src: []u8, start: u64, length: u64) -> u64 {
+fn count_newlines(src: const []u8, start: u64, length: u64) -> u64 {
     if (start > len(src) || length > len(src) - start) { trap; }
     var count: u64 = 0;
     for (var i = start; i < start + length; i += 1) {
@@ -156,7 +156,7 @@ fn make_piece(text: ref Text, source: Source, start: u64, length: u64) -> Piece 
     };
 }
 
-fn build_balanced(pieces: []Piece, start: u64, end: u64) -> ?ref Node {
+fn build_balanced(pieces: const []Piece, start: u64, end: u64) -> ?ref Node {
     if (start >= end) { return none; }
     var mid = start + (end - start) / 2;
     var left = build_balanced(pieces, start, mid);
@@ -351,7 +351,7 @@ fn check_node(text: ref Text, node_opt: ?ref Node) -> Stats {
     }
 }
 
-pub fn from_bytes(data: []u8) -> ref Text {
+pub fn from_bytes(data: const []u8) -> ref Text {
     var text = new Text {
         original: bytes.clone(data),
         added: [],
@@ -414,7 +414,7 @@ pub fn byte_at(text: ref Text, offset: u64) -> u8 {
     trap;
 }
 
-pub fn replace(text: ref Text, start: u64, end: u64, replacement: []u8) {
+pub fn replace(text: ref Text, start: u64, end: u64, replacement: const []u8) {
     if (start > end || end > byte_len(text)) { trap; }
 
     var first = split_node(text, text.root, start);
