@@ -152,6 +152,26 @@ fn test_modal_cursor_invariants() {
     expect(model.cursor(insertion) == 3);
 }
 
+fn test_final_newline_is_not_a_phantom_line() {
+    var editor = model.create("one\ntwo\n");
+    model.move_document_end(editor);
+    expect(model.cursor(editor) == 6);
+
+    // A linewise delete of the last real line should leave the cursor on the
+    // previous real line, not at EOF after its terminating newline.
+    var span = model.current_line_span(editor);
+    model.delete_span(editor, span, true, false);
+    expect_bytes(text.to_bytes(editor.doc), "one\n");
+    expect(model.cursor(editor) == 2);
+
+    // The same invariant must survive undo/redo history restoration.
+    model.undo(editor);
+    expect_bytes(text.to_bytes(editor.doc), "one\ntwo\n");
+    model.redo(editor);
+    expect_bytes(text.to_bytes(editor.doc), "one\n");
+    expect(model.cursor(editor) == 2);
+}
+
 fn main() {
     test_insert_undo_group();
     test_unicode_atomic_delete();
@@ -161,4 +181,5 @@ fn main() {
     test_motion_spans_and_search();
     test_saved_state();
     test_modal_cursor_invariants();
+    test_final_newline_is_not_a_phantom_line();
 }
