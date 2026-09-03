@@ -30,6 +30,19 @@ jobs:
           subprocess.run(['/tmp/lace-long-before'], check=True)
           print(f'BASELINE_LONG_LINE_SECONDS={time.perf_counter() - t:.6f}')
           PY
+      - name: Correct staged L newline escapes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.github/apply_lace_streaming_render.py')
+          s = p.read_text()
+          old = r"'\n'"
+          new = r"'\\n'"
+          count = s.count(old)
+          if count < 5:
+              raise SystemExit(f'expected staged newline literals, found {count}')
+          p.write_text(s.replace(old, new))
+          PY
       - name: Apply piece-aware redraw implementation
         run: python3 .github/apply_lace_streaming_render.py
       - name: Compile optimized long-line benchmark
