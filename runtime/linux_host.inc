@@ -1,6 +1,6 @@
 /* Linux-only hosted profile used by native L executables.
  *
- * Native host IDs 25..39 are reserved by bootstrap/native_compile.py. Keeping
+ * Native host IDs 25..49 are reserved by bootstrap/native_compile.py. Keeping
  * their implementation here avoids teaching the portable VM representation
  * about Linux descriptor/process internals. The native runtime already permits
  * only one active LVM per process (g_vm); this profile follows the same model
@@ -34,6 +34,16 @@ enum {
     H_LINUX_PROCESS_WAIT_EXIT,
     H_LINUX_PROCESS_EXIT_CODE,
     H_LINUX_PROCESS_TERM_SIGNAL,
+    H_LINUX_PROCESS_SEND,
+    H_LINUX_PROCESS_SEND_GROUP,
+    H_LINUX_PROCESS_SIGINT,
+    H_LINUX_PROCESS_SIGQUIT,
+    H_LINUX_PROCESS_SIGTERM,
+    H_LINUX_PROCESS_SIGKILL,
+    H_LINUX_PROCESS_SIGSTOP,
+    H_LINUX_PROCESS_SIGTSTP,
+    H_LINUX_PROCESS_SIGCONT,
+    H_LINUX_PROCESS_SIGHUP,
 };
 
 enum {
@@ -190,12 +200,24 @@ static int linux_pidfd_open(pid_t pid) {
 #endif
 }
 
-static void linux_pidfd_kill(int pidfd, pid_t pid) {
+static int linux_send_child_signal(int pidfd, pid_t pid, int signo) {
 #ifdef SYS_pidfd_send_signal
-    if (pidfd >= 0 && syscall(SYS_pidfd_send_signal, pidfd, SIGKILL, NULL, 0) == 0)
-        return;
+    if (pidfd >= 0) {
+        if (syscall(SYS_pidfd_send_signal, pidfd, signo, NULL, 0) == 0)
+            return 0;
+        if (errno != ENOSYS) return -1;
+    }
 #endif
-    (void)kill(pid, SIGKILL);
+    return kill(pid, signo);
+}
+
+static void linux_pidfd_kill(int pidfd, pid_t pid) {
+    (void)linux_send_child_signal(pidfd, pid, SIGKILL);
+}
+
+static LValue linux_errno_optional(LVM *vm, int rc) {
+    if (rc == 0) return v_none();
+    return linux_some(vm, v_int((uint64_t)(int64_t)(errno ? errno : EIO)));
 }
 
 static LValue linux_host_call(LVM *vm, int id, LValue *args, int n) {
@@ -421,6 +443,40 @@ static LValue linux_host_call(LVM *vm, int id, LValue *args, int n) {
         group->u.group.pgid = child->u.child.pgid;
         return v_opaque(group);
     }
+    case H_LINUX_PROCESS_SEND: {
+        if (n != 2) die("linux.process.send arity");
+        LinuxOpaque *child = linux_as(args[0], LX_CHILD, "linux.process.Child");
+        int signo = (int)(int64_t)args[1].as.u;
+        errno = 0;
+        return linux_errno_optional(vm,
+            linux_send_child_signal(child->u.child.pidfd, child->u.child.pid, signo));
+    }
+    case H_LINUX_PROCESS_SEND_GROUP: {
+        if (n != 2) die("linux.process.send_group arity");
+        LinuxOpaque *group = linux_as(args[0], LX_GROUP, "linux.process.Group");
+        int signo = (int)(int64_t)args[1].as.u;
+        errno = 0;
+        return linux_errno_optional(vm, kill(-group->u.group.pgid, signo));
+    }
+    case H_LINUX_PROCESS_SIGINT:
+    case H_LINUX_PROCESS_SIGQUIT:
+    case H_LINUX_PROCESS_SIGTERM:
+    case H_LINUX_PROCESS_SIGKILL:
+    case H_LINUX_PROCESS_SIGSTOP:
+    case H_LINUX_PROCESS_SIGTSTP:
+    case H_LINUX_PROCESS_SIGCONT:
+    case H_LINUX_PROCESS_SIGHUP: {
+        if (n != 0) die("linux.process signal-number arity");
+        int signo = id == H_LINUX_PROCESS_SIGINT ? SIGINT
+            : id == H_LINUX_PROCESS_SIGQUIT ? SIGQUIT
+            : id == H_LINUX_PROCESS_SIGTERM ? SIGTERM
+            : id == H_LINUX_PROCESS_SIGKILL ? SIGKILL
+            : id == H_LINUX_PROCESS_SIGSTOP ? SIGSTOP
+            : id == H_LINUX_PROCESS_SIGTSTP ? SIGTSTP
+            : id == H_LINUX_PROCESS_SIGCONT ? SIGCONT
+            : SIGHUP;
+        return v_int((uint64_t)(int64_t)signo);
+    }
     case H_LINUX_PROCESS_WAIT_EXIT: {
         if (n != 1) die("linux.process.wait_exit arity");
         LinuxOpaque *child = linux_as(args[0], LX_CHILD, "linux.process.Child");
@@ -520,6 +576,6 @@ static void linux_host_cleanup(LVM *vm) { (void)vm; }
 
 #ifdef __linux__
 static int linux_host_id(int id) {
-    return id >= H_LINUX_FD_STDIN && id <= H_LINUX_PROCESS_TERM_SIGNAL;
+    return id >= H_LINUX_FD_STDIN && id <= H_LINUX_PROCESS_SIGHUP;
 }
 #endif

@@ -88,6 +88,8 @@ class LinuxHost:
     Descriptor values own their underlying descriptor and may be aliased as L
     values. Closing one alias closes the shared handle; later operations through
     another alias trap. Child values similarly identify one tracked process.
+    Expected OS failures for spawn/signalling are returned as errno values;
+    contract violations remain traps.
     """
 
     def __init__(self):
@@ -305,6 +307,26 @@ class LinuxHost:
         child = self._child(value)
         return OpaqueVal(GROUP_TYPE, LinuxGroup(child.pgid))
 
+    def _send(self, value, number):
+        child = self._child(value)
+        signo = int(number)
+        try:
+            if child.pidfd >= 0 and hasattr(signal, "pidfd_send_signal"):
+                signal.pidfd_send_signal(child.pidfd, signo)
+            else:
+                os.kill(child.pid, signo)
+            return None
+        except OSError as exc:
+            return SomeVal(int(exc.errno or errno.EIO))
+
+    def _send_group(self, value, number):
+        group = self._group(value)
+        try:
+            os.killpg(group.pgid, int(number))
+            return None
+        except OSError as exc:
+            return SomeVal(int(exc.errno or errno.EIO))
+
     def _wait_exit(self, value):
         child = self._child(value)
         if child.waited:
@@ -366,6 +388,8 @@ class LinuxHost:
         status_ty = host.opaque_type("ExitStatus")
         bytes_ro = const_arr(name_ty("u8"))
         argv_ro = const_arr(bytes_ro)
+        i64_ty = name_ty("i64")
+        signal_result_ty = opt(i64_ty)
 
         host.function(
             "spawn_exact",
@@ -374,11 +398,21 @@ class LinuxHost:
             self._spawn_exact,
         )
         host.function("spawn_child", [spawn_ty], opt(child_ty), self._spawn_child)
-        host.function("spawn_error", [spawn_ty], opt(name_ty("i64")), self._spawn_error)
+        host.function("spawn_error", [spawn_ty], opt(i64_ty), self._spawn_error)
         host.function("group", [child_ty], group_ty, self._child_group)
+        host.function("send", [child_ty, i64_ty], signal_result_ty, self._send)
+        host.function("send_group", [group_ty, i64_ty], signal_result_ty, self._send_group)
+        host.function("sigint", [], i64_ty, lambda: int(signal.SIGINT))
+        host.function("sigquit", [], i64_ty, lambda: int(signal.SIGQUIT))
+        host.function("sigterm", [], i64_ty, lambda: int(signal.SIGTERM))
+        host.function("sigkill", [], i64_ty, lambda: int(signal.SIGKILL))
+        host.function("sigstop", [], i64_ty, lambda: int(signal.SIGSTOP))
+        host.function("sigtstp", [], i64_ty, lambda: int(signal.SIGTSTP))
+        host.function("sigcont", [], i64_ty, lambda: int(signal.SIGCONT))
+        host.function("sighup", [], i64_ty, lambda: int(signal.SIGHUP))
         host.function("wait_exit", [child_ty], status_ty, self._wait_exit)
-        host.function("exit_code", [status_ty], opt(name_ty("i64")), self._exit_code)
-        host.function("term_signal", [status_ty], opt(name_ty("i64")), self._term_signal)
+        host.function("exit_code", [status_ty], opt(i64_ty), self._exit_code)
+        host.function("term_signal", [status_ty], opt(i64_ty), self._term_signal)
         return host
 
     def modules(self) -> dict[tuple[str, ...], HostModule]:
