@@ -65,8 +65,16 @@ fn main() -> i64 {
     require(!groups.same(shell_group, job));
 
     write_all(output, "READY\n");
-    require_ok(tty.set_foreground(input, job));
+    write_all(output, "BEFORE_SET\n");
+    var set_result = tty.set_foreground(input, job);
+    match (set_result) {
+        none { write_all(output, "SET_OK\n"); }
+        some(_) { write_all(output, "SET_ERR\n"); trap; }
+    }
+    write_all(output, "BEFORE_QUERY\n");
     require(foreground_is(input, job));
+    write_all(output, "QUERY_OK\n");
+    write_all(output, "BEFORE_WAIT\n");
 
     // The harness sends the terminal's VSUSP byte (Ctrl-Z). The tty driver, not
     // this process, must stop the foreground process group.
@@ -78,8 +86,6 @@ fn main() -> i64 {
 
     require_ok(tty.set_foreground(input, shell_group));
     require(foreground_is(input, shell_group));
-    // A real full-screen child may have changed termios before stopping. Save
-    // that mode for fg, then restore the shell's baseline before reading input.
     var job_mode = mode_or_trap(input);
     require_ok(tty.restore(input, shell_mode));
     write_all(output, "STOPPED\n");
@@ -91,8 +97,6 @@ fn main() -> i64 {
     require(wait.continued(continued));
     write_all(output, "CONTINUED\n");
 
-    // The harness now sends VINTR (Ctrl-C) through the tty. It should terminate
-    // cat with SIGINT while the parent remains blocked in a kernel wait.
     var terminated = wait.group(job);
     match (wait.term_signal(terminated)) {
         some(number) { require(number == process.sigint()); }
