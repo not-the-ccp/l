@@ -101,7 +101,8 @@ def project_sources(entry: Path, root: Path) -> tuple[dict[tuple[str, ...], str]
     load(entry_mod, entry)
     return sources, entry_mod
 
-def make_hosts(argv: list[str]):
+
+def make_hosts_full(argv: list[str]):
     ph = ProcessHost()
     th = TermHost()
     lh = LinuxHost()
@@ -114,6 +115,17 @@ def make_hosts(argv: list[str]):
         **lh.modules(),
     }
     return hosts, ph, th, lh
+
+
+def make_hosts(argv: list[str]):
+    """Compatibility surface used by tooling that only needs host typechecking.
+
+    The returned host functions retain the Linux host object through bound
+    methods. Callers that execute Linux host operations should use
+    make_hosts_full() so they can explicitly clean up Linux-owned resources.
+    """
+    hosts, ph, th, _lh = make_hosts_full(argv)
+    return hosts, ph, th
 
 
 def cleanup(ph: ProcessHost, th: TermHost, lh: LinuxHost | None = None):
@@ -129,7 +141,7 @@ def cleanup(ph: ProcessHost, th: TermHost, lh: LinuxHost | None = None):
 
 def build_program(entry: Path, root: Path, argv: list[str]):
     sources, mod = project_sources(entry, root)
-    hosts, ph, th, lh = make_hosts(argv)
+    hosts, ph, th, lh = make_hosts_full(argv)
     try:
         p = Program(sources, hosts)
         if "main" not in p.tops.get(mod, {}):
@@ -218,7 +230,7 @@ def cmd_exec(ns) -> int:
     payload = pickle.loads(path.read_bytes())
     if not isinstance(payload, dict) or payload.get("magic") != ARTIFACT_MAGIC:
         raise SystemExit("not an LBC1 bytecode artifact")
-    hosts, ph, th, lh = make_hosts(ns.args)
+    hosts, ph, th, lh = make_hosts_full(ns.args)
     try:
         result = BCVM(payload["bytecode"], hosts).run(payload["entry"])
         if ns.print_result:
