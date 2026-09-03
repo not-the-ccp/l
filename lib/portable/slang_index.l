@@ -54,7 +54,7 @@ fn eof(indexer: ref Indexer) -> bool {
     return current(indexer).kind is slang_syntax.Kind.eof;
 }
 
-fn at(indexer: ref Indexer, text: []u8) -> bool {
+fn at(indexer: ref Indexer, text: const []u8) -> bool {
     return bytes.equal(current(indexer).text, text);
 }
 
@@ -150,7 +150,7 @@ fn push_decl(out: []Decl, kind: DeclKind, name: slang_syntax.Token, exported: bo
     });
 }
 
-pub fn index(text: []u8) -> ModuleIndex {
+pub fn index(text: const []u8) -> ModuleIndex {
     var errors = slang_syntax.errors(text);
     var indexer = new Indexer { tokens: slang_syntax.scan(text), pos: 0 };
     var imports: []Import = [];

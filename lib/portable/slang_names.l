@@ -92,21 +92,21 @@ struct Resolver {
     scopes: []Scope,
 }
 
-fn contains(names: [][]u8, name: []u8) -> bool {
+fn contains(names: const [][]u8, name: const []u8) -> bool {
     for (item in names) {
         if (bytes.equal(item, name)) { return true; }
     }
     return false;
 }
 
-fn root_name(text: []u8) -> []u8 {
+fn root_name(text: const []u8) -> []u8 {
     match (bytes.find_byte(text, '.', 0)) {
         none { return bytes.clone(text); }
         some(index) { return bytes.slice(text, 0, index); }
     }
 }
 
-fn push_error(resolver: ref Resolver, kind: ErrorKind, name: []u8, start: u64, end: u64) {
+fn push_error(resolver: ref Resolver, kind: ErrorKind, name: const []u8, start: u64, end: u64) {
     push(resolver.errors, Error {
         kind: kind,
         name: bytes.clone(name),
@@ -115,7 +115,7 @@ fn push_error(resolver: ref Resolver, kind: ErrorKind, name: []u8, start: u64, e
     });
 }
 
-fn add_symbol(resolver: ref Resolver, kind: SymbolKind, name: []u8, start: u64, end: u64) -> u64 {
+fn add_symbol(resolver: ref Resolver, kind: SymbolKind, name: const []u8, start: u64, end: u64) -> u64 {
     var index = len(resolver.symbols);
     push(resolver.symbols, Symbol {
         kind: kind,
@@ -134,7 +134,7 @@ fn pop_scope(resolver: ref Resolver) {
     pop(resolver.scopes);
 }
 
-fn module_symbol(resolver: ref Resolver, name: []u8) -> ?u64 {
+fn module_symbol(resolver: ref Resolver, name: const []u8) -> ?u64 {
     for (var i: u64 = 0; i < len(resolver.module_names); i += 1) {
         if (bytes.equal(resolver.module_names[i], name)) {
             return some(resolver.module_symbols[i]);
@@ -143,7 +143,7 @@ fn module_symbol(resolver: ref Resolver, name: []u8) -> ?u64 {
     return none;
 }
 
-fn local_symbol(resolver: ref Resolver, name: []u8) -> ?u64 {
+fn local_symbol(resolver: ref Resolver, name: const []u8) -> ?u64 {
     var i = len(resolver.scopes);
     while (i > 0) {
         i -= 1;
@@ -157,7 +157,7 @@ fn local_symbol(resolver: ref Resolver, name: []u8) -> ?u64 {
     return none;
 }
 
-fn candidate_visible(resolver: ref Resolver, name: []u8) -> bool {
+fn candidate_visible(resolver: ref Resolver, name: const []u8) -> bool {
     var i = len(resolver.scopes);
     while (i > 0) {
         i -= 1;
@@ -166,11 +166,11 @@ fn candidate_visible(resolver: ref Resolver, name: []u8) -> bool {
     return false;
 }
 
-fn local_name_visible(resolver: ref Resolver, name: []u8) -> bool {
+fn local_name_visible(resolver: ref Resolver, name: const []u8) -> bool {
     return local_symbol(resolver, name) is some(_);
 }
 
-fn bind(resolver: ref Resolver, kind: SymbolKind, name: []u8, start: u64, end: u64) -> ?u64 {
+fn bind(resolver: ref Resolver, kind: SymbolKind, name: const []u8, start: u64, end: u64) -> ?u64 {
     if (local_name_visible(resolver, name)) {
         push_error(resolver, ErrorKind.duplicate_binding, name, start, end);
         return none;
@@ -195,15 +195,15 @@ fn bind(resolver: ref Resolver, kind: SymbolKind, name: []u8, start: u64, end: u
     return some(symbol);
 }
 
-fn add_candidate(resolver: ref Resolver, name: []u8) {
+fn add_candidate(resolver: ref Resolver, name: const []u8) {
     var scope_index = len(resolver.scopes) - 1;
     if (!contains(resolver.scopes[scope_index].candidates, name)) {
         push(resolver.scopes[scope_index].candidates, bytes.clone(name));
     }
 }
 
-fn add_use(resolver: ref Resolver, kind: UseKind, status: UseStatus, text: []u8,
-    root: []u8, symbol: ?u64, start: u64, end: u64) {
+fn add_use(resolver: ref Resolver, kind: UseKind, status: UseStatus, text: const []u8,
+    root: const []u8, symbol: ?u64, start: u64, end: u64) {
     push(resolver.uses, Use {
         kind: kind,
         status: status,
@@ -307,7 +307,7 @@ fn visible_runtime_names(resolver: ref Resolver) -> [][]u8 {
     return out;
 }
 
-fn resolve_block(resolver: ref Resolver, body: []ref slang_decls.Stmt, new_scope: bool) {
+fn resolve_block(resolver: ref Resolver, body: const []ref slang_decls.Stmt, new_scope: bool) {
     if (new_scope) { push_scope(resolver); }
     for (stmt in body) { resolve_stmt(resolver, stmt); }
     if (new_scope) { pop_scope(resolver); }
@@ -434,7 +434,7 @@ fn resolve_stmt(resolver: ref Resolver, stmt: ref slang_decls.Stmt) {
     // break/continue/trap contain no value names.
 }
 
-fn add_module_name(resolver: ref Resolver, kind: SymbolKind, name: []u8, start: u64, end: u64) {
+fn add_module_name(resolver: ref Resolver, kind: SymbolKind, name: const []u8, start: u64, end: u64) {
     var symbol = add_symbol(resolver, kind, name, start, end);
     push(resolver.module_names, bytes.clone(name));
     push(resolver.module_symbols, symbol);
@@ -482,7 +482,7 @@ fn resolve_function(resolver: ref Resolver, decl: slang_decls.Decl) {
     resolver.forbidden_runtime = [];
 }
 
-pub fn resolve(text: []u8) -> Resolution {
+pub fn resolve(text: const []u8) -> Resolution {
     var index = slang_index.index(text);
     var module = slang_decls.parse(text);
     var resolver = new Resolver {
