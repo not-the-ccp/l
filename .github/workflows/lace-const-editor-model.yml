@@ -1,0 +1,60 @@
+name: Lace editor-model const dogfood
+
+on:
+  push:
+    branches: [work/lace-const-editor-model]
+    paths:
+      - .github/workflows/lace-const-editor-model.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rewrite-test-push:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/lace-const-editor-model
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Make editor-model byte inputs read-only
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('tools/lace2/editor_model.l')
+          source = path.read_text()
+          replacements = {
+              '    pub yank: []u8,': '    pub yank: const []u8,',
+              'pub fn create(data: []u8) -> ref Editor {': 'pub fn create(data: const []u8) -> ref Editor {',
+              'pub fn commit_change(editor: ref Editor, label: []u8) {': 'pub fn commit_change(editor: ref Editor, label: const []u8) {',
+              'fn apply_replace(editor: ref Editor, start: u64, end: u64, inserted: []u8, cursor_after: u64) {': 'fn apply_replace(editor: ref Editor, start: u64, end: u64, inserted: const []u8, cursor_after: u64) {',
+              'fn finish_normal_change(editor: ref Editor, label: []u8) {': 'fn finish_normal_change(editor: ref Editor, label: const []u8) {',
+              'fn leading_indent(editor: ref Editor, pos: u64) -> []u8 {': 'fn leading_indent(editor: ref Editor, pos: u64) -> const []u8 {',
+              'pub fn insert_bytes(editor: ref Editor, value: []u8) {': 'pub fn insert_bytes(editor: ref Editor, value: const []u8) {',
+              'pub fn replace_atom(editor: ref Editor, value: []u8) {': 'pub fn replace_atom(editor: ref Editor, value: const []u8) {',
+              'pub fn find_forward(editor: ref Editor, needle: []u8, start: u64) -> ?u64 {': 'pub fn find_forward(editor: ref Editor, needle: const []u8, start: u64) -> ?u64 {',
+              'pub fn find_backward(editor: ref Editor, needle: []u8, before: u64) -> ?u64 {': 'pub fn find_backward(editor: ref Editor, needle: const []u8, before: u64) -> ?u64 {',
+          }
+          for old, new in replacements.items():
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected one {old!r}, got {count}')
+              source = source.replace(old, new, 1)
+          path.write_text(source)
+          PY
+      - name: Full repository test suite
+        run: ./test.sh
+      - name: Commit const-correct editor model
+        shell: bash
+        run: |
+          rm .github/workflows/lace-const-editor-model.yml
+          git config user.name 'not-the-ccp'
+          git config user.email '315506978+not-the-ccp@users.noreply.github.com'
+          git add -A
+          git commit -m 'Use const byte views across the Lace editor model'
+          git push origin HEAD:work/lace-const-editor-model
