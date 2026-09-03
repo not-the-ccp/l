@@ -39,6 +39,10 @@ build_lace() {
     dest=$1
     CC="$CC" "$HERE/lc" --root "$HERE" "$HERE/tools/lace2/main.l" -o "$dest/lace" >/dev/null
 }
+build_shell() {
+    dest=$1
+    CC="$CC" "$HERE/lc" --root "$HERE" "$HERE/tools/shell/main.l" -o "$dest/lsh" >/dev/null
+}
 build_lace_legacy() {
     dest=$1
     build_one editor lace-legacy "$dest"
@@ -74,6 +78,7 @@ build_single() {
 build_tools() {
     begin_stage
     build_lace "$STAGE"
+    build_shell "$STAGE"
     # One transition escape hatch while the rewrite becomes the sole editor.
     build_lace_legacy "$STAGE"
     build_l_lsp "$STAGE"
@@ -81,12 +86,13 @@ build_tools() {
     build_ini_lsp "$STAGE"
     build_syntax "$STAGE"
     build_check "$STAGE"
-    publish_stage lace lace-legacy l-lsp json-lsp ini-lsp lsyntax lcheck
+    publish_stage lace lsh lace-legacy l-lsp json-lsp ini-lsp lsyntax lcheck
 }
 
 case "${1:-all}" in
   all|tools) build_tools ;;
   lace|lace-next) build_single lace build_lace ;;
+  lsh|shell) build_single lsh build_shell ;;
   lace-legacy) build_single lace-legacy build_lace_legacy ;;
   l-lsp) build_single l-lsp build_l_lsp ;;
   json-lsp) build_single json-lsp build_json_lsp ;;
@@ -94,5 +100,5 @@ case "${1:-all}" in
   lsyntax) build_single lsyntax build_syntax ;;
   lcheck) build_single lcheck build_check ;;
   clean) cleanup_stage; rm -rf "$BUILD_DIR" ;;
-  *) echo "usage: ./build.sh [all|tools|lace|lace-next|lace-legacy|l-lsp|json-lsp|ini-lsp|lsyntax|lcheck|clean]" >&2; exit 2 ;;
+  *) echo "usage: ./build.sh [all|tools|lace|lace-next|lsh|shell|lace-legacy|l-lsp|json-lsp|ini-lsp|lsyntax|lcheck|clean]" >&2; exit 2 ;;
 esac
