@@ -1,0 +1,357 @@
+name: Lace operator stabilization
+
+on:
+  push:
+    branches: [work/lace-stabilize-operators]
+    paths:
+      - .github/workflows/lace-operator-stabilize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rewrite-test-push:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/lace-stabilize-operators
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply operator stabilization
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def sub_once(path: str, pattern: str, replacement: str) -> None:
+              p = Path(path)
+              source = p.read_text()
+              updated, count = re.subn(pattern, lambda _: replacement, source, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement, got {count}")
+              p.write_text(updated)
+
+          sub_once(
+              "tools/lace2/main.l",
+              r"fn read_count\(first: \[\]u8\) -> CountKey \{.*?\n\}\n\nfn drop_prompt_atom",
+              r'''fn read_count(first: []u8) -> CountKey {
+              if (len(first) != 1 || first[0] < '1' || first[0] > '9') {
+                  return CountKey { count: 1, key: first };
+              }
+              var maximum: u64 = 0xffffffffffffffff;
+              var count: u64 = (first[0] - '0') as u64;
+              while (true) {
+                  var next_opt = term.read_key();
+                  match (next_opt) {
+                      none { return CountKey { count: count, key: [] }; }
+                      some(next) {
+                          if (len(next) == 1 && next[0] >= '0' && next[0] <= '9') {
+                              var digit = (next[0] - '0') as u64;
+                              if (count > (maximum - digit) / 10) { count = maximum; }
+                              else { count = count * 10 + digit; }
+                          } else {
+                              return CountKey { count: count, key: next };
+                          }
+                      }
+                  }
+              }
+          }
+
+          fn combine_counts(first: u64, second: u64) -> u64 {
+              var maximum: u64 = 0xffffffffffffffff;
+              if (first != 0 && second > maximum / first) { return maximum; }
+              return first * second;
+          }
+
+          fn drop_prompt_atom'''
+          )
+
+          sub_once(
+              "tools/lace2/main.l",
+              r"fn operator_command\(ui: ref Ui, op: u8\) \{.*?\n\}\n\nfn visual_command",
+              r'''fn operator_command(ui: ref Ui, op: u8, prefix_count: u64) {
+              var second_opt = term.read_key();
+              match (second_opt) {
+                  none { return; }
+                  some(second) {
+                      var parsed = read_count(second);
+                      if (len(parsed.key) == 0) { return; }
+                      var count = combine_counts(prefix_count, parsed.count);
+                      var span_opt: ?model.Span = none;
+                      var is_linewise = false;
+                      if (key_is(parsed.key, op)) {
+                          span_opt = some(model.line_count_span(ui.editor, count));
+                          is_linewise = true;
+                      } else if (len(parsed.key) == 1) {
+                          if (op == 'c') {
+                              span_opt = model.change_motion_span(ui.editor, parsed.key[0], count);
+                          } else {
+                              span_opt = model.motion_span_count(ui.editor, parsed.key[0], count);
+                          }
+                      }
+                      match (span_opt) {
+                          none { return; }
+                          some(span) {
+                              if (op == 'y') {
+                                  model.yank_span(ui.editor, span, is_linewise);
+                                  model.set_cursor(ui.editor, span.start);
+                                  set_message(ui, "yanked");
+                              } else if (op == 'c' && is_linewise) {
+                                  linewise.change_lines(ui.editor, count);
+                              } else if (op == 'c') {
+                                  model.delete_span(ui.editor, span, false, true);
+                              } else {
+                                  model.delete_span(ui.editor, span, is_linewise, false);
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+
+          fn visual_command'''
+          )
+
+          main = Path("tools/lace2/main.l")
+          source = main.read_text()
+          source = source.replace(
+              "if (key_is(key, 'S')) { linewise.change_current_line(ui.editor); return; }",
+              "if (key_is(key, 'S')) { linewise.change_lines(ui.editor, count); return; }",
+          )
+          source = source.replace(
+              "if (key_is(key, 'd') || key_is(key, 'y') || key_is(key, 'c')) { operator_command(ui, key[0]); return; }",
+              "if (key_is(key, 'd') || key_is(key, 'y') || key_is(key, 'c')) { operator_command(ui, key[0], count); return; }",
+          )
+          old_y = '''if (key_is(key, 'Y')) {
+                  var span = model.current_line_span(ui.editor);
+                  model.yank_span(ui.editor, span, true);
+                  set_message(ui, "yanked line");
+                  return;
+              }'''
+          new_y = '''if (key_is(key, 'Y')) {
+                  var span = model.line_count_span(ui.editor, count);
+                  model.yank_span(ui.editor, span, true);
+                  model.set_cursor(ui.editor, span.start);
+                  set_message(ui, "yanked line");
+                  return;
+              }'''
+          if old_y not in source:
+              raise SystemExit("tools/lace2/main.l: Y block not found")
+          source = source.replace(old_y, new_y, 1)
+          main.write_text(source)
+
+          sub_once(
+              "tools/lace2/editor_model.l",
+              r"pub fn current_line_span\(editor: ref Editor\) -> Span \{.*?\n\}\n\npub fn open_line",
+              r'''pub fn line_count_span(editor: ref Editor, count: u64) -> Span {
+              var span = line_span(editor, cursor(editor));
+              var end = span.end;
+              var n: u64 = 1;
+              while (n < count && end < text.byte_len(editor.doc)) {
+                  var next = line_span(editor, end);
+                  if (next.end <= end) { break; }
+                  end = next.end;
+                  n += 1;
+              }
+              return Span { start: span.start, end: end };
+          }
+
+          pub fn current_line_span(editor: ref Editor) -> Span {
+              return line_count_span(editor, 1);
+          }
+
+          pub fn motion_span_count(editor: ref Editor, motion: u8, count: u64) -> ?Span {
+              var pos = cursor(editor);
+              var target = pos;
+              var n: u64 = 0;
+              if (motion == 'w') {
+                  while (n < count) {
+                      var next = nav.word_forward(editor.doc, target);
+                      if (next == target) { break; }
+                      target = next;
+                      n += 1;
+                  }
+              }
+              else if (motion == 'b') {
+                  while (n < count) {
+                      var next = nav.word_backward(editor.doc, target);
+                      if (next == target) { break; }
+                      target = next;
+                      n += 1;
+                  }
+              }
+              else if (motion == 'e') {
+                  while (n < count) {
+                      if (target >= text.byte_len(editor.doc)) { break; }
+                      var end = nav.word_end(editor.doc, target);
+                      var next = end;
+                      if (next < text.byte_len(editor.doc)) { next = nav.next_atom(editor.doc, next); }
+                      if (next == target) { break; }
+                      target = next;
+                      n += 1;
+                  }
+              }
+              else if (motion == '0') { target = nav.line_start(editor.doc, pos); }
+              else if (motion == '^') { target = nav.first_nonblank(editor.doc, pos); }
+              else if (motion == '$') {
+                  n = 1;
+                  while (n < count) {
+                      var next_line = nav.next_line_start(editor.doc, target);
+                      match (next_line) {
+                          none { break; }
+                          some(value) { target = value; n += 1; }
+                      }
+                  }
+                  target = nav.line_end(editor.doc, target);
+              }
+              else { return none; }
+
+              if (target < pos) { return some(Span { start: target, end: pos }); }
+              return some(Span { start: pos, end: target });
+          }
+
+          pub fn motion_span(editor: ref Editor, motion: u8) -> ?Span {
+              return motion_span_count(editor, motion, 1);
+          }
+
+          pub fn change_motion_span(editor: ref Editor, motion: u8, count: u64) -> ?Span {
+              if (motion == 'w') {
+                  var pos = cursor(editor);
+                  if (pos < text.byte_len(editor.doc)) {
+                      var value = text.byte_at(editor.doc, pos);
+                      if (value != ' ' && value != '\t' && value != '\r' && value != '\n') {
+                          return motion_span_count(editor, 'e', count);
+                      }
+                  }
+              }
+              return motion_span_count(editor, motion, count);
+          }
+
+          pub fn open_line'''
+          )
+
+          sub_once(
+              "tools/lace2/editor_model.l",
+              r"pub fn move_word_forward\(editor: ref Editor, count: u64\) \{.*?\n\}\n\npub fn move_line_start",
+              r'''pub fn move_word_forward(editor: ref Editor, count: u64) {
+              var pos = cursor(editor);
+              var n: u64 = 0;
+              while (n < count) {
+                  var next = nav.word_forward(editor.doc, pos);
+                  if (next == pos) { break; }
+                  pos = next;
+                  n += 1;
+              }
+              set_motion_cursor(editor, pos);
+              editor.goal_valid = false;
+          }
+
+          pub fn move_word_backward(editor: ref Editor, count: u64) {
+              var pos = cursor(editor);
+              var n: u64 = 0;
+              while (n < count) {
+                  var next = nav.word_backward(editor.doc, pos);
+                  if (next == pos) { break; }
+                  pos = next;
+                  n += 1;
+              }
+              set_motion_cursor(editor, pos);
+              editor.goal_valid = false;
+          }
+
+          pub fn move_word_end(editor: ref Editor, count: u64) {
+              var pos = cursor(editor);
+              var length = text.byte_len(editor.doc);
+              var n: u64 = 0;
+              while (n < count) {
+                  if (pos >= length) { break; }
+                  pos = nav.word_end(editor.doc, pos);
+                  if (n + 1 < count && pos < length) { pos = nav.next_atom(editor.doc, pos); }
+                  n += 1;
+              }
+              set_motion_cursor(editor, pos);
+              editor.goal_valid = false;
+          }
+
+          pub fn move_line_start'''
+          )
+
+          sub_once(
+              "tools/lace2/editor_model.l",
+              r"pub fn move_vertical\(editor: ref Editor, down: bool, count: u64\) \{.*?\n\}\n\npub fn move_document_start",
+              r'''pub fn move_vertical(editor: ref Editor, down: bool, count: u64) {
+              var pos = cursor(editor);
+              if (!editor.goal_valid) {
+                  var start = nav.line_start(editor.doc, pos);
+                  editor.goal_column = nav.screen_column(editor.doc, start, pos, editor.tab_width);
+                  editor.goal_valid = true;
+              }
+              var n: u64 = 0;
+              while (n < count) {
+                  var next = nav.move_vertical(editor.doc, pos, down, editor.goal_column, editor.tab_width);
+                  if (next == pos) { break; }
+                  pos = next;
+                  n += 1;
+              }
+              set_motion_cursor(editor, pos);
+          }
+
+          pub fn move_document_start'''
+          )
+
+          sub_once(
+              "tools/lace2/linewise.l",
+              r"pub fn change_current_line\(editor: ref model.Editor\) \{.*?\n\}\n\npub fn paste",
+              r'''pub fn change_lines(editor: ref model.Editor, count: u64) {
+              var pos = model.cursor(editor);
+              var whole = model.line_count_span(editor, count);
+              var indent = line_indent(editor, pos);
+              var content_end = whole.end;
+              if (content_end > whole.start && text.byte_at(editor.doc, content_end - 1) == '\n') {
+                  content_end -= 1;
+              }
+
+              editor.yank = text.slice(editor.doc, whole.start, whole.end);
+              editor.yank_linewise = true;
+
+              // Preserve one line boundary for the insertion line, even when a
+              // counted change consumes several source lines.
+              apply(editor, whole.start, content_end, indent, whole.start + len(indent));
+              editor.mode = model.Mode.insert;
+          }
+
+          pub fn change_current_line(editor: ref model.Editor) {
+              change_lines(editor, 1);
+          }
+
+          pub fn paste'''
+          )
+
+          tests = Path("test.sh")
+          source = tests.read_text()
+          old = '"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/linewise_test.l" >/dev/null\n'
+          new = old + '"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/operator_model_test.l" >/dev/null\n'
+          if old not in source:
+              raise SystemExit("test.sh: Lace model insertion point not found")
+          source = source.replace(old, new, 1)
+          old_loop = 'editor_pty.py lace2_pty.py; do'
+          if old_loop not in source:
+              raise SystemExit("test.sh: PTY loop insertion point not found")
+          source = source.replace(old_loop, 'editor_pty.py lace2_pty.py lace_operator_pty.py; do', 1)
+          tests.write_text(source)
+          PY
+      - name: Full repository test suite
+        run: ./test.sh
+      - name: Commit stabilized implementation
+        shell: bash
+        run: |
+          rm .github/workflows/lace-operator-stabilize.yml
+          git config user.name 'not-the-ccp'
+          git config user.email '315506978+not-the-ccp@users.noreply.github.com'
+          git add -A
+          git commit -m 'Stabilize Lace operator grammar and counts'
+          git push origin HEAD:work/lace-stabilize-operators
