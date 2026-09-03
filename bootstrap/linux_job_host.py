@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 import errno
 import os
 import signal
+import termios
 
 from core import HostModule, OpaqueVal, SomeVal, TrapSig, name_ty, opt
 from linux_host import (
@@ -16,6 +18,7 @@ from linux_host import (
 
 
 EVENT_TYPE = ("linux", "process", "wait", "Event")
+MODE_TYPE = ("linux", "tty", "Mode")
 
 
 @dataclass(frozen=True)
@@ -25,12 +28,17 @@ class LinuxProcessEvent:
     code: int
 
 
+@dataclass(frozen=True)
+class LinuxTtyMode:
+    attrs: list
+
+
 class LinuxJobHost:
     """Process-state and controlling-terminal operations layered on LinuxHost.
 
-    This layer deliberately models kernel process groups/events rather than
-    shell jobs. Terminal events reap terminal child states; stopped/continued
-    events leave the child waitable for later state changes.
+    This layer deliberately models kernel process groups/events and terminal
+    state rather than shell jobs. Terminal events reap terminal child states;
+    stopped/continued events leave the child waitable for later state changes.
     """
 
     def __init__(self, linux: LinuxHost):
@@ -43,6 +51,14 @@ class LinuxJobHost:
         if not isinstance(event, LinuxProcessEvent):
             raise TrapSig("invalid linux.process.wait.Event")
         return event
+
+    def _mode(self, value) -> LinuxTtyMode:
+        if not isinstance(value, OpaqueVal) or value.type_id != MODE_TYPE:
+            raise TrapSig("expected linux.tty.Mode")
+        mode = value.payload
+        if not isinstance(mode, LinuxTtyMode):
+            raise TrapSig("invalid linux.tty.Mode")
+        return mode
 
     def _find_child(self, pid: int) -> LinuxChild:
         for child in self.linux.children:
@@ -174,6 +190,22 @@ class LinuxJobHost:
             if old_mask is not None:
                 signal.pthread_sigmask(signal.SIG_SETMASK, old_mask)
 
+    def _capture_mode(self, descriptor_value):
+        descriptor = self.linux._fd(descriptor_value).fd
+        try:
+            return SomeVal(OpaqueVal(MODE_TYPE, LinuxTtyMode(copy.deepcopy(termios.tcgetattr(descriptor)))))
+        except OSError:
+            return None
+
+    def _restore_mode(self, descriptor_value, mode_value):
+        descriptor = self.linux._fd(descriptor_value).fd
+        mode = self._mode(mode_value)
+        try:
+            termios.tcsetattr(descriptor, termios.TCSADRAIN, copy.deepcopy(mode.attrs))
+            return None
+        except OSError as exc:
+            return SomeVal(int(exc.errno or errno.EIO))
+
     def group_module(self) -> HostModule:
         host = HostModule(("linux", "process", "group"))
         group_ty = name_ty(("__host__", "linux", "process", "Group"))
@@ -208,9 +240,12 @@ class LinuxJobHost:
         host = HostModule(("linux", "tty"))
         fd_ty = name_ty(("__host__", "linux", "fd", "Fd"))
         group_ty = name_ty(("__host__", "linux", "process", "Group"))
+        mode_ty = host.opaque_type("Mode")
         host.function("is_tty", [fd_ty], name_ty("bool"), self._is_tty)
         host.function("foreground", [fd_ty], opt(group_ty), self._foreground)
         host.function("set_foreground", [fd_ty, group_ty], opt(name_ty("i64")), self._set_foreground)
+        host.function("capture", [fd_ty], opt(mode_ty), self._capture_mode)
+        host.function("restore", [fd_ty, mode_ty], opt(name_ty("i64")), self._restore_mode)
         return host
 
     def modules(self) -> dict[tuple[str, ...], HostModule]:
