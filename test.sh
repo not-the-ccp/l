@@ -8,10 +8,10 @@ PYTHON=${PYTHON:-python3}
 "$HERE/lc" --check "$HERE/examples/hosted/project/main.l" >/dev/null
 "$HERE/lr" "$HERE/examples/hosted/hello.l" -- smoke >/dev/null
 
-# Portable-library stress: this runs through the bytecode VM and exercises
-# generic stack/queue/heap/map/set code including queue compaction and map
-# rehashing. It deliberately uses no host APIs itself.
+# Portable-library stress: run representative library workloads through the
+# native compiler without relying on host capabilities.
 "$HERE/lr" "$HERE/examples/portable/collections_demo.l" >/dev/null
+"$HERE/lr" "$HERE/examples/portable/bytes_demo.l" >/dev/null
 
 # Self-hosting frontend slices run as native executables. Check syntax,
 # top-level identity, full body-AST traversal on small and substantial real

@@ -1,4 +1,4 @@
-pub fn clone[T](src: []T) -> []T {
+pub fn clone[T](src: const []T) -> []T {
     var out: []T = [];
     for (item in src) {
         push(out, item);
