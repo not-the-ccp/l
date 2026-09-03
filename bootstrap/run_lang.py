@@ -45,7 +45,7 @@ def stdio_host():
         while off<len(data):off+=os.write(1,data[off:])
         return UNITV
     h.function('read',[name_ty('u64')],opt(arr(name_ty('u8'))),rd)
-    h.function('write',[arr(name_ty('u8'))],UNIT,wr)
+    h.function('write',[const_arr(name_ty('u8'))],UNIT,wr)
     return h
 
 class ProcessHost:
@@ -68,7 +68,7 @@ class ProcessHost:
             return None if not b else SomeVal(array_bytes(b))
         def close(pv):self.close_one(pv.payload);return UNITV
         h.function('spawn',[arr(arr(name_ty('u8')))],pt,spawn)
-        h.function('write',[pt,arr(name_ty('u8'))],UNIT,write)
+        h.function('write',[pt,const_arr(name_ty('u8'))],UNIT,write)
         h.function('read',[pt,name_ty('u64')],opt(arr(name_ty('u8'))),read)
         def read_timeout(pv,n,ms):
             import select
@@ -83,13 +83,13 @@ class ProcessHost:
             cmd=os.fsdecode(to_bytes(command))
             return int(subprocess.call(cmd,shell=True,executable='/bin/sh'))
         h.function('close',[pt],UNIT,close)
-        h.function('shell',[arr(name_ty('u8'))],name_ty('i64'),shell)
+        h.function('shell',[const_arr(name_ty('u8'))],name_ty('i64'),shell)
         def write_try(pv,data):
             p=pv.payload;b=to_bytes(data)
             if p.stdin is None:return False
             try:p.stdin.write(b);p.stdin.flush();return True
             except (BrokenPipeError,OSError):return False
-        h.function('write_try',[pt,arr(name_ty('u8'))],name_ty('bool'),write_try)
+        h.function('write_try',[pt,const_arr(name_ty('u8'))],name_ty('bool'),write_try)
         h.function('alive',[pt],name_ty('bool'),lambda pv: pv.payload.poll() is None)
         return h
     def close_one(self,p):
@@ -115,7 +115,7 @@ class TermHost:
         h.function('leave_ui',[],UNIT,self.leave_ui)
         h.function('read_key',[],opt(arr(name_ty('u8'))),self.read_key)
         h.function('read_key_timeout',[name_ty('u64')],opt(arr(name_ty('u8'))),self.read_key_timeout)
-        h.function('write',[arr(name_ty('u8'))],UNIT,self.write)
+        h.function('write',[const_arr(name_ty('u8'))],UNIT,self.write)
         h.function('rows',[],name_ty('u64'),lambda:shutil.get_terminal_size((80,24)).lines)
         h.function('cols',[],name_ty('u64'),lambda:shutil.get_terminal_size((80,24)).columns)
         def text_width(value):
@@ -136,7 +136,7 @@ class TermHost:
                     join=False; continue
                 total+=w
             return total
-        h.function('text_width',[arr(name_ty('u8'))],name_ty('u64'),text_width)
+        h.function('text_width',[const_arr(name_ty('u8'))],name_ty('u64'),text_width)
         return h
     def enter(self):
         if os.isatty(0) and self.saved is None:self.saved=termios.tcgetattr(0);tty.setraw(0)
@@ -166,8 +166,8 @@ def fs_host():
     def wr(path,data):
         try:Path(os.fsdecode(to_bytes(path))).write_bytes(to_bytes(data));return True
         except OSError:return False
-    h.function('read',[arr(name_ty('u8'))],opt(arr(name_ty('u8'))),rd)
-    h.function('write',[arr(name_ty('u8')),arr(name_ty('u8'))],name_ty('bool'),wr)
+    h.function('read',[const_arr(name_ty('u8'))],opt(arr(name_ty('u8'))),rd)
+    h.function('write',[const_arr(name_ty('u8')),const_arr(name_ty('u8'))],name_ty('bool'),wr)
     return h
 
 def sys_host(args):
@@ -175,7 +175,7 @@ def sys_host(args):
     def getenv(name):
         value=os.environ.get(os.fsdecode(to_bytes(name)))
         return None if value is None else SomeVal(array_bytes(os.fsencode(value)))
-    h.function('getenv',[arr(name_ty('u8'))],opt(arr(name_ty('u8'))),getenv);return h
+    h.function('getenv',[const_arr(name_ty('u8'))],opt(arr(name_ty('u8'))),getenv);return h
 
 def build_sources(main_path:Path,editor=False):
     if editor:
