@@ -764,7 +764,10 @@ static void proc_close_one(Proc *p) {
     }
 }
 
+#include "linux_host.inc"
+
 static LValue host_call(LVM *vm, int id, LValue *args, int n) {
+    if (linux_host_id(id)) return linux_host_call(vm, id, args, n);
     switch (id) {
     case H_STDIO_READ: {
         if (n != 1) die("stdio.read arity");
@@ -1202,7 +1205,7 @@ static int field_index(LObj *st, int field) {
             pushv(vm, v_int(mask_width(in->u, ty_width(in->a))));
             break;
         case OP_PUSH_FLOAT:
-            pushv(vm, v_float(round_float(in->f, in->a)));
+            pushv(vm, v_float(round_float(in->f, in->a));
             break;
         case OP_MAKE_BYTES: {
             const LBlob *b = in->ptr;
@@ -1545,6 +1548,7 @@ static void vm_cleanup(LVM *vm) {
         tcsetattr(0, TCSANOW, &vm->saved_term);
         vm->term_raw = 0;
     }
+    linux_host_cleanup(vm);
     for (Proc *p = vm->procs; p;) {
         Proc *n = p->next;
         proc_close_one(p);
