@@ -24,6 +24,8 @@ _impl.HOST.update({
     (("linux", "tty"), "capture"): 71,
     (("linux", "tty"), "restore"): 72,
     (("linux", "process", "launch"), "foreground_exact"): 73,
+    (("linux", "process", "signal"), "ignore"): 74,
+    (("linux", "process", "signal"), "default"): 75,
 })
 
 globals().update({
