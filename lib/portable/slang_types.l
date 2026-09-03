@@ -46,6 +46,7 @@ pub enum ResolvedKind {
     optional,
     reference,
     array,
+    const_array,
     function,
 }
 
@@ -281,6 +282,9 @@ fn resolve_one(modules: []Module, module_index: u64, generics: []slang_decls.Gen
     }
     if (source.kind is slang_decls.TypeKind.array) {
         return resolved(ResolvedKind.array, empty_bytes(), empty_bytes(), children, 0, source);
+    }
+    if (source.kind is slang_decls.TypeKind.const_array) {
+        return resolved(ResolvedKind.const_array, empty_bytes(), empty_bytes(), children, 0, source);
     }
     if (source.kind is slang_decls.TypeKind.function) {
         return resolved(ResolvedKind.function, empty_bytes(), empty_bytes(), children, source.parameter_count, source);
