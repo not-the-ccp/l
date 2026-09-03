@@ -1,5 +1,37 @@
+import bytes;
 import linux.fd as fd;
 import linux.process as process;
+
+fn require(ok: bool) {
+    if (!ok) {
+        trap;
+    }
+}
+
+fn test_fd_io() {
+    var ends = fd.pipe();
+    var writer = fd.dup(ends[1]);
+    fd.close(ends[1]);
+
+    require(fd.write(writer, "abc") == 3);
+    fd.close(writer);
+
+    match (fd.read(ends[0], 16)) {
+        some(data) {
+            require(bytes.equal(data, "abc"));
+        }
+        none {
+            trap;
+        }
+    }
+    match (fd.read(ends[0], 16)) {
+        none {}
+        some(_) {
+            trap;
+        }
+    }
+    fd.close(ends[0]);
+}
 
 fn exited_zero(status: process.TerminalStatus) -> bool {
     match (process.exit_code(status)) {
@@ -13,6 +45,8 @@ fn exited_zero(status: process.TerminalStatus) -> bool {
 }
 
 fn main() -> i64 {
+    test_fd_io();
+
     var input = fd.stdin();
     var output = fd.stdout();
     var error = fd.stderr();
