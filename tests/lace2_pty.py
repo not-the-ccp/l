@@ -4,6 +4,7 @@ from __future__ import annotations
 import fcntl
 import os
 import pty
+import re
 import select
 import signal
 import struct
@@ -51,11 +52,11 @@ def wait_exit(pid: int, fd: int, timeout: float = 5.0) -> bytes:
     raise RuntimeError("rewritten Lace failed to quit")
 
 
-def spawn(path: Path) -> tuple[int, int, bytes]:
+def spawn(path: Path, rows: int = 24, cols: int = 90) -> tuple[int, int, bytes]:
     pid, fd = pty.fork()
     if pid == 0:
         os.execv(str(LACE), [str(LACE), str(path)])
-    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 90, 0, 0))
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
     return pid, fd, drain(fd, timeout=3)
 
 
@@ -65,6 +66,13 @@ def edit(path: Path, keys: bytes) -> bytes:
     transcript += wait_exit(pid, fd)
     os.close(fd)
     return transcript
+
+
+def last_cursor(transcript: bytes) -> tuple[int, int]:
+    matches = re.findall(rb"\x1b\[(\d+);(\d+)H", transcript)
+    assert matches, transcript[-1000:]
+    row, col = matches[-1]
+    return int(row), int(col)
 
 
 def run() -> None:
@@ -122,6 +130,62 @@ def run() -> None:
         created = root / "new-file.txt"
         edit(created, b"ihello\x1b:wq\r")
         assert created.read_bytes() == b"hello"
+
+        # Command-mode cursor positions are characters, not invisible line
+        # terminator insertion boundaries. The first development release let
+        # both `l` and `$` walk one cell past the final character.
+        edges = root / "cursor-edges.txt"
+        edges.write_bytes(b"abc\nxy\n")
+        pid, fd, transcript = spawn(edges, rows=10, cols=40)
+        os.write(fd, b"lll")
+        moved = drain(fd, timeout=.4)
+        assert last_cursor(moved) == (1, 9), moved[-1500:]
+        os.write(fd, b"j")
+        moved = drain(fd, timeout=.4)
+        assert last_cursor(moved) == (2, 8), moved[-1500:]
+        os.write(fd, b":q\r")
+        transcript += wait_exit(pid, fd)
+        os.close(fd)
+
+        # `$` addresses the final visible atom, so destructive commands work
+        # there rather than silently operating on the newline separator.
+        dollar_delete = root / "dollar-delete.txt"
+        dollar_delete.write_bytes(b"abc\n")
+        edit(dollar_delete, b"$x:wq\r")
+        assert dollar_delete.read_bytes() == b"ab\n", dollar_delete.read_bytes()
+
+        # Characterwise visual `$` ends on the final character, not the line
+        # separator. Deleting the selection therefore preserves the newline.
+        visual_dollar = root / "visual-dollar.txt"
+        visual_dollar.write_bytes(b"abcd\n")
+        edit(visual_dollar, b"v$d:wq\r")
+        assert visual_dollar.read_bytes() == b"\n", visual_dollar.read_bytes()
+
+        # Redo must restore the Normal-mode cursor snapshot after Escape, not
+        # the one-past-EOL insertion boundary that existed before Escape.
+        redo_cursor = root / "redo-cursor.txt"
+        redo_cursor.write_bytes(b"abc\n")
+        pid, fd, transcript = spawn(redo_cursor, rows=10, cols=40)
+        os.write(fd, b"A!\x1bu\x12")
+        redrawn = drain(fd, timeout=.6)
+        assert last_cursor(redrawn) == (1, 10), redrawn[-1500:]
+        os.write(fd, b":q!\r")
+        transcript += wait_exit(pid, fd)
+        os.close(fd)
+
+        # Status and message rows are single terminal rows. Long paths/help
+        # strings must be clipped instead of wrapping back into the buffer.
+        long_name = root / ("very-long-lace-path-" + "x" * 40 + ".txt")
+        long_name.write_bytes(b"x\n")
+        pid, fd, transcript = spawn(long_name, rows=8, cols=18)
+        assert os.fsencode(str(long_name)) not in transcript, transcript[-2000:]
+        os.write(fd, b":help\r")
+        help_frame = drain(fd, timeout=.5)
+        full_help = b"i/a/o edit \xc2\xb7 hjkl/arrows/wbe move \xc2\xb7 d/y/c ops \xc2\xb7 v/V select \xc2\xb7 / search \xc2\xb7 :w :q \xc2\xb7 ^VxFF raw byte"
+        assert full_help not in help_frame, help_frame[-2000:]
+        os.write(fd, b":q\r")
+        transcript += wait_exit(pid, fd)
+        os.close(fd)
 
     print("default Lace native PTY dogfood PASS")
 
