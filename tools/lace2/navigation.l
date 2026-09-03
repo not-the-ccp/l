@@ -79,8 +79,14 @@ pub fn previous_atom(doc: ref text.Text, pos: u64) -> u64 {
 }
 
 pub fn line_start(doc: ref text.Text, pos: u64) -> u64 {
-    if (pos > text.byte_len(doc)) { trap; }
+    var length = text.byte_len(doc);
+    if (pos > length) { trap; }
     var cursor = pos;
+    // A terminating newline closes the final logical line; EOF after it is an
+    // insertion boundary, not the start of another phantom line.
+    if (cursor == length && length > 0 && text.byte_at(doc, length - 1) == '\n') {
+        cursor -= 1;
+    }
     while (cursor > 0 && text.byte_at(doc, cursor - 1) != '\n') { cursor -= 1; }
     return cursor;
 }
@@ -94,12 +100,18 @@ pub fn line_end(doc: ref text.Text, pos: u64) -> u64 {
 }
 
 // Last addressable atom for command/selection modes on this line. `line_end`
-// is deliberately the insertion boundary before a newline (or EOF), whereas
-// a modal command cursor belongs on the last atom of a non-empty line.
+// is deliberately an insertion boundary, whereas a modal command cursor
+// belongs on the last atom of a non-empty line. If EOF follows a terminating
+// newline, skip that newline as well.
 pub fn cursor_end(doc: ref text.Text, pos: u64) -> u64 {
     var start = line_start(doc, pos);
     var end = line_end(doc, pos);
-    if (end > start) { return previous_atom(doc, end); }
+    var boundary = end;
+    var length = text.byte_len(doc);
+    if (boundary == length && boundary > 0 && text.byte_at(doc, boundary - 1) == '\n') {
+        boundary -= 1;
+    }
+    if (boundary > start) { return previous_atom(doc, boundary); }
     return start;
 }
 
@@ -111,8 +123,11 @@ pub fn previous_line_start(doc: ref text.Text, pos: u64) -> ?u64 {
 
 pub fn next_line_start(doc: ref text.Text, pos: u64) -> ?u64 {
     var end = line_end(doc, pos);
-    if (end >= text.byte_len(doc)) { return none; }
-    return some(end + 1);
+    var length = text.byte_len(doc);
+    if (end >= length) { return none; }
+    var next = end + 1;
+    if (next >= length) { return none; }
+    return some(next);
 }
 
 pub fn first_nonblank(doc: ref text.Text, pos: u64) -> u64 {
