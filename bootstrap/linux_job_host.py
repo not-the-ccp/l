@@ -7,7 +7,7 @@ import os
 import signal
 import termios
 
-from core import HostModule, OpaqueVal, SomeVal, TrapSig, name_ty, opt
+from core import HostModule, OpaqueVal, SomeVal, TrapSig, const_arr, name_ty, opt
 from linux_host import (
     CHILD_TYPE,
     GROUP_TYPE,
@@ -178,17 +178,11 @@ class LinuxJobHost:
     def _set_foreground(self, descriptor_value, group_value):
         descriptor = self.linux._fd(descriptor_value).fd
         group = self.linux._group(group_value)
-        old_mask = None
         try:
-            if hasattr(signal, "pthread_sigmask"):
-                old_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTTOU})
-            os.tcsetpgrp(descriptor, group.pgid)
+            self.linux._set_foreground_pgid(descriptor, group.pgid)
             return None
         except OSError as exc:
             return SomeVal(int(exc.errno or errno.EIO))
-        finally:
-            if old_mask is not None:
-                signal.pthread_sigmask(signal.SIG_SETMASK, old_mask)
 
     def _capture_mode(self, descriptor_value):
         descriptor = self.linux._fd(descriptor_value).fd
@@ -205,6 +199,21 @@ class LinuxJobHost:
             return None
         except OSError as exc:
             return SomeVal(int(exc.errno or errno.EIO))
+
+    def launch_module(self) -> HostModule:
+        host = HostModule(("linux", "process", "launch"))
+        fd_ty = name_ty(("__host__", "linux", "fd", "Fd"))
+        group_ty = name_ty(("__host__", "linux", "process", "Group"))
+        spawn_ty = name_ty(("__host__", "linux", "process", "SpawnResult"))
+        bytes_ro = const_arr(name_ty("u8"))
+        argv_ro = const_arr(bytes_ro)
+        host.function(
+            "foreground_exact",
+            [bytes_ro, argv_ro, fd_ty, fd_ty, fd_ty, opt(group_ty), fd_ty],
+            spawn_ty,
+            self.linux._spawn_foreground_exact,
+        )
+        return host
 
     def group_module(self) -> HostModule:
         host = HostModule(("linux", "process", "group"))
@@ -250,6 +259,7 @@ class LinuxJobHost:
 
     def modules(self) -> dict[tuple[str, ...], HostModule]:
         return {
+            ("linux", "process", "launch"): self.launch_module(),
             ("linux", "process", "group"): self.group_module(),
             ("linux", "process", "child"): self.child_module(),
             ("linux", "process", "wait"): self.wait_module(),
