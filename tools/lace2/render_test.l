@@ -21,4 +21,21 @@ fn main() {
     unicode_editor.unicode_guard = model.UnicodeGuard.all_non_ascii;
     var guarded = render.draw(unicode_editor, "unicode", "", 0, 1, 0, 6, 40);
     expect(bytes.find(guarded.bytes, "\x1b[48;5;52m", 0) is some(_));
+
+    // Terminal chrome must never emit an unbounded status or message row.
+    // Before clipping, either of these strings wrapped into the editing area
+    // on a narrow terminal and made the screen look corrupted.
+    var narrow = model.create("x\n");
+    var clipped = render.draw(
+        narrow,
+        "this/path/is/far/too/long/for/the/status/row",
+        "this help or error message is also much too long for one row",
+        0,
+        1,
+        0,
+        5,
+        18
+    );
+    expect(bytes.find(clipped.bytes, "this/path/is/far/too/long/for/the/status/row", 0) is none);
+    expect(bytes.find(clipped.bytes, "this help or error message is also much too long for one row", 0) is none);
 }
