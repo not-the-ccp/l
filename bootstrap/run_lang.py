@@ -5,6 +5,7 @@ import os,sys,subprocess,termios,tty,shutil,time
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from core import *
 from bytecode import BCCompiler,BCVM
+from term_keys import KeyReader
 
 HERE=Path(__file__).resolve().parent
 REPO=HERE.parent
@@ -105,7 +106,7 @@ class ProcessHost:
         for p in self.ps:self.close_one(p)
 
 class TermHost:
-    def __init__(self):self.saved=None
+    def __init__(self):self.saved=None;self.keys=KeyReader(0)
     def module(self):
         h=HostModule(('term',))
         h.function('enter_raw',[],UNIT,self.enter)
@@ -113,12 +114,7 @@ class TermHost:
         h.function('enter_ui',[],UNIT,self.enter_ui)
         h.function('leave_ui',[],UNIT,self.leave_ui)
         h.function('read_key',[],opt(arr(name_ty('u8'))),self.read_key)
-        def read_key_timeout(ms):
-            import select
-            r,_,_=select.select([0],[],[],max(0,int(ms))/1000.0)
-            if not r:return None
-            return self.read_key()
-        h.function('read_key_timeout',[name_ty('u64')],opt(arr(name_ty('u8'))),read_key_timeout)
+        h.function('read_key_timeout',[name_ty('u64')],opt(arr(name_ty('u8'))),self.read_key_timeout)
         h.function('write',[arr(name_ty('u8'))],UNIT,self.write)
         h.function('rows',[],name_ty('u64'),lambda:shutil.get_terminal_size((80,24)).lines)
         h.function('cols',[],name_ty('u64'),lambda:shutil.get_terminal_size((80,24)).columns)
@@ -154,7 +150,9 @@ class TermHost:
     def leave_ui(self):
         self.write(array_bytes(b'\x1b[0m\x1b[?25h\x1b[?1049l')); self.leave(); return UNITV
     def read_key(self):
-        b=os.read(0,1);return None if not b else SomeVal(array_bytes(b))
+        b=self.keys.read();return None if b is None else SomeVal(array_bytes(b))
+    def read_key_timeout(self,ms):
+        b=self.keys.read(int(ms));return None if b is None else SomeVal(array_bytes(b))
     def write(self,a):
         b=to_bytes(a);off=0
         while off<len(b):off+=os.write(1,b[off:])
