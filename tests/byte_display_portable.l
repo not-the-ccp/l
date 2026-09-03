@@ -28,7 +28,7 @@ fn main() -> i64 {
 
     // Protocol-relevant/control data is rendered as visible text, never copied
     // through as an escape/control sequence.
-    require(bytes.equal(display.render_safe([0x1b, '[', '3', '1', 'm']), "^[ [31m"));
+    require(bytes.equal(display.render_safe([0x1b, '[', '3', '1', 'm']), "^[[31m"));
     require(bytes.equal(display.render_safe([0x00, 0x7f]), "^@^?"));
     require(bytes.equal(display.render_safe([0xff, 0xc0]), "<FF><C0>"));
     require(bytes.equal(display.render_safe([0xe2, 0x80, 0xae]), "<U+202E>"));
