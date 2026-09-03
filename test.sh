@@ -16,10 +16,14 @@ PYTHON=${PYTHON:-python3}
 "$HERE/lr" "$HERE/examples/portable/bytes_demo.l" >/dev/null
 "$HERE/lr" "$HERE/examples/portable/const_readers_demo.l" >/dev/null
 
-# Shell syntax is a normal portable L consumer. Keep its parser executable
-# through the native toolchain so parse-state and source-span changes cannot
-# silently drift from what L itself can compile and run.
+# Shell parsing and human-interface models are ordinary L consumers. Keep them
+# executable through the native toolchain so parsing, source spans, byte-safe
+# editing, prompt semantics and history behavior stay in lockstep with L.
 "$HERE/lr" "$HERE/tools/shell/syntax_test.l" >/dev/null
+"$HERE/lr" "$HERE/tools/shell/presentation_test.l" >/dev/null
+"$HERE/lr" "$HERE/tools/shell/history_test.l" >/dev/null
+"$HERE/lr" "$HERE/tools/shell/prompt_test.l" >/dev/null
+"$HERE/lr" "$HERE/tools/shell/editor_test.l" >/dev/null
 
 # Linux hosted-profile parity. Exercise the exact same L programs once through
 # the Python reference host and once through the generated native runtime.
@@ -27,9 +31,11 @@ PYTHON=${PYTHON:-python3}
 # exec failure, explicit stdio wiring, process groups, signals, waits, and a
 # real three-process byte-stream pipeline. The context probe covers cwd changes
 # plus raw byte environment lookup/enumeration/mutation and error paths. The
-# shell executor adds PATH resolution, per-stage status, and launch rollback.
+# shell executor adds PATH resolution, per-stage status, launch rollback and
+# persistent shell-owned cwd/environment state.
 if [ "$(uname -s)" = Linux ]; then
   "$HERE/lr" "$HERE/tools/shell/executor_test.l" >/dev/null
+  "$HERE/lr" "$HERE/tools/shell/state_test.l" >/dev/null
 
   linux_ref=$("$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_process_probe.l")
   test "$linux_ref" = '3'
