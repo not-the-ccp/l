@@ -92,7 +92,7 @@ def run() -> None:
 
         pid, fd, transcript = spawn(path)
         assert b"<FF>" in transcript, transcript[-1000:]
-        os.write(fd, b"$hx:wq\r")
+        os.write(fd, b"$x:wq\r")
         transcript += wait_exit(pid, fd)
         os.close(fd)
         assert path.read_bytes() == b"alpha!\n", path.read_bytes()
