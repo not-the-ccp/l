@@ -35,10 +35,11 @@ PYTHON=${PYTHON:-python3}
 # real three-process byte-stream pipeline. The context probe covers cwd changes
 # plus raw byte environment lookup/enumeration/mutation and error paths. The
 # job-control probe adds stopped/continued/terminal wait events. The shell
-# executor adds PATH resolution, per-stage status, launch rollback and
-# persistent shell-owned cwd/environment state.
+# executor adds PATH resolution, per-stage status, launch rollback and the job
+# state model tracks per-process stop/continue/termination state.
 if [ "$(uname -s)" = Linux ]; then
   "$HERE/lr" "$HERE/tools/shell/executor_test.l" >/dev/null
+  "$HERE/lr" "$HERE/tools/shell/job_control_test.l" >/dev/null
   "$HERE/lr" "$HERE/tools/shell/state_test.l" >/dev/null
 
   linux_ref=$("$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_process_probe.l")
