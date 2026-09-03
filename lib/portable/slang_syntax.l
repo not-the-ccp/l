@@ -178,6 +178,7 @@ fn parse_qname(p: ref Parser) -> bool {
 fn parse_type(p: ref Parser) -> bool {
     if (at(p, "?")) { advance(p); return parse_type(p); }
     if (at(p, "ref")) { advance(p); return parse_type(p); }
+    if (at(p, "const")) { advance(p); need(p, "["); need(p, "]"); return parse_type(p); }
     if (at(p, "[")) { advance(p); need(p, "]"); return parse_type(p); }
     if (at(p, "(")) { advance(p); need(p, ")"); return true; }
     if (at(p, "fn")) {
