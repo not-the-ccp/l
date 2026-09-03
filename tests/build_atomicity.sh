@@ -19,4 +19,48 @@ if find "$BUILD" -mindepth 1 -maxdepth 1 -name '.stage.*' | grep -q .; then
     exit 1
 fi
 
-printf 'atomic tool build failure handling PASS\n'
+# Direct user compilation has the same publication guarantee. The fake C
+# compiler deliberately creates/truncates its requested -o path before failing;
+# that file must only ever be the private staged path, never the destination.
+SOURCE="$TMP/program.l"
+OUTPUT="$TMP/program"
+FAIL_CC="$TMP/fail-cc"
+cat >"$SOURCE" <<'EOF'
+fn main() -> i64 { return 0; }
+EOF
+printf 'known-good\n' >"$OUTPUT"
+cat >"$FAIL_CC" <<'EOF'
+#!/bin/sh
+out=
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = '-o' ]; then
+        shift
+        out=$1
+        break
+    fi
+    shift
+done
+test -n "$out"
+printf 'broken\n' >"$out"
+exit 23
+EOF
+chmod +x "$FAIL_CC"
+
+if "$HERE/lc" "$SOURCE" -o "$OUTPUT" --cc "$FAIL_CC" >/dev/null 2>&1; then
+    echo 'lc unexpectedly succeeded with a failing C compiler' >&2
+    exit 1
+fi
+test "$(cat "$OUTPUT")" = 'known-good'
+if find "$TMP" -mindepth 1 -maxdepth 1 -type d -name '.program.stage-*' | grep -q .; then
+    echo 'lc left an output staging directory after compiler failure' >&2
+    exit 1
+fi
+
+"$HERE/lc" "$SOURCE" -o "$OUTPUT" >/dev/null
+"$OUTPUT"
+if find "$TMP" -mindepth 1 -maxdepth 1 -type d -name '.program.stage-*' | grep -q .; then
+    echo 'lc left an output staging directory after success' >&2
+    exit 1
+fi
+
+printf 'atomic build/output failure handling PASS\n'

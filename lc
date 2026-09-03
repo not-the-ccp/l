@@ -9,6 +9,7 @@ if len(sys.argv) > 1 and sys.argv[1] == 'analyze':
     from analyze import main as analyze_main
     raise SystemExit(analyze_main(sys.argv[2:]))
 
+from atomic_output import publish_after_success
 from core import LangError
 from cli_common import VERSION, emit_lang_error
 from native_compile import build_user, compile_native
@@ -29,7 +30,8 @@ try:
     program,entry=build_user(src,Path(ns.root).resolve() if ns.root else None)
     if ns.check:
         print(f'{src}: ok');raise SystemExit(0)
-    compile_native(program,entry,out,Path(ns.emit_c).resolve() if ns.emit_c else None,ns.cc)
+    emit_c=Path(ns.emit_c).resolve() if ns.emit_c else None
+    publish_after_success(out, lambda staged: compile_native(program,entry,staged,emit_c,ns.cc))
 except LangError as e:
     emit_lang_error(e,src);raise SystemExit(1)
 except subprocess.CalledProcessError as e:
