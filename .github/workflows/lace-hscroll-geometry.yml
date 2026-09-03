@@ -1,0 +1,144 @@
+name: Lace horizontal-scroll geometry
+
+on:
+  push:
+    branches: [work/lace-hscroll-geometry]
+    paths:
+      - .github/workflows/lace-hscroll-geometry.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rewrite-test-push:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/lace-hscroll-geometry
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Preserve geometry for left-clipped display atoms
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('tools/lace2/render.l')
+          source = path.read_text()
+          anchor = '''fn append_tab(out: []u8, column: u64, tab_width: u64) -> u64 {
+              var width = tab_width;
+              if (width == 0) { width = 4; }
+              var advance = width - (column % width);
+              append_spaces(out, advance);
+              return advance;
+          }
+          '''
+          helper = '''
+          // Render the visible suffix of a safe representation when horizontal
+          // scrolling begins inside one display atom. ASCII representations can
+          // be clipped exactly; if the cut lands inside a wide scalar, reserve
+          // its remaining cells with spaces because a terminal cannot draw half
+          // a glyph.
+          fn append_left_clipped(out: []u8, shown: const []u8, clip_columns: u64) -> u64 {
+              var offset: u64 = 0;
+              var skipped: u64 = 0;
+              var painted: u64 = 0;
+              while (offset < len(shown)) {
+                  var unit = display.next_unit(shown, offset);
+                  var representation = display.representation(shown, unit);
+                  var width = term.text_width(representation);
+                  if (skipped + width <= clip_columns) {
+                      skipped += width;
+                      offset = unit.end;
+                      continue;
+                  }
+                  if (skipped < clip_columns) {
+                      var clipped = clip_columns - skipped;
+                      append_spaces(out, width - clipped);
+                      painted += width - clipped;
+                  } else {
+                      bytes.append(out, representation);
+                      painted += width;
+                  }
+                  skipped += width;
+                  offset = unit.end;
+              }
+              return painted;
+          }
+          '''
+          if source.count(anchor) != 1:
+              raise SystemExit('append_tab anchor changed')
+          source = source.replace(anchor, anchor + helper, 1)
+
+          old = '''        if (logical_column + width > hscroll && logical_column >= hscroll) {
+                      if (painted + width > content_cols) { break; }
+                      append_unit_style(out, editor, unit, selected(editor, document_pos));
+                      if (unit.kind is display.UnitKind.tab) { painted += append_tab(out, logical_column, editor.tab_width); }
+                      else { bytes.append(out, shown); painted += width; }
+                      bytes.append(out, "\\x1b[0m");
+                  }
+          '''
+          new = '''        if (logical_column + width > hscroll) {
+                      var left_clip: u64 = 0;
+                      if (logical_column < hscroll) { left_clip = hscroll - logical_column; }
+                      var visible_width = width - left_clip;
+                      if (painted + visible_width > content_cols) { break; }
+                      append_unit_style(out, editor, unit, selected(editor, document_pos));
+                      if (unit.kind is display.UnitKind.tab) {
+                          if (left_clip == 0) { painted += append_tab(out, logical_column, editor.tab_width); }
+                          else { append_spaces(out, visible_width); painted += visible_width; }
+                      } else if (left_clip == 0) {
+                          bytes.append(out, shown);
+                          painted += width;
+                      } else {
+                          painted += append_left_clipped(out, shown, left_clip);
+                      }
+                      bytes.append(out, "\\x1b[0m");
+                  }
+          '''
+          if source.count(old) != 1:
+              raise SystemExit('render-line paint block changed')
+          path.write_text(source.replace(old, new, 1))
+
+          test = Path('tools/lace2/render_test.l')
+          source = test.read_text()
+          marker = '''    expect(bytes.find(guarded.bytes, "\\x1b[48;5;52m", 0) is some(_));
+          '''
+          tests = '''
+
+              // Horizontal scrolling may begin inside a multi-column atom. The
+              // visible suffix must still occupy its logical cells so following
+              // text and the terminal cursor agree on geometry.
+              var tab_editor = model.create("\\tX\\n");
+              tab_editor.tab_width = 4;
+              model.set_cursor(tab_editor, 1);
+              var tab_frame = render.draw(tab_editor, "", "", 0, 1, 2, 6, 20);
+              expect(tab_frame.cursor_visible);
+              expect(tab_frame.cursor_col == 9);
+              expect(bytes.find(tab_frame.bytes, "  \\x1b[0mX\\x1b[0m", 0) is some(_));
+
+              var escaped_editor = model.create([0xff, 'X', '\\n']);
+              model.set_cursor(escaped_editor, 1);
+              var escaped_frame = render.draw(escaped_editor, "", "", 0, 1, 2, 6, 20);
+              expect(escaped_frame.cursor_visible);
+              expect(escaped_frame.cursor_col == 9);
+              expect(bytes.find(escaped_frame.bytes, "F>\\x1b[0mX\\x1b[0m", 0) is some(_));
+          '''
+          if source.count(marker) != 1:
+              raise SystemExit('render test insertion marker changed')
+          test.write_text(source.replace(marker, marker + tests, 1))
+          PY
+      - name: Full repository test suite
+        run: ./test.sh
+      - name: Commit horizontal-scroll geometry fix
+        shell: bash
+        run: |
+          rm .github/workflows/lace-hscroll-geometry.yml
+          git config user.name 'not-the-ccp'
+          git config user.email '315506978+not-the-ccp@users.noreply.github.com'
+          git add -A
+          git commit -m 'Keep Lace horizontal-scroll display geometry aligned'
+          git push origin HEAD:work/lace-hscroll-geometry
