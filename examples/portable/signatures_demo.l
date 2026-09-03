@@ -5,7 +5,7 @@ fn require(ok: bool) {
     if (!ok) { trap; }
 }
 
-fn named(type: ref slang_decls.Type, name: []u8) -> bool {
+fn named(type: ref slang_decls.Type, name: const []u8) -> bool {
     return type.kind is slang_decls.TypeKind.named && bytes.equal(type.name, name);
 }
 
