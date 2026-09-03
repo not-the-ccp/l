@@ -28,10 +28,9 @@ fn apply(editor: ref model.Editor, start: u64, end: u64, inserted: []u8, cursor:
     editor.goal_valid = false;
 }
 
-pub fn change_lines(editor: ref model.Editor, count: u64) {
-    var pos = model.cursor(editor);
-    var whole = model.line_count_span(editor, count);
-    var indent = line_indent(editor, pos);
+pub fn change_span(editor: ref model.Editor, whole: model.Span) {
+    if (whole.start > whole.end || whole.end > text.byte_len(editor.doc)) { trap; }
+    var indent = line_indent(editor, whole.start);
     var content_end = whole.end;
     if (content_end > whole.start && text.byte_at(editor.doc, content_end - 1) == '\n') {
         content_end -= 1;
@@ -40,10 +39,14 @@ pub fn change_lines(editor: ref model.Editor, count: u64) {
     editor.yank = text.slice(editor.doc, whole.start, whole.end);
     editor.yank_linewise = true;
 
-    // Preserve one line boundary for the insertion line, even when a
-    // counted change consumes several source lines.
+    // Preserve one line boundary for the insertion line, even when the
+    // resolved linewise motion spans upward or consumes several source lines.
     apply(editor, whole.start, content_end, indent, whole.start + len(indent));
     editor.mode = model.Mode.insert;
+}
+
+pub fn change_lines(editor: ref model.Editor, count: u64) {
+    change_span(editor, model.line_count_span(editor, count));
 }
 
 pub fn change_current_line(editor: ref model.Editor) {

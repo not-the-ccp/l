@@ -488,6 +488,47 @@ pub fn move_vertical(editor: ref Editor, down: bool, count: u64) {
     set_motion_cursor(editor, pos);
 }
 
+fn absolute_line_start(editor: ref Editor, line_number: u64) -> u64 {
+    var wanted = line_number;
+    if (wanted == 0) { wanted = 1; }
+    var start: u64 = 0;
+    var line: u64 = 1;
+    while (line < wanted) {
+        match (nav.next_line_start(editor.doc, start)) {
+            none { break; }
+            some(value) {
+                start = value;
+                line += 1;
+            }
+        }
+    }
+    return start;
+}
+
+pub fn absolute_line_target(editor: ref Editor, line_number: u64) -> u64 {
+    return nav.first_nonblank(editor.doc, absolute_line_start(editor, line_number));
+}
+
+pub fn move_absolute_line(editor: ref Editor, line_number: u64) {
+    set_motion_cursor(editor, absolute_line_target(editor, line_number));
+    editor.goal_valid = false;
+}
+
+pub fn line_span_to_absolute_line(editor: ref Editor, line_number: u64) -> Span {
+    var current = nav.line_start(editor.doc, cursor(editor));
+    var target = absolute_line_start(editor, line_number);
+    var first = current;
+    var last = target;
+    if (last < first) {
+        var swap = first;
+        first = last;
+        last = swap;
+    }
+    var end = nav.line_end(editor.doc, last);
+    if (end < text.byte_len(editor.doc)) { end += 1; }
+    return Span { start: first, end: end };
+}
+
 pub fn move_document_start(editor: ref Editor) {
     set_motion_cursor(editor, 0);
     editor.goal_valid = false;

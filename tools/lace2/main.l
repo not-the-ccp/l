@@ -25,6 +25,7 @@ struct Ui {
 struct CountKey {
     count: u64,
     key: []u8,
+    explicit: bool,
 }
 
 fn set_message(ui: ref Ui, value: []u8) {
@@ -157,21 +158,21 @@ fn save(ui: ref Ui) -> bool {
 
 fn read_count(first: []u8) -> CountKey {
     if (len(first) != 1 || first[0] < '1' || first[0] > '9') {
-        return CountKey { count: 1, key: first };
+        return CountKey { count: 1, key: first, explicit: false };
     }
     var maximum: u64 = 0xffffffffffffffff;
     var count: u64 = (first[0] - '0') as u64;
     while (true) {
         var next_opt = term.read_key();
         match (next_opt) {
-            none { return CountKey { count: count, key: [] }; }
+            none { return CountKey { count: count, key: [], explicit: true }; }
             some(next) {
                 if (len(next) == 1 && next[0] >= '0' && next[0] <= '9') {
                     var digit = (next[0] - '0') as u64;
                     if (count > (maximum - digit) / 10) { count = maximum; }
                     else { count = count * 10 + digit; }
                 } else {
-                    return CountKey { count: count, key: next };
+                    return CountKey { count: count, key: next, explicit: true };
                 }
             }
         }
@@ -288,7 +289,7 @@ fn recenter(ui: ref Ui) {
     }
 }
 
-fn do_motion(ui: ref Ui, key: []u8, count: u64) -> bool {
+fn do_motion(ui: ref Ui, key: []u8, count: u64, count_explicit: bool) -> bool {
     if (key_is(key, 'h') || key_left(key)) { model.move_left(ui.editor, count); return true; }
     if (key_is(key, 'l') || key_right(key)) { model.move_right(ui.editor, count); return true; }
     if (key_is(key, 'j') || key_down(key)) { model.move_vertical(ui.editor, true, count); return true; }
@@ -299,11 +300,28 @@ fn do_motion(ui: ref Ui, key: []u8, count: u64) -> bool {
     if (key_is(key, '0') || key_home(key)) { model.move_line_start(ui.editor, false); return true; }
     if (key_is(key, '^')) { model.move_line_start(ui.editor, true); return true; }
     if (key_is(key, '$') || key_end(key)) { model.move_line_end(ui.editor); return true; }
-    if (key_is(key, 'G')) { model.move_document_end(ui.editor); return true; }
+    if (key_is(key, 'G')) {
+        var target = count;
+        if (!count_explicit) { target = 0xffffffffffffffff; }
+        model.move_absolute_line(ui.editor, target);
+        return true;
+    }
     return false;
 }
 
-fn operator_command(ui: ref Ui, op: u8, prefix_count: u64) {
+fn do_g_motion(ui: ref Ui, count: u64) -> bool {
+    var second_opt = term.read_key();
+    match (second_opt) {
+        none { return false; }
+        some(second) {
+            if (!key_is(second, 'g')) { return false; }
+            model.move_absolute_line(ui.editor, count);
+            return true;
+        }
+    }
+}
+
+fn operator_command(ui: ref Ui, op: u8, prefix_count: u64, prefix_explicit: bool) {
     var second_opt = term.read_key();
     match (second_opt) {
         none { return; }
@@ -316,6 +334,22 @@ fn operator_command(ui: ref Ui, op: u8, prefix_count: u64) {
             if (key_is(parsed.key, op)) {
                 span_opt = some(model.line_count_span(ui.editor, count));
                 is_linewise = true;
+            } else if (key_is(parsed.key, 'G')) {
+                var target = count;
+                if (!prefix_explicit && !parsed.explicit) { target = 0xffffffffffffffff; }
+                span_opt = some(model.line_span_to_absolute_line(ui.editor, target));
+                is_linewise = true;
+            } else if (key_is(parsed.key, 'g')) {
+                var third_opt = term.read_key();
+                match (third_opt) {
+                    none {}
+                    some(third) {
+                        if (key_is(third, 'g')) {
+                            span_opt = some(model.line_span_to_absolute_line(ui.editor, count));
+                            is_linewise = true;
+                        }
+                    }
+                }
             } else if (len(parsed.key) == 1) {
                 if (op == 'c') {
                     span_opt = model.change_motion_span(ui.editor, parsed.key[0], count);
@@ -331,7 +365,7 @@ fn operator_command(ui: ref Ui, op: u8, prefix_count: u64) {
                         model.set_cursor(ui.editor, span.start);
                         set_message(ui, "yanked");
                     } else if (op == 'c' && is_linewise) {
-                        linewise.change_lines(ui.editor, count);
+                        linewise.change_span(ui.editor, span);
                     } else if (op == 'c') {
                         model.delete_span(ui.editor, span, false, true);
                     } else {
@@ -343,8 +377,9 @@ fn operator_command(ui: ref Ui, op: u8, prefix_count: u64) {
     }
 }
 
-fn visual_command(ui: ref Ui, key: []u8, count: u64) {
-    if (do_motion(ui, key, count)) { return; }
+fn visual_command(ui: ref Ui, key: []u8, count: u64, count_explicit: bool) {
+    if (do_motion(ui, key, count, count_explicit)) { return; }
+    if (key_is(key, 'g')) { do_g_motion(ui, count); return; }
     if (key_is(key, 0x1b) || key_is(key, 0x03) || key_is(key, 'v')) {
         model.leave_visual(ui.editor);
         return;
@@ -501,7 +536,7 @@ fn colon_command(ui: ref Ui) {
                 return;
             }
             if (bytes.equal(command, "help")) {
-                set_message(ui, "i/a/o edit · hjkl/arrows/wbe move · d/y/c ops · v/V select · / search · :w :q · ^VxFF raw byte");
+                set_message(ui, "i/a/o edit · hjkl/arrows/wbe/G/gg move · d/y/c ops · v/V select · / search · :w :q · ^VxFF raw byte");
                 return;
             }
             set_message(ui, "unknown command");
@@ -514,17 +549,10 @@ fn normal_command(ui: ref Ui, first: []u8) {
     var count = parsed.count;
     var key = parsed.key;
     if (len(key) == 0) { return; }
-    if (do_motion(ui, key, count)) { return; }
+    if (do_motion(ui, key, count, parsed.explicit)) { return; }
     if (key_is(key, 0x03) || key_is(key, 0x1b)) { set_message(ui, ""); return; }
 
-    if (key_is(key, 'g')) {
-        var second_opt = term.read_key();
-        match (second_opt) {
-            none { return; }
-            some(second) { if (key_is(second, 'g')) { model.move_document_start(ui.editor); } }
-        }
-        return;
-    }
+    if (key_is(key, 'g')) { do_g_motion(ui, count); return; }
     if (key_is(key, 'z')) {
         var second_opt = term.read_key();
         match (second_opt) { none { } some(second) { if (key_is(second, 'z')) { recenter(ui); } } }
@@ -575,7 +603,7 @@ fn normal_command(ui: ref Ui, first: []u8) {
         else if (key_is(key, 'C')) { model.enter_insert(ui.editor, pos); }
         return;
     }
-    if (key_is(key, 'd') || key_is(key, 'y') || key_is(key, 'c')) { operator_command(ui, key[0], count); return; }
+    if (key_is(key, 'd') || key_is(key, 'y') || key_is(key, 'c')) { operator_command(ui, key[0], count, parsed.explicit); return; }
     if (key_is(key, 'Y')) {
         var span = model.line_count_span(ui.editor, count);
         model.yank_span(ui.editor, span, true);
@@ -629,7 +657,7 @@ fn run(path: []u8) {
                     insert_command(ui, key);
                 } else if (ui.editor.mode is model.Mode.visual || ui.editor.mode is model.Mode.visual_line) {
                     var parsed = read_count(key);
-                    visual_command(ui, parsed.key, parsed.count);
+                    visual_command(ui, parsed.key, parsed.count, parsed.explicit);
                 } else {
                     normal_command(ui, key);
                 }

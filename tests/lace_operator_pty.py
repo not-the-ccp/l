@@ -97,6 +97,31 @@ def run() -> None:
         case(root, "d2d.txt", b"1\n2\n3\n4\n", b"d2d", b"3\n4\n")
         case(root, "2d2d.txt", b"1\n2\n3\n4\n5\n6\n", b"2d2d", b"5\n6\n")
 
+        # Absolute line motions distinguish omitted counts from explicit
+        # counts: G means last line, while 1G means line one. gg defaults to one.
+        case(root, "G-dd.txt", b"1\n2\n3\n", b"Gdd", b"1\n2\n")
+        case(root, "1G-dd.txt", b"1\n2\n3\n", b"G1Gdd", b"2\n3\n")
+        case(root, "gg-dd.txt", b"1\n2\n3\n", b"Gggdd", b"2\n3\n")
+        case(root, "2gg-dd.txt", b"1\n2\n3\n", b"G2ggdd", b"1\n3\n")
+
+        # G/gg are linewise operator motions. Counts on both sides multiply,
+        # and upward ranges include both the current and target lines.
+        case(root, "dG.txt", b"1\n2\n3\n4\n", b"2GdG", b"1\n")
+        case(root, "d2G.txt", b"1\n2\n3\n4\n5\n", b"4Gd2G", b"1\n5\n")
+        case(root, "2d2G.txt", b"1\n2\n3\n4\n5\n6\n", b"3G2d2G", b"1\n2\n5\n6\n")
+        case(root, "dgg.txt", b"1\n2\n3\n4\n5\n", b"4Gdgg", b"5\n")
+        case(root, "d2gg.txt", b"1\n2\n3\n4\n5\n", b"4Gd2gg", b"1\n5\n")
+
+        # Linewise change uses the resolved absolute span, so upward cgg is not
+        # approximated as a downward counted cc.
+        case(root, "cG.txt", b"  one\n    two\nthree\n", b"2GcGX\x1b", b"  one\n    X\n")
+        case(root, "cgg.txt", b"  one\n    two\nthree\n", b"2GcggX\x1b", b"  X\nthree\n")
+
+        # Existing characterwise Visual mode stays characterwise: the absolute
+        # motion only moves the head to first-nonblank on the target line.
+        case(root, "visual-G.txt", b"aa\nbb\ncc\n", b"jvGd", b"aa\nc\n")
+        case(root, "visual-gg.txt", b"aa\nbb\ncc\n", b"jvggd", b"b\ncc\n")
+
         # Counted yanks use the same range grammar.
         case(root, "2yyp.txt", b"1\n2\n3\n4\n", b"2yyp", b"1\n1\n2\n2\n3\n4\n")
 
