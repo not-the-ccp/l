@@ -22,6 +22,13 @@ fn child_or_trap(result: process.SpawnResult) -> process.Child {
     }
 }
 
+fn mode_or_trap(input: fd.Fd) -> tty.Mode {
+    match (tty.capture(input)) {
+        some(mode) { return mode; }
+        none { trap; }
+    }
+}
+
 fn foreground_is(input: fd.Fd, group: process.Group) -> bool {
     match (tty.foreground(input)) {
         some(actual) { return groups.same(actual, group); }
@@ -29,7 +36,7 @@ fn foreground_is(input: fd.Fd, group: process.Group) -> bool {
     }
 }
 
-fn write_all(output: fd.Fd, value: []u8) {
+fn write_all(output: fd.Fd, value: const []u8) {
     var offset: u64 = 0;
     while (offset < len(value)) {
         var rest: []u8 = [];
@@ -48,6 +55,7 @@ fn main() -> i64 {
 
     var shell_group = groups.current();
     require(foreground_is(input, shell_group));
+    var shell_mode = mode_or_trap(input);
 
     var argv = ["cat"];
     var child = child_or_trap(process.spawn_exact(
@@ -70,8 +78,13 @@ fn main() -> i64 {
 
     require_ok(tty.set_foreground(input, shell_group));
     require(foreground_is(input, shell_group));
+    // A real full-screen child may have changed termios before stopping. Save
+    // that mode for fg, then restore the shell's baseline before reading input.
+    var job_mode = mode_or_trap(input);
+    require_ok(tty.restore(input, shell_mode));
     write_all(output, "STOPPED\n");
 
+    require_ok(tty.restore(input, job_mode));
     require_ok(tty.set_foreground(input, job));
     require_ok(process.send_group(job, process.sigcont()));
     var continued = wait.group(job);
@@ -87,6 +100,7 @@ fn main() -> i64 {
     }
 
     require_ok(tty.set_foreground(input, shell_group));
+    require_ok(tty.restore(input, shell_mode));
     require(foreground_is(input, shell_group));
     write_all(output, "DONE\n");
 
