@@ -10,7 +10,7 @@ fn named(type: ref slang_decls.Type, name: []u8) -> bool {
 }
 
 fn main() -> i64 {
-    var source: []u8 = "pub const LIMIT: u64 = 10;\npub struct Pair[A, B] { pub left: A, right: ?ref pkg.Node[B], }\npub enum Result[T] { ok(T), err([]u8), }\npub fn map[T, U](value: T, f: fn(T) -> U) -> U { return f(value); }\n";
+    var source: []u8 = "pub const LIMIT: u64 = 10;\npub struct Pair[A, B] { pub left: A, right: ?ref pkg.Node[B], view: const []A, nested: []const []B, }\npub enum Result[T] { ok(T), err(const []u8), }\npub fn map[T, U](value: T, f: fn(T) -> U, bytes: const []u8) -> U { return f(value); }\n";
     var module = slang_decls.parse(source);
     require(len(module.errors) == 0);
     require(len(module.declarations) == 4);
@@ -29,7 +29,7 @@ fn main() -> i64 {
     require(len(pair.generics) == 2);
     require(bytes.equal(pair.generics[0].name, "A"));
     require(bytes.equal(pair.generics[1].name, "B"));
-    require(len(pair.fields) == 2);
+    require(len(pair.fields) == 4);
     require(pair.fields[0].exported);
     require(named(pair.fields[0].type, "A"));
     var optional = pair.fields[1].type;
@@ -42,19 +42,30 @@ fn main() -> i64 {
     require(len(node.children) == 1);
     require(named(node.children[0], "B"));
 
+    var view = pair.fields[2].type;
+    require(view.kind is slang_decls.TypeKind.const_array);
+    require(len(view.children) == 1);
+    require(named(view.children[0], "A"));
+
+    var nested = pair.fields[3].type;
+    require(nested.kind is slang_decls.TypeKind.array);
+    require(len(nested.children) == 1);
+    require(nested.children[0].kind is slang_decls.TypeKind.const_array);
+    require(named(nested.children[0].children[0], "B"));
+
     var result = module.declarations[2];
     require(result.kind is slang_decls.DeclKind.enumeration);
     require(len(result.generics) == 1);
     require(len(result.variants) == 2);
     require(bytes.equal(result.variants[0].name, "ok"));
     require(named(result.variants[0].payload[0], "T"));
-    require(result.variants[1].payload[0].kind is slang_decls.TypeKind.array);
+    require(result.variants[1].payload[0].kind is slang_decls.TypeKind.const_array);
     require(named(result.variants[1].payload[0].children[0], "u8"));
 
     var function = module.declarations[3];
     require(function.kind is slang_decls.DeclKind.function);
     require(len(function.generics) == 2);
-    require(len(function.parameters) == 2);
+    require(len(function.parameters) == 3);
     require(named(function.parameters[0].type, "T"));
     var callback = function.parameters[1].type;
     require(callback.kind is slang_decls.TypeKind.function);
@@ -62,6 +73,8 @@ fn main() -> i64 {
     require(len(callback.children) == 2);
     require(named(callback.children[0], "T"));
     require(named(callback.children[1], "U"));
+    require(function.parameters[2].type.kind is slang_decls.TypeKind.const_array);
+    require(named(function.parameters[2].type.children[0], "u8"));
     match (function.return_type) {
         none { trap; }
         some(type) { require(named(type, "U")); }
