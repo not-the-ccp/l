@@ -29,7 +29,7 @@ fn main() -> i64 {
     require(len(pair.generics) == 2);
     require(bytes.equal(pair.generics[0].name, "A"));
     require(bytes.equal(pair.generics[1].name, "B"));
-    require(len(pair.fields) == 4);
+    if (len(pair.fields) != 4) { return 21; }
     require(pair.fields[0].exported);
     require(named(pair.fields[0].type, "A"));
     var optional = pair.fields[1].type;
@@ -43,15 +43,15 @@ fn main() -> i64 {
     require(named(node.children[0], "B"));
 
     var view = pair.fields[2].type;
-    require(view.kind is slang_decls.TypeKind.const_array);
-    require(len(view.children) == 1);
-    require(named(view.children[0], "A"));
+    if (!(view.kind is slang_decls.TypeKind.const_array)) { return 22; }
+    if (len(view.children) != 1) { return 23; }
+    if (!named(view.children[0], "A")) { return 24; }
 
     var nested = pair.fields[3].type;
-    require(nested.kind is slang_decls.TypeKind.array);
-    require(len(nested.children) == 1);
-    require(nested.children[0].kind is slang_decls.TypeKind.const_array);
-    require(named(nested.children[0].children[0], "B"));
+    if (!(nested.kind is slang_decls.TypeKind.array)) { return 25; }
+    if (len(nested.children) != 1) { return 26; }
+    if (!(nested.children[0].kind is slang_decls.TypeKind.const_array)) { return 27; }
+    if (!named(nested.children[0].children[0], "B")) { return 28; }
 
     var result = module.declarations[2];
     require(result.kind is slang_decls.DeclKind.enumeration);
@@ -59,13 +59,13 @@ fn main() -> i64 {
     require(len(result.variants) == 2);
     require(bytes.equal(result.variants[0].name, "ok"));
     require(named(result.variants[0].payload[0], "T"));
-    require(result.variants[1].payload[0].kind is slang_decls.TypeKind.const_array);
-    require(named(result.variants[1].payload[0].children[0], "u8"));
+    if (!(result.variants[1].payload[0].kind is slang_decls.TypeKind.const_array)) { return 29; }
+    if (!named(result.variants[1].payload[0].children[0], "u8")) { return 30; }
 
     var function = module.declarations[3];
     require(function.kind is slang_decls.DeclKind.function);
     require(len(function.generics) == 2);
-    require(len(function.parameters) == 3);
+    if (len(function.parameters) != 3) { return 31; }
     require(named(function.parameters[0].type, "T"));
     var callback = function.parameters[1].type;
     require(callback.kind is slang_decls.TypeKind.function);
@@ -73,8 +73,8 @@ fn main() -> i64 {
     require(len(callback.children) == 2);
     require(named(callback.children[0], "T"));
     require(named(callback.children[1], "U"));
-    require(function.parameters[2].type.kind is slang_decls.TypeKind.const_array);
-    require(named(function.parameters[2].type.children[0], "u8"));
+    if (!(function.parameters[2].type.kind is slang_decls.TypeKind.const_array)) { return 32; }
+    if (!named(function.parameters[2].type.children[0], "u8")) { return 33; }
     match (function.return_type) {
         none { trap; }
         some(type) { require(named(type, "U")); }
