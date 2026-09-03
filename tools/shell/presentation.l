@@ -21,7 +21,7 @@ pub enum DiagnosticKind {
 pub struct Diagnostic {
     pub kind: DiagnosticKind,
     pub span: syntax.Span,
-    pub message: []u8,
+    pub message: const []u8,
 }
 
 pub struct Analysis {
@@ -53,7 +53,7 @@ fn add_pipeline(out: []Highlight, pipeline: syntax.Pipeline) {
     }
 }
 
-fn incomplete_message(kind: syntax.IncompleteKind) -> []u8 {
+fn incomplete_message(kind: syntax.IncompleteKind) -> const []u8 {
     if (kind == syntax.IncompleteKind.single_quote) {
         return "close single quote";
     }
