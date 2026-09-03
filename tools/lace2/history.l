@@ -8,7 +8,7 @@ struct Node {
     selections: selection.Set,
     parent: ?ref Node,
     children: []ref Node,
-    label: []u8,
+    label: const []u8,
 }
 
 pub struct History {
@@ -38,7 +38,7 @@ pub fn commit(
     history: ref History,
     doc: ref text.Text,
     selections: selection.Set,
-    label: []u8
+    label: const []u8
 ) -> u64 {
     selection.validate(selections, text.byte_len(doc));
     var child = new Node {
