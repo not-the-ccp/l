@@ -74,11 +74,10 @@ fn main() -> i64 {
     write_all(output, "BEFORE_QUERY\n");
     require(foreground_is(input, job));
     write_all(output, "QUERY_OK\n");
-    write_all(output, "BEFORE_WAIT\n");
+    write_all(output, "BEFORE_CHILD_WAIT\n");
 
-    // The harness sends the terminal's VSUSP byte (Ctrl-Z). The tty driver, not
-    // this process, must stop the foreground process group.
-    var stopped = wait.group(job);
+    var stopped = wait.child(child);
+    write_all(output, "CHILD_WAIT_RETURNED\n");
     match (wait.stop_signal(stopped)) {
         some(number) { require(number == process.sigtstp()); }
         none { trap; }
@@ -93,11 +92,11 @@ fn main() -> i64 {
     require_ok(tty.restore(input, job_mode));
     require_ok(tty.set_foreground(input, job));
     require_ok(process.send_group(job, process.sigcont()));
-    var continued = wait.group(job);
+    var continued = wait.child(child);
     require(wait.continued(continued));
     write_all(output, "CONTINUED\n");
 
-    var terminated = wait.group(job);
+    var terminated = wait.child(child);
     match (wait.term_signal(terminated)) {
         some(number) { require(number == process.sigint()); }
         none { trap; }
