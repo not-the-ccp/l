@@ -22,6 +22,12 @@ fn main() -> i64 {
     require(utf8.valid_width(two, 0) == 2);
     require(utf8.valid_width(three, 0) == 3);
     require(utf8.valid_width(four, 0) == 4);
+    require(utf8.valid_scalar_width('a', 0, 0, 0, 1) == 1);
+    require(utf8.valid_scalar_width(0xc3, 0xa9, 0, 0, 2) == 2);
+    require(utf8.valid_scalar_width(0xe2, 0x82, 0xac, 0, 3) == 3);
+    require(utf8.valid_scalar_width(0xf0, 0x9f, 0x98, 0x80, 4) == 4);
+    require(utf8.valid_scalar_width(0xe2, 0x82, 0, 0, 2) == 1);
+    require(utf8.valid_scalar_width(0xed, 0xa0, 0x80, 0, 3) == 1);
     require(utf8.decode_at(two, 0) == 0x00e9);
     require(utf8.decode_at(three, 0) == 0x20ac);
     require(utf8.decode_at(four, 0) == 0x1f600);

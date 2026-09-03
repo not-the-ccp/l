@@ -3,7 +3,7 @@ import bytes;
 import fs;
 import sys;
 import term;
-import tools.lace2.display_bytes as display;
+import byte_display as display;
 import tools.lace2.editor_model as model;
 import tools.lace2.linewise as linewise;
 import tools.lace2.navigation as nav;
