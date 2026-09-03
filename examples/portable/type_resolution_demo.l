@@ -28,7 +28,7 @@ fn main() -> i64 {
 
     var modules: []slang_types.Module = [
         slang_types.parse_module("base", "pub struct Box[T] { pub value: T, } struct Secret { value: i64, } pub fn helper() { }"),
-        slang_types.parse_module("app", "import base as b; import ffi; pub struct Local[T] { pub local: T, pub boxed: b.Box[T], pub handle: ffi.Handle, pub bytes: []u8, pub callback: fn(T) -> ?ref b.Box[T], }"),
+        slang_types.parse_module("app", "import base as b; import ffi; pub struct Local[T] { pub local: T, pub boxed: b.Box[T], pub handle: ffi.Handle, pub bytes: []u8, pub callback: fn(T) -> ?ref b.Box[T], pub view: const []T, pub nested: []const []u8, }"),
     ];
 
     var good_errors = slang_types.validate(modules, hosts);
@@ -59,6 +59,21 @@ fn main() -> i64 {
     require(callback.type.children[1].kind is slang_types.ResolvedKind.optional);
     require(callback.type.children[1].children[0].kind is slang_types.ResolvedKind.reference);
     require(callback.type.children[1].children[0].children[0].kind is slang_types.ResolvedKind.nominal);
+
+    var view = slang_types.resolve(modules, 1, local.generics, local.fields[5].type, hosts, local.name);
+    require(len(view.errors) == 0);
+    require(view.type.kind is slang_types.ResolvedKind.const_array);
+    require(len(view.type.children) == 1);
+    require(view.type.children[0].kind is slang_types.ResolvedKind.generic);
+    require(bytes.equal(view.type.children[0].name, "T"));
+
+    var nested = slang_types.resolve(modules, 1, local.generics, local.fields[6].type, hosts, local.name);
+    require(len(nested.errors) == 0);
+    require(nested.type.kind is slang_types.ResolvedKind.array);
+    require(len(nested.type.children) == 1);
+    require(nested.type.children[0].kind is slang_types.ResolvedKind.const_array);
+    require(nested.type.children[0].children[0].kind is slang_types.ResolvedKind.primitive);
+    require(bytes.equal(nested.type.children[0].children[0].name, "u8"));
 
     var arity_modules: []slang_types.Module = [
         modules[0],
