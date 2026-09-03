@@ -41,7 +41,7 @@ build_lace() {
 }
 build_shell() {
     dest=$1
-    CC="$CC" "$HERE/lc" --root "$HERE" "$HERE/tools/shell/main.l" -o "$dest/lsh" >/dev/null
+    CC="$CC" "$HERE/lc" "$HERE/tools/shell/main.l" -o "$dest/lsh" >/dev/null
 }
 build_lace_legacy() {
     dest=$1
