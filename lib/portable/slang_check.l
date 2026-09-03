@@ -19,6 +19,7 @@ pub enum ErrorKind {
     ambiguous_value,
     not_a_value,
     array_required,
+    mutable_array_required,
     reference_required,
     boolean_required,
     integer_required,
@@ -121,6 +122,15 @@ fn array_type(inner: ref slang_types.ResolvedType) -> ref slang_types.ResolvedTy
     return make_type(slang_types.ResolvedKind.array, [], [], [inner], 0);
 }
 
+fn const_array_type(inner: ref slang_types.ResolvedType) -> ref slang_types.ResolvedType {
+    return make_type(slang_types.ResolvedKind.const_array, [], [], [inner], 0);
+}
+
+fn array_like(type: ref slang_types.ResolvedType) -> bool {
+    return type.kind is slang_types.ResolvedKind.array ||
+        type.kind is slang_types.ResolvedKind.const_array;
+}
+
 fn optional_type(inner: ref slang_types.ResolvedType) -> ref slang_types.ResolvedType {
     return make_type(slang_types.ResolvedKind.optional, [], [], [inner], 0);
 }
@@ -145,6 +155,22 @@ fn same(a: ref slang_types.ResolvedType, b: ref slang_types.ResolvedType) -> boo
         if (!same(a.children[i], b.children[i])) { return false; }
     }
     return true;
+}
+
+// Array capability conversion is intentionally shallow. A mutable []T can be
+// used where const []T is expected only when T is exactly the same type. The
+// conversion is not recursively lifted through optionals, refs, nominal type
+// arguments, or another nested array layer.
+fn compatible(expected: ref slang_types.ResolvedType,
+    actual: ref slang_types.ResolvedType) -> bool {
+    if (same(expected, actual)) { return true; }
+    if (expected.kind is slang_types.ResolvedKind.const_array &&
+        actual.kind is slang_types.ResolvedKind.array &&
+        len(expected.children) == 1 && len(actual.children) == 1 &&
+        same(expected.children[0], actual.children[0])) {
+        return true;
+    }
+    return false;
 }
 
 fn binding_type(bindings: ref TypeBindings, name: []u8) -> ?ref slang_types.ResolvedType {
@@ -193,7 +219,7 @@ fn fully_bound(type: ref slang_types.ResolvedType, bindings: ref TypeBindings) -
     return true;
 }
 
-fn unify_type(checker: ref Checker, pattern: ref slang_types.ResolvedType,
+fn unify_type_exact(checker: ref Checker, pattern: ref slang_types.ResolvedType,
     actual: ref slang_types.ResolvedType, bindings: ref TypeBindings,
     start: u64, end: u64, soft: bool) -> bool {
     if (pattern.kind is slang_types.ResolvedKind.invalid || actual.kind is slang_types.ResolvedKind.invalid) {
@@ -212,11 +238,39 @@ fn unify_type(checker: ref Checker, pattern: ref slang_types.ResolvedType,
         return false;
     }
     for (var i: u64 = 0; i < len(pattern.children); i += 1) {
-        if (!unify_type(checker, pattern.children[i], actual.children[i], bindings, start, end, soft)) {
+        if (!unify_type_exact(checker, pattern.children[i], actual.children[i], bindings, start, end, soft)) {
             return false;
         }
     }
     return true;
+}
+
+fn unify_type(checker: ref Checker, pattern: ref slang_types.ResolvedType,
+    actual: ref slang_types.ResolvedType, bindings: ref TypeBindings,
+    start: u64, end: u64, soft: bool) -> bool {
+    if (pattern.kind is slang_types.ResolvedKind.const_array &&
+        actual.kind is slang_types.ResolvedKind.array &&
+        len(pattern.children) == 1 && len(actual.children) == 1) {
+        return unify_type_exact(checker, pattern.children[0], actual.children[0],
+            bindings, start, end, soft);
+    }
+    return unify_type_exact(checker, pattern, actual, bindings, start, end, soft);
+}
+
+fn unify_result_expected(checker: ref Checker, result: ref slang_types.ResolvedType,
+    expected: ref slang_types.ResolvedType, bindings: ref TypeBindings,
+    start: u64, end: u64) {
+    // A generic function returning mutable []T may be contextually consumed as
+    // const []T. Infer through that one outer conversion without permitting a
+    // const result to regain mutability or lifting qualification recursively.
+    if (result.kind is slang_types.ResolvedKind.array &&
+        expected.kind is slang_types.ResolvedKind.const_array &&
+        len(result.children) == 1 && len(expected.children) == 1) {
+        unify_type_exact(checker, result.children[0], expected.children[0],
+            bindings, start, end, true);
+        return;
+    }
+    unify_type(checker, result, expected, bindings, start, end, true);
 }
 
 fn bindings_complete(generics: []slang_decls.GenericParam, bindings: ref TypeBindings) -> bool {
@@ -341,6 +395,14 @@ fn require_same(checker: ref Checker, expected: ref slang_types.ResolvedType,
     actual: ref slang_types.ResolvedType, start: u64, end: u64) {
     if (!(expected.kind is slang_types.ResolvedKind.invalid) &&
         !(actual.kind is slang_types.ResolvedKind.invalid) && !same(expected, actual)) {
+        push_error(checker, ErrorKind.type_mismatch, [], start, end);
+    }
+}
+
+fn require_compatible(checker: ref Checker, expected: ref slang_types.ResolvedType,
+    actual: ref slang_types.ResolvedType, start: u64, end: u64) {
+    if (!(expected.kind is slang_types.ResolvedKind.invalid) &&
+        !(actual.kind is slang_types.ResolvedKind.invalid) && !compatible(expected, actual)) {
         push_error(checker, ErrorKind.type_mismatch, [], start, end);
     }
 }
@@ -566,12 +628,12 @@ fn enum_value_type(checker: ref Checker, decl: slang_decls.Decl,
             for (var i: u64 = 0; i < len(arguments); i += 1) {
                 var template = resolve_syntax_type(checker, decl.generics, variant.payload[i], decl.name);
                 var want = substitute_type(template, bindings);
-                require_same(checker, want, expr_type(checker, arguments[i], some(want)),
+                require_compatible(checker, want, expr_type(checker, arguments[i], some(want)),
                     arguments[i].start, arguments[i].end);
             }
             match (expected) {
                 none { }
-                some(want) { require_same(checker, want, out, start, end); }
+                some(want) { require_compatible(checker, want, out, start, end); }
             }
             return out;
         }
@@ -700,7 +762,7 @@ fn builtin_call(checker: ref Checker, name: []u8, args: []ref slang_decls.Expr,
     if (bytes.equal(name, "len")) {
         if (len(args) != 1) { push_error(checker, ErrorKind.arity, name, start, end); return invalid_type(); }
         var array = expr_type(checker, args[0], none);
-        if (!(array.kind is slang_types.ResolvedKind.array)) {
+        if (!array_like(array)) {
             push_error(checker, ErrorKind.array_required, name, start, end);
         }
         return primitive_type("u64");
@@ -708,17 +770,26 @@ fn builtin_call(checker: ref Checker, name: []u8, args: []ref slang_decls.Expr,
     if (bytes.equal(name, "push")) {
         if (len(args) != 2) { push_error(checker, ErrorKind.arity, name, start, end); return invalid_type(); }
         var array = expr_type(checker, args[0], none);
+        if (array.kind is slang_types.ResolvedKind.const_array) {
+            push_error(checker, ErrorKind.mutable_array_required, name, args[0].start, args[0].end);
+            return unit_type();
+        }
         if (!(array.kind is slang_types.ResolvedKind.array) || len(array.children) != 1) {
             push_error(checker, ErrorKind.array_required, name, start, end);
             return unit_type();
         }
         var value = expr_type(checker, args[1], some(array.children[0]));
-        require_same(checker, array.children[0], value, args[1].start, args[1].end);
+        require_compatible(checker, array.children[0], value, args[1].start, args[1].end);
         return unit_type();
     }
     if (bytes.equal(name, "pop")) {
         if (len(args) != 1) { push_error(checker, ErrorKind.arity, name, start, end); return invalid_type(); }
         var array = expr_type(checker, args[0], none);
+        if (array.kind is slang_types.ResolvedKind.const_array) {
+            push_error(checker, ErrorKind.mutable_array_required, name, args[0].start, args[0].end);
+            if (len(array.children) == 1) { return array.children[0]; }
+            return invalid_type();
+        }
         if (!(array.kind is slang_types.ResolvedKind.array) || len(array.children) != 1) {
             push_error(checker, ErrorKind.array_required, name, start, end);
             return invalid_type();
@@ -728,13 +799,19 @@ fn builtin_call(checker: ref Checker, name: []u8, args: []ref slang_decls.Expr,
     if (bytes.equal(name, "splice")) {
         if (len(args) != 4) { push_error(checker, ErrorKind.arity, name, start, end); return invalid_type(); }
         var array = expr_type(checker, args[0], none);
-        if (!(array.kind is slang_types.ResolvedKind.array)) {
+        if (array.kind is slang_types.ResolvedKind.const_array) {
+            push_error(checker, ErrorKind.mutable_array_required, name, args[0].start, args[0].end);
+            return unit_type();
+        }
+        if (!(array.kind is slang_types.ResolvedKind.array) || len(array.children) != 1) {
             push_error(checker, ErrorKind.array_required, name, start, end);
             return unit_type();
         }
         require_same(checker, primitive_type("u64"), expr_type(checker, args[1], some(primitive_type("u64"))), args[1].start, args[1].end);
         require_same(checker, primitive_type("u64"), expr_type(checker, args[2], some(primitive_type("u64"))), args[2].start, args[2].end);
-        require_same(checker, array, expr_type(checker, args[3], some(array)), args[3].start, args[3].end);
+        var replacement = const_array_type(array.children[0]);
+        require_compatible(checker, replacement, expr_type(checker, args[3], some(replacement)),
+            args[3].start, args[3].end);
         return unit_type();
     }
     return invalid_type();
@@ -755,7 +832,7 @@ fn instantiate_generic_call(checker: ref Checker, decl: slang_decls.Decl,
     }
     match (expected) {
         none { }
-        some(want) { unify_type(checker, result, want, bindings, start, end, true); }
+        some(want) { unify_result_expected(checker, result, want, bindings, start, end); }
     }
     for (var i: u64 = 0; i < len(args); i += 1) {
         var template = resolve_syntax_type(checker, decl.generics, decl.parameters[i].type, decl.name);
@@ -783,7 +860,7 @@ fn instantiate_generic_call(checker: ref Checker, decl: slang_decls.Decl,
     for (var i: u64 = 0; i < len(args); i += 1) {
         var template = resolve_syntax_type(checker, decl.generics, decl.parameters[i].type, decl.name);
         var want = substitute_type(template, bindings);
-        require_same(checker, want, expr_type(checker, args[i], some(want)), args[i].start, args[i].end);
+        require_compatible(checker, want, expr_type(checker, args[i], some(want)), args[i].start, args[i].end);
     }
     return substitute_type(result, bindings);
 }
@@ -841,7 +918,7 @@ fn call_type(checker: ref Checker, expr: ref slang_decls.Expr,
     }
     for (var i: u64 = 0; i < len(args); i += 1) {
         var actual = expr_type(checker, args[i], some(callee_type.children[i]));
-        require_same(checker, callee_type.children[i], actual, args[i].start, args[i].end);
+        require_compatible(checker, callee_type.children[i], actual, args[i].start, args[i].end);
     }
     return callee_type.children[len(callee_type.children) - 1];
 }
@@ -894,12 +971,12 @@ fn struct_literal_type(checker: ref Checker, expr: ref slang_decls.Expr,
                     if (bytes.equal(field.name, supplied.name)) {
                         var template = resolve_syntax_type(checker, decl.generics, field.type, decl.name);
                         var want = substitute_type(template, bindings);
-                        require_same(checker, want, expr_type(checker, supplied.value, some(want)),
+                        require_compatible(checker, want, expr_type(checker, supplied.value, some(want)),
                             supplied.start, supplied.end);
                     }
                 }
             }
-            match (expected) { none { } some(want) { require_same(checker, want, out, expr.start, expr.end); } }
+            match (expected) { none { } some(want) { require_compatible(checker, want, out, expr.start, expr.end); } }
             return out;
         }
     }
@@ -916,7 +993,19 @@ fn expr_type(checker: ref Checker, expr: ref slang_decls.Expr,
     } else if (expr.kind is slang_decls.ExprKind.byte) {
         type = primitive_type("u8");
     } else if (expr.kind is slang_decls.ExprKind.string) {
-        type = array_type(primitive_type("u8"));
+        var u8 = primitive_type("u8");
+        var mutable_context = false;
+        match (expected) {
+            none { }
+            some(want) {
+                if (want.kind is slang_types.ResolvedKind.array && len(want.children) == 1 &&
+                    same(want.children[0], u8)) {
+                    mutable_context = true;
+                }
+            }
+        }
+        if (mutable_context) { type = array_type(u8); }
+        else { type = const_array_type(u8); }
     } else if (expr.kind is slang_decls.ExprKind.integer) {
         type = primitive_type("i64");
         match (expected) { none { } some(want) { if (integer(want)) { type = want; } } }
@@ -951,7 +1040,7 @@ fn expr_type(checker: ref Checker, expr: ref slang_decls.Expr,
     } else if (expr.kind is slang_decls.ExprKind.array) {
         var element: ?ref slang_types.ResolvedType = none;
         match (expected) {
-            some(want) { if (want.kind is slang_types.ResolvedKind.array && len(want.children) == 1) { element = some(want.children[0]); } }
+            some(want) { if (array_like(want) && len(want.children) == 1) { element = some(want.children[0]); } }
             none { }
         }
         if (len(expr.children) == 0 && element is none) {
@@ -961,14 +1050,19 @@ fn expr_type(checker: ref Checker, expr: ref slang_decls.Expr,
             match (element) {
                 none { }
                 some(elem) {
-                    for (child in expr.children) { require_same(checker, elem, expr_type(checker, child, some(elem)), child.start, child.end); }
+                    for (child in expr.children) {
+                        require_compatible(checker, elem, expr_type(checker, child, some(elem)), child.start, child.end);
+                    }
                     type = array_type(elem);
                 }
             }
         }
     } else if (expr.kind is slang_decls.ExprKind.repeat) {
         var elem_expected: ?ref slang_types.ResolvedType = none;
-        match (expected) { some(want) { if (want.kind is slang_types.ResolvedKind.array && len(want.children) == 1) { elem_expected = some(want.children[0]); } } none { } }
+        match (expected) {
+            some(want) { if (array_like(want) && len(want.children) == 1) { elem_expected = some(want.children[0]); } }
+            none { }
+        }
         var elem = expr_type(checker, expr.children[0], elem_expected);
         require_same(checker, primitive_type("u64"), expr_type(checker, expr.children[1], some(primitive_type("u64"))), expr.children[1].start, expr.children[1].end);
         type = array_type(elem);
@@ -1040,7 +1134,7 @@ fn expr_type(checker: ref Checker, expr: ref slang_decls.Expr,
     } else if (expr.kind is slang_decls.ExprKind.index) {
         var array = expr_type(checker, expr.children[0], none);
         require_same(checker, primitive_type("u64"), expr_type(checker, expr.children[1], some(primitive_type("u64"))), expr.children[1].start, expr.children[1].end);
-        if (!(array.kind is slang_types.ResolvedKind.array) || len(array.children) != 1) {
+        if (!array_like(array) || len(array.children) != 1) {
             push_error(checker, ErrorKind.array_required, [], expr.start, expr.end);
         } else { type = array.children[0]; }
     } else if (expr.kind is slang_decls.ExprKind.field) {
@@ -1077,7 +1171,7 @@ fn expr_type(checker: ref Checker, expr: ref slang_decls.Expr,
         type = primitive_type("bool");
     }
 
-    match (expected) { none { } some(want) { require_same(checker, want, type, expr.start, expr.end); } }
+    match (expected) { none { } some(want) { require_compatible(checker, want, type, expr.start, expr.end); } }
     return record_expr(checker, expr, type);
 }
 
@@ -1117,6 +1211,10 @@ fn place_try(checker: ref Checker, expr: ref slang_decls.Expr, report: bool) -> 
         var base = expr_type(checker, expr.children[0], none);
         require_same(checker, primitive_type("u64"), expr_type(checker, expr.children[1], some(primitive_type("u64"))), expr.children[1].start, expr.children[1].end);
         if (base.kind is slang_types.ResolvedKind.array && len(base.children) == 1) { return some(base.children[0]); }
+        if (base.kind is slang_types.ResolvedKind.const_array) {
+            if (report) { push_error(checker, ErrorKind.not_assignable, [], expr.start, expr.end); }
+            return none;
+        }
         if (report) { push_error(checker, ErrorKind.array_required, [], expr.start, expr.end); }
         return none;
     }
@@ -1363,8 +1461,8 @@ fn check_match_coverage(checker: ref Checker, stmt: ref slang_decls.Stmt,
         }
     }
 
-    // Integer, byte, float, refs, arrays, function values and future open
-    // domains cannot be enumerated by a finite literal-arm list.
+    // Integer, byte, float, refs, mutable/const arrays, function values and
+    // future open domains cannot be enumerated by a finite literal-arm list.
     push_error(checker, ErrorKind.non_exhaustive_match, [], stmt.start, stmt.end);
 }
 
@@ -1374,7 +1472,7 @@ fn check_stmt(checker: ref Checker, stmt: ref slang_decls.Stmt) {
         match (stmt.type) { none { } some(syntax) { expected = some(resolve_syntax_type(checker, checker.current_generics, syntax, checker.current_decl)); } }
         var actual = expr_type(checker, stmt.expressions[0], expected);
         var type = actual;
-        match (expected) { none { } some(want) { require_same(checker, want, actual, stmt.start, stmt.end); type = want; } }
+        match (expected) { none { } some(want) { require_compatible(checker, want, actual, stmt.start, stmt.end); type = want; } }
         match (find_symbol(checker, slang_names.SymbolKind.local, stmt.name, stmt.start)) {
             none { }
             some(symbol) { set_symbol_type(checker, symbol, type); }
@@ -1389,7 +1487,7 @@ fn check_stmt(checker: ref Checker, stmt: ref slang_decls.Stmt) {
                 var want = place;
                 if (bytes.equal(stmt.op, "<<=") || bytes.equal(stmt.op, ">>=")) { want = primitive_type("u64"); }
                 var actual = expr_type(checker, stmt.expressions[1], some(want));
-                if (bytes.equal(stmt.op, "=")) { require_same(checker, place, actual, stmt.start, stmt.end); }
+                if (bytes.equal(stmt.op, "=")) { require_compatible(checker, place, actual, stmt.start, stmt.end); }
                 else {
                     var op = bytes.slice(stmt.op, 0, len(stmt.op) - 1);
                     binop(checker, op, place, actual, stmt.start, stmt.end);
@@ -1437,7 +1535,7 @@ fn check_stmt(checker: ref Checker, stmt: ref slang_decls.Stmt) {
 
     if (stmt.kind is slang_decls.StmtKind.for_in) {
         var array = expr_type(checker, stmt.expressions[0], none);
-        if (!(array.kind is slang_types.ResolvedKind.array) || len(array.children) != 1) {
+        if (!array_like(array) || len(array.children) != 1) {
             push_error(checker, ErrorKind.array_required, stmt.name, stmt.start, stmt.end);
         } else {
             match (find_symbol(checker, slang_names.SymbolKind.loop_binding, stmt.name, stmt.start)) {
@@ -1465,7 +1563,7 @@ fn check_stmt(checker: ref Checker, stmt: ref slang_decls.Stmt) {
 
     if (stmt.kind is slang_decls.StmtKind.return_stmt) {
         if (len(stmt.expressions) == 0) { require_same(checker, checker.return_type, unit_type(), stmt.start, stmt.end); }
-        else { require_same(checker, checker.return_type, expr_type(checker, stmt.expressions[0], some(checker.return_type)), stmt.start, stmt.end); }
+        else { require_compatible(checker, checker.return_type, expr_type(checker, stmt.expressions[0], some(checker.return_type)), stmt.start, stmt.end); }
         return;
     }
 
@@ -1530,7 +1628,7 @@ fn check_decl(checker: ref Checker, decl: slang_decls.Decl) {
                     none { }
                     some(syntax) {
                         var expected = resolve_syntax_type(checker, decl.generics, syntax, decl.name);
-                        require_same(checker, expected, expr_type(checker, value, some(expected)), value.start, value.end);
+                        require_compatible(checker, expected, expr_type(checker, value, some(expected)), value.start, value.end);
                     }
                 }
             }
