@@ -25,8 +25,8 @@ PYTHON=${PYTHON:-python3}
 "$HERE/lr" "$HERE/tools/shell/history_test.l" >/dev/null
 "$HERE/lr" "$HERE/tools/shell/prompt_test.l" >/dev/null
 "$HERE/lr" "$HERE/tools/shell/editor_test.l" >/dev/null
-"$HERE/lr" --root "$HERE" "$HERE/tools/shell/terminal_ui_test.l" >/dev/null
-"$HERE/lc" --check --root "$HERE" "$HERE/tools/shell/main.l" >/dev/null
+"$HERE/lr" "$HERE/tools/shell/terminal_ui_test.l" >/dev/null
+"$HERE/lc" --check "$HERE/tools/shell/main.l" >/dev/null
 
 # Linux hosted-profile parity. Exercise the exact same L programs once through
 # the Python reference host and once through the generated native runtime.
