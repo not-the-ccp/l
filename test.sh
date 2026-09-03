@@ -19,12 +19,14 @@ PYTHON=${PYTHON:-python3}
 
 # Shell parsing and human-interface models are ordinary L consumers. Keep them
 # executable through the native toolchain so parsing, source spans, byte-safe
-# editing, prompt semantics and history behavior stay in lockstep with L.
+# editing, prompt semantics, history and terminal layout stay in lockstep with L.
 "$HERE/lr" "$HERE/tools/shell/syntax_test.l" >/dev/null
 "$HERE/lr" "$HERE/tools/shell/presentation_test.l" >/dev/null
 "$HERE/lr" "$HERE/tools/shell/history_test.l" >/dev/null
 "$HERE/lr" "$HERE/tools/shell/prompt_test.l" >/dev/null
 "$HERE/lr" "$HERE/tools/shell/editor_test.l" >/dev/null
+"$HERE/lr" "$HERE/tools/shell/terminal_ui_test.l" >/dev/null
+"$HERE/lc" --check "$HERE/tools/shell/main.l" >/dev/null
 
 # Linux hosted-profile parity. Exercise the exact same L programs once through
 # the Python reference host and once through the generated native runtime.
@@ -94,7 +96,7 @@ rm -f "$bad"
 trap - EXIT HUP INT TERM
 
 "$PYTHON" "$HERE/tests/selfhost_checker_diff.py"
-for t in term_key_events.py code_analysis.py incremental_lsp.py editor_safety.py highlight_stability.py editor_usability.py editor_display.py editor_pty.py lace2_pty.py; do
+for t in term_key_events.py code_analysis.py incremental_lsp.py editor_safety.py highlight_stability.py editor_usability.py editor_display.py editor_pty.py lace2_pty.py shell_pty.py; do
   "$PYTHON" "$HERE/tests/$t"
 done
 echo 'L repository test suite PASS'
