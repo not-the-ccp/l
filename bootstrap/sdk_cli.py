@@ -26,6 +26,7 @@ from run_lang import (
 IS_LINUX = sys.platform.startswith("linux")
 if IS_LINUX:
     from linux_host import LinuxHost
+    from linux_job_host import LinuxJobHost
 
 ARTIFACT_MAGIC = "LBC1"
 
@@ -51,6 +52,9 @@ if IS_LINUX:
         ("linux", "fs"),
         ("linux", "env"),
         ("linux", "process"),
+        ("linux", "process", "group"),
+        ("linux", "process", "wait"),
+        ("linux", "tty"),
     }
 
 
@@ -125,6 +129,7 @@ def make_hosts_full(argv: list[str]):
     if IS_LINUX:
         lh = LinuxHost()
         hosts.update(lh.modules())
+        hosts.update(LinuxJobHost(lh).modules())
     return hosts, ph, th, lh
 
 
