@@ -21,6 +21,7 @@ enum {
     H_LINUX_TTY_IS_TTY,
     H_LINUX_TTY_FOREGROUND,
     H_LINUX_TTY_SET_FOREGROUND,
+    H_LINUX_CHILD_SAME,
 };
 
 enum {
@@ -133,6 +134,12 @@ static LValue linux_job_host_call(LVM *vm, int id, LValue *args, int n) {
         LinuxOpaque *b = linux_as(args[1], LX_GROUP, "linux.process.Group");
         return v_bool(a->u.group.pgid == b->u.group.pgid);
     }
+    case H_LINUX_CHILD_SAME: {
+        if (n != 2) die("linux.process.child.same arity");
+        LinuxOpaque *a = linux_as(args[0], LX_CHILD, "linux.process.Child");
+        LinuxOpaque *b = linux_as(args[1], LX_CHILD, "linux.process.Child");
+        return v_bool(a == b);
+    }
     case H_LINUX_WAIT_CHILD: {
         if (n != 1) die("linux.process.wait.child arity");
         LinuxOpaque *child = linux_as(args[0], LX_CHILD, "linux.process.Child");
@@ -203,7 +210,7 @@ static LValue linux_job_host_call(LVM *vm, int id, LValue *args, int n) {
 }
 
 static int linux_job_host_id(int id) {
-    return id >= H_LINUX_GROUP_CURRENT && id <= H_LINUX_TTY_SET_FOREGROUND;
+    return id >= H_LINUX_GROUP_CURRENT && id <= H_LINUX_CHILD_SAME;
 }
 
 static void linux_job_host_cleanup(LVM *vm) {
