@@ -1,0 +1,60 @@
+name: Lace development release
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'tools/lace2/**'
+      - 'lib/portable/**'
+      - 'runtime/**'
+      - 'bootstrap/**'
+      - 'build.sh'
+      - 'lace'
+      - '.github/workflows/lace-release.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build Lace
+        run: ./build.sh lace
+      - name: Package
+        run: |
+          install -m 0755 build/lace lace-linux-x86_64
+          sha256sum lace-linux-x86_64 > lace-linux-x86_64.sha256
+          ./lace-linux-x86_64 --help >/dev/null || true
+          file lace-linux-x86_64
+      - name: Keep workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lace-linux-x86_64-${{ github.sha }}
+          path: |
+            lace-linux-x86_64
+            lace-linux-x86_64.sha256
+          retention-days: 90
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          short=${GITHUB_SHA:0:7}
+          tag="lace-dev-${GITHUB_RUN_NUMBER}"
+          cat > /tmp/notes.md <<EOF
+          Development build of Lace from commit ${GITHUB_SHA}.
+
+          Platform: Linux x86_64 (Ubuntu 24.04 runner)
+          This is a prerelease dogfood build, not a stable compatibility promise.
+          EOF
+          gh release create "$tag" \
+            lace-linux-x86_64 \
+            lace-linux-x86_64.sha256 \
+            --target "$GITHUB_SHA" \
+            --title "Lace development build ${short}" \
+            --notes-file /tmp/notes.md \
+            --prerelease
