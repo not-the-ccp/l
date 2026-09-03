@@ -1,5 +1,5 @@
 import bytes;
-import tools.lace2.display_bytes as display;
+import byte_display as display;
 import tools.lace2.history as history;
 import tools.lace2.piece_tree as text;
 import tools.lace2.selection as selection;
@@ -24,7 +24,7 @@ fn test_round_trip_bytes() {
     }
     text.validate(doc);
 
-    expect_bytes(display.render_debug(raw), "^@^A<TAB><LF>^[^?<80><FF>");
+    expect_bytes(display.render_safe(raw), "^@^A<TAB><LF>^[^?<80><FF>");
 }
 
 fn test_strict_utf8_units() {
