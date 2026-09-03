@@ -27,78 +27,61 @@ pub fn width_at(src: const []u8, pos: u64) -> u64 {
 // Return the width of one valid UTF-8 scalar starting at pos. Invalid or
 // truncated input deliberately consumes one byte so callers can preserve and
 // navigate arbitrary byte strings without getting stuck or swallowing bytes.
-pub fn valid_width(src: const []u8, pos: u64) -> u64 {
-    if (pos >= len(src)) {
-        return 0;
-    }
-
-    var b0 = src[pos];
-    if (b0 < 0x80) {
-        return 1;
-    }
+pub fn valid_scalar_width(
+    b0: u8,
+    b1: u8,
+    b2: u8,
+    b3: u8,
+    available: u64
+) -> u64 {
+    if (available == 0) { return 0; }
+    if (b0 < 0x80) { return 1; }
 
     if (b0 >= 0xc2 && b0 <= 0xdf) {
-        if (pos + 2 <= len(src) && continuation(src[pos + 1])) {
-            return 2;
-        }
+        if (available >= 2 && continuation(b1)) { return 2; }
         return 1;
     }
-
     if (b0 == 0xe0) {
-        if (pos + 3 <= len(src)) {
-            var b1 = src[pos + 1];
-            if (b1 >= 0xa0 && b1 <= 0xbf && continuation(src[pos + 2])) {
-                return 3;
-            }
-        }
+        if (available >= 3 && b1 >= 0xa0 && b1 <= 0xbf && continuation(b2)) { return 3; }
         return 1;
     }
-
     if ((b0 >= 0xe1 && b0 <= 0xec) || (b0 >= 0xee && b0 <= 0xef)) {
-        if (pos + 3 <= len(src) && continuation(src[pos + 1]) && continuation(src[pos + 2])) {
-            return 3;
-        }
+        if (available >= 3 && continuation(b1) && continuation(b2)) { return 3; }
         return 1;
     }
-
     if (b0 == 0xed) {
-        if (pos + 3 <= len(src)) {
-            var b1 = src[pos + 1];
-            if (b1 >= 0x80 && b1 <= 0x9f && continuation(src[pos + 2])) {
-                return 3;
-            }
-        }
+        if (available >= 3 && b1 >= 0x80 && b1 <= 0x9f && continuation(b2)) { return 3; }
         return 1;
     }
-
     if (b0 == 0xf0) {
-        if (pos + 4 <= len(src)) {
-            var b1 = src[pos + 1];
-            if (b1 >= 0x90 && b1 <= 0xbf && continuation(src[pos + 2]) && continuation(src[pos + 3])) {
-                return 4;
-            }
-        }
+        if (available >= 4 && b1 >= 0x90 && b1 <= 0xbf && continuation(b2) && continuation(b3)) { return 4; }
         return 1;
     }
-
     if (b0 >= 0xf1 && b0 <= 0xf3) {
-        if (pos + 4 <= len(src) && continuation(src[pos + 1]) && continuation(src[pos + 2]) && continuation(src[pos + 3])) {
-            return 4;
-        }
+        if (available >= 4 && continuation(b1) && continuation(b2) && continuation(b3)) { return 4; }
         return 1;
     }
-
     if (b0 == 0xf4) {
-        if (pos + 4 <= len(src)) {
-            var b1 = src[pos + 1];
-            if (b1 >= 0x80 && b1 <= 0x8f && continuation(src[pos + 2]) && continuation(src[pos + 3])) {
-                return 4;
-            }
-        }
+        if (available >= 4 && b1 >= 0x80 && b1 <= 0x8f && continuation(b2) && continuation(b3)) { return 4; }
         return 1;
     }
-
     return 1;
+}
+
+// Validate one scalar from a contiguous byte slice. The scalar-level
+// primitive above is also usable by ropes, streams and piece tables
+// that can cheaply fetch a four-byte lookahead without allocating.
+pub fn valid_width(src: const []u8, pos: u64) -> u64 {
+    if (pos >= len(src)) { return 0; }
+    var available = len(src) - pos;
+    if (available > 4) { available = 4; }
+    var b1: u8 = 0;
+    var b2: u8 = 0;
+    var b3: u8 = 0;
+    if (available > 1) { b1 = src[pos + 1]; }
+    if (available > 2) { b2 = src[pos + 2]; }
+    if (available > 3) { b3 = src[pos + 3]; }
+    return valid_scalar_width(src[pos], b1, b2, b3, available);
 }
 
 pub fn valid(src: const []u8) -> bool {

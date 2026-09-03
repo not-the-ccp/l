@@ -1,59 +1,21 @@
 import term;
-import tools.lace2.display_bytes as display;
+import utf8;
+import byte_display as display;
 import tools.lace2.piece_tree as text;
-
-fn continuation(value: u8) -> bool {
-    return (value & 0xc0) == 0x80;
-}
 
 fn valid_utf8_width(doc: ref text.Text, pos: u64) -> u64 {
     var length = text.byte_len(doc);
     if (pos >= length) { return 0; }
+    var available = length - pos;
+    if (available > 4) { available = 4; }
     var b0 = text.byte_at(doc, pos);
-    if (b0 < 0x80) { return 1; }
-
-    if (b0 >= 0xc2 && b0 <= 0xdf) {
-        if (pos + 2 > length) { return 0; }
-        if (!continuation(text.byte_at(doc, pos + 1))) { return 0; }
-        return 2;
-    }
-    if (b0 == 0xe0) {
-        if (pos + 3 > length) { return 0; }
-        var b1 = text.byte_at(doc, pos + 1);
-        if (b1 < 0xa0 || b1 > 0xbf || !continuation(text.byte_at(doc, pos + 2))) { return 0; }
-        return 3;
-    }
-    if ((b0 >= 0xe1 && b0 <= 0xec) || (b0 >= 0xee && b0 <= 0xef)) {
-        if (pos + 3 > length) { return 0; }
-        if (!continuation(text.byte_at(doc, pos + 1)) || !continuation(text.byte_at(doc, pos + 2))) { return 0; }
-        return 3;
-    }
-    if (b0 == 0xed) {
-        if (pos + 3 > length) { return 0; }
-        var b1 = text.byte_at(doc, pos + 1);
-        if (b1 < 0x80 || b1 > 0x9f || !continuation(text.byte_at(doc, pos + 2))) { return 0; }
-        return 3;
-    }
-    if (b0 == 0xf0) {
-        if (pos + 4 > length) { return 0; }
-        var b1 = text.byte_at(doc, pos + 1);
-        if (b1 < 0x90 || b1 > 0xbf) { return 0; }
-        if (!continuation(text.byte_at(doc, pos + 2)) || !continuation(text.byte_at(doc, pos + 3))) { return 0; }
-        return 4;
-    }
-    if (b0 >= 0xf1 && b0 <= 0xf3) {
-        if (pos + 4 > length) { return 0; }
-        if (!continuation(text.byte_at(doc, pos + 1)) || !continuation(text.byte_at(doc, pos + 2)) || !continuation(text.byte_at(doc, pos + 3))) { return 0; }
-        return 4;
-    }
-    if (b0 == 0xf4) {
-        if (pos + 4 > length) { return 0; }
-        var b1 = text.byte_at(doc, pos + 1);
-        if (b1 < 0x80 || b1 > 0x8f) { return 0; }
-        if (!continuation(text.byte_at(doc, pos + 2)) || !continuation(text.byte_at(doc, pos + 3))) { return 0; }
-        return 4;
-    }
-    return 0;
+    var b1: u8 = 0;
+    var b2: u8 = 0;
+    var b3: u8 = 0;
+    if (available > 1) { b1 = text.byte_at(doc, pos + 1); }
+    if (available > 2) { b2 = text.byte_at(doc, pos + 2); }
+    if (available > 3) { b3 = text.byte_at(doc, pos + 3); }
+    return utf8.valid_scalar_width(b0, b1, b2, b3, available);
 }
 
 pub fn next_atom(doc: ref text.Text, pos: u64) -> u64 {
@@ -70,7 +32,7 @@ pub fn previous_atom(doc: ref text.Text, pos: u64) -> u64 {
 
     var candidate = pos - 1;
     var steps: u64 = 0;
-    while (candidate > 0 && continuation(text.byte_at(doc, candidate)) && steps < 3) {
+    while (candidate > 0 && utf8.continuation(text.byte_at(doc, candidate)) && steps < 3) {
         candidate -= 1;
         steps += 1;
     }
