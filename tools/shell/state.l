@@ -4,16 +4,16 @@ import linux.fs as fs;
 import syntax;
 
 pub struct BuiltinError {
-    pub message: []u8,
+    pub message: const []u8,
     pub error_number: ?i64,
 }
 
 pub struct BuiltinResult {
     pub status: i64,
-    // Output is data, not terminal presentation. The eventual interactive layer
-    // decides how and where it is shown; redirection/pipeline support can reuse
-    // the same bytes later.
-    pub output: []u8,
+    // Output is data, not terminal presentation. Once a builtin has produced
+    // it the shell only forwards/prints/redirects those bytes; callers do not
+    // need a mutation capability for the result buffer.
+    pub output: const []u8,
     pub error: ?BuiltinError,
 }
 
@@ -30,7 +30,7 @@ pub fn create() -> ref State {
     return new State { previous_cwd: none };
 }
 
-fn success(output: []u8) -> BuiltinResult {
+fn success(output: const []u8) -> BuiltinResult {
     return BuiltinResult {
         status: 0,
         output: output,
@@ -43,7 +43,7 @@ fn failure(status: i64, message: const []u8, number: ?i64) -> BuiltinResult {
         status: status,
         output: [],
         error: some(BuiltinError {
-            message: bytes.clone(message),
+            message: message,
             error_number: number,
         }),
     };
