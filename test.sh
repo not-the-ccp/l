@@ -12,6 +12,7 @@ PYTHON=${PYTHON:-python3}
 # native compiler without relying on host capabilities.
 "$HERE/lr" "$HERE/examples/portable/collections_demo.l" >/dev/null
 "$HERE/lr" "$HERE/examples/portable/bytes_demo.l" >/dev/null
+"$HERE/lr" "$HERE/examples/portable/const_readers_demo.l" >/dev/null
 
 # Self-hosting frontend slices run as native executables. Check syntax,
 # top-level identity, full body-AST traversal on small and substantial real

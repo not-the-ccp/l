@@ -23,7 +23,7 @@ pub fn reverse[T](items: []T) {
     }
 }
 
-pub fn find_by[T](items: []T, value: T, equal: fn(T, T) -> bool) -> ?u64 {
+pub fn find_by[T](items: const []T, value: T, equal: fn(T, T) -> bool) -> ?u64 {
     for (var i: u64 = 0; i < len(items); i += 1) {
         if (equal(items[i], value)) {
             return some(i);
@@ -32,14 +32,14 @@ pub fn find_by[T](items: []T, value: T, equal: fn(T, T) -> bool) -> ?u64 {
     return none;
 }
 
-pub fn contains_by[T](items: []T, value: T, equal: fn(T, T) -> bool) -> bool {
+pub fn contains_by[T](items: const []T, value: T, equal: fn(T, T) -> bool) -> bool {
     match (find_by(items, value, equal)) {
         none { return false; }
         some(_) { return true; }
     }
 }
 
-pub fn equal_by[T](a: []T, b: []T, equal: fn(T, T) -> bool) -> bool {
+pub fn equal_by[T](a: const []T, b: const []T, equal: fn(T, T) -> bool) -> bool {
     if (len(a) != len(b)) {
         return false;
     }
