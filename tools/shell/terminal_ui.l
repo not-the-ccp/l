@@ -21,8 +21,10 @@ pub enum Role {
 pub struct Atom {
     pub role: Role,
     // Atom text is always terminal-safe printable UTF-8. Newlines are row
-    // structure, never atom data.
-    pub text: []u8,
+    // structure, never atom data. Once attached to the view it is presentation
+    // data, so consumers get a read-only view even if construction used a
+    // mutable temporary.
+    pub text: const []u8,
 }
 
 pub struct Row {
