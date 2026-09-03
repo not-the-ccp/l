@@ -82,14 +82,22 @@ def _opaque(value, type_id: tuple[str, ...], what: str):
     return value.payload
 
 
+def _errno_result(exc: BaseException):
+    if isinstance(exc, OSError):
+        return SomeVal(int(exc.errno or errno.EIO))
+    if isinstance(exc, MemoryError):
+        return SomeVal(errno.ENOMEM)
+    return SomeVal(errno.EINVAL)
+
+
 class LinuxHost:
-    """Reference implementation of the Linux hosted FD/process profile.
+    """Reference implementation of the Linux-specific hosted profile.
 
     Descriptor values own their underlying descriptor and may be aliased as L
     values. Closing one alias closes the shared handle; later operations through
     another alias trap. Child values similarly identify one tracked process.
-    Expected OS failures for spawn/signalling are returned as errno values;
-    contract violations remain traps.
+    Expected OS failures for spawn/signalling/context mutation are returned as
+    errno values; contract violations remain traps.
     """
 
     def __init__(self):
@@ -184,6 +192,64 @@ class LinuxHost:
                 continue
             except OSError as exc:
                 raise TrapSig(f"linux.fd.write failed: {exc}") from exc
+
+    # linux.fs
+
+    def _cwd(self):
+        try:
+            return SomeVal(ArrayObj(list(os.getcwdb())))
+        except OSError:
+            return None
+
+    def _chdir(self, path_value):
+        path = _bytes(path_value)
+        if b"\0" in path:
+            return SomeVal(errno.EINVAL)
+        try:
+            os.chdir(path)
+            return None
+        except BaseException as exc:
+            return _errno_result(exc)
+
+    # linux.env
+
+    def _env_get(self, name_value):
+        name = _bytes(name_value)
+        if not name or b"\0" in name or b"=" in name:
+            return None
+        value = os.environb.get(name)
+        if value is None:
+            return None
+        return SomeVal(ArrayObj(list(value)))
+
+    def _env_entries(self):
+        return ArrayObj([
+            ArrayObj(list(name + b"=" + value))
+            for name, value in os.environb.items()
+        ])
+
+    def _env_set(self, name_value, value_value, overwrite_value):
+        name = _bytes(name_value)
+        value = _bytes(value_value)
+        if not name or b"\0" in name or b"=" in name or b"\0" in value:
+            return SomeVal(errno.EINVAL)
+        try:
+            if not bool(overwrite_value) and name in os.environb:
+                return None
+            os.environb[name] = value
+            return None
+        except BaseException as exc:
+            return _errno_result(exc)
+
+    def _env_unset(self, name_value):
+        name = _bytes(name_value)
+        if not name or b"\0" in name or b"=" in name:
+            return SomeVal(errno.EINVAL)
+        try:
+            os.environb.pop(name, None)
+            return None
+        except BaseException as exc:
+            return _errno_result(exc)
 
     # linux.process
 
@@ -379,6 +445,23 @@ class LinuxHost:
         host.function("write", [fd_ty, bytes_ro], name_ty("u64"), self._write)
         return host
 
+    def fs_module(self) -> HostModule:
+        host = HostModule(("linux", "fs"))
+        bytes_ro = const_arr(name_ty("u8"))
+        host.function("cwd", [], opt(arr(name_ty("u8"))), self._cwd)
+        host.function("chdir", [bytes_ro], opt(name_ty("i64")), self._chdir)
+        return host
+
+    def env_module(self) -> HostModule:
+        host = HostModule(("linux", "env"))
+        bytes_ro = const_arr(name_ty("u8"))
+        i64_ty = name_ty("i64")
+        host.function("get", [bytes_ro], opt(arr(name_ty("u8"))), self._env_get)
+        host.function("entries", [], arr(arr(name_ty("u8"))), self._env_entries)
+        host.function("set", [bytes_ro, bytes_ro, name_ty("bool")], opt(i64_ty), self._env_set)
+        host.function("unset", [bytes_ro], opt(i64_ty), self._env_unset)
+        return host
+
     def process_module(self) -> HostModule:
         host = HostModule(("linux", "process"))
         fd_ty = name_ty(("__host__", "linux", "fd", "Fd"))
@@ -418,6 +501,8 @@ class LinuxHost:
     def modules(self) -> dict[tuple[str, ...], HostModule]:
         return {
             ("linux", "fd"): self.fd_module(),
+            ("linux", "fs"): self.fs_module(),
+            ("linux", "env"): self.env_module(),
             ("linux", "process"): self.process_module(),
         }
 
