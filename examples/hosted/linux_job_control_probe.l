@@ -1,5 +1,6 @@
 import linux.fd as fd;
 import linux.process as process;
+import linux.process.child as children;
 import linux.process.group as groups;
 import linux.process.wait as wait;
 
@@ -60,6 +61,7 @@ fn main() -> i64 {
     var child = child_or_trap(process.spawn_exact(
         "/usr/bin/sleep", argv, input, output, error, none
     ));
+    require(children.same(child, child));
     var job = process.group(child);
     require(!groups.same(current, job));
 
@@ -72,16 +74,20 @@ fn main() -> i64 {
     signal_ok(process.send_group(job, stop));
     var stopped = wait.group(job);
     require_only_stop(stopped, stop);
-    require(groups.same(process.group(wait.event_child(stopped)), job));
+    var event_child = wait.event_child(stopped);
+    require(children.same(event_child, child));
+    require(groups.same(process.group(event_child), job));
 
     signal_ok(process.send_group(job, process.sigcont()));
     var continued = wait.group(job);
     require_only_continue(continued);
+    require(children.same(wait.event_child(continued), child));
 
     var term = process.sigterm();
     signal_ok(process.send_group(job, term));
     var terminated = wait.group(job);
     require_only_term(terminated, term);
+    require(children.same(wait.event_child(terminated), child));
 
     fd.close(input);
     fd.close(output);
