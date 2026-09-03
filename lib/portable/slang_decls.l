@@ -11,6 +11,7 @@ pub enum TypeKind {
     optional,
     reference,
     array,
+    const_array,
     function,
 }
 
@@ -270,6 +271,15 @@ fn parse_type(parser: ref Parser) -> ref Type {
         var start = advance(parser).start;
         var inner = parse_type(parser);
         return new Type { kind: TypeKind.reference, name: [], children: [inner],
+            parameter_count: 0, start: start, end: inner.end };
+    }
+
+    if (at(parser, "const")) {
+        var start = advance(parser).start;
+        take(parser, "[");
+        take(parser, "]");
+        var inner = parse_type(parser);
+        return new Type { kind: TypeKind.const_array, name: [], children: [inner],
             parameter_count: 0, start: start, end: inner.end };
     }
 
