@@ -13,6 +13,12 @@ PYTHON=${PYTHON:-python3}
 "$HERE/lr" "$HERE/examples/portable/collections_demo.l" >/dev/null
 "$HERE/lr" "$HERE/examples/portable/bytes_demo.l" >/dev/null
 
+# Linux hosted-profile probe. This executes exact paths, wires explicit file
+# descriptors, and places all stages in one process group. It intentionally
+# uses the reference host until the native backend has matching host IDs.
+linux_pipeline=$("$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_process_probe.l")
+test "$linux_pipeline" = '3'
+
 # Self-hosting frontend slices run as native executables. Check syntax,
 # top-level identity, full body-AST traversal on small and substantial real
 # programs, and semantic checking of a real Core program.
