@@ -2,7 +2,7 @@ pub fn continuation(value: u8) -> bool {
     return (value & 0xc0) == 0x80;
 }
 
-pub fn width_at(src: []u8, pos: u64) -> u64 {
+pub fn width_at(src: const []u8, pos: u64) -> u64 {
     if (pos >= len(src)) {
         return 0;
     }
@@ -22,7 +22,7 @@ pub fn width_at(src: []u8, pos: u64) -> u64 {
     return 1;
 }
 
-pub fn decode_at(src: []u8, pos: u64) -> u32 {
+pub fn decode_at(src: const []u8, pos: u64) -> u32 {
     var w = width_at(src, pos);
     if (w == 0) {
         trap;
@@ -46,7 +46,7 @@ pub fn decode_at(src: []u8, pos: u64) -> u32 {
     return ((b0 & 0x07) << 18) | (((src[pos + 1] as u32) & 0x3f) << 12) | (((src[pos + 2] as u32) & 0x3f) << 6) | ((src[pos + 3] as u32) & 0x3f);
 }
 
-pub fn valid_width(src: []u8, pos: u64) -> u64 {
+pub fn valid_width(src: const []u8, pos: u64) -> u64 {
     var w = width_at(src, pos);
     if (w <= 1) { return w; }
     if (pos + w > len(src)) { return 1; }
@@ -58,7 +58,7 @@ pub fn valid_width(src: []u8, pos: u64) -> u64 {
     return w;
 }
 
-pub fn utf16_len(src: []u8) -> u64 {
+pub fn utf16_len(src: const []u8) -> u64 {
     var units: u64 = 0;
     var pos: u64 = 0;
     while (pos < len(src)) {
@@ -70,7 +70,7 @@ pub fn utf16_len(src: []u8) -> u64 {
     return units;
 }
 
-pub fn byte_to_utf16(src: []u8, byte_offset: u64) -> u64 {
+pub fn byte_to_utf16(src: const []u8, byte_offset: u64) -> u64 {
     if (byte_offset > len(src)) { trap; }
     var units: u64 = 0;
     var pos: u64 = 0;
@@ -84,7 +84,7 @@ pub fn byte_to_utf16(src: []u8, byte_offset: u64) -> u64 {
     return units;
 }
 
-pub fn utf16_to_byte(src: []u8, units_target: u64) -> u64 {
+pub fn utf16_to_byte(src: const []u8, units_target: u64) -> u64 {
     var units: u64 = 0;
     var pos: u64 = 0;
     while (pos < len(src) && units < units_target) {
