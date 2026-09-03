@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import errno
 import os
 import signal
+import struct
 
 from core import (
     ArrayObj,
@@ -23,7 +24,8 @@ from core import (
 FD_TYPE = ("linux", "fd", "Fd")
 CHILD_TYPE = ("linux", "process", "Child")
 GROUP_TYPE = ("linux", "process", "Group")
-STATUS_TYPE = ("linux", "process", "TerminalStatus")
+SPAWN_TYPE = ("linux", "process", "SpawnResult")
+STATUS_TYPE = ("linux", "process", "ExitStatus")
 
 
 @dataclass
@@ -46,7 +48,13 @@ class LinuxGroup:
 
 
 @dataclass(frozen=True)
-class LinuxTerminalStatus:
+class LinuxSpawnResult:
+    child: LinuxChild | None
+    error_number: int | None
+
+
+@dataclass(frozen=True)
+class LinuxExitStatus:
     exited: bool
     code: int
 
@@ -110,10 +118,16 @@ class LinuxHost:
             raise TrapSig("invalid linux.process.Group")
         return group
 
-    def _status(self, value) -> LinuxTerminalStatus:
-        status = _opaque(value, STATUS_TYPE, "linux.process.TerminalStatus")
-        if not isinstance(status, LinuxTerminalStatus):
-            raise TrapSig("invalid linux.process.TerminalStatus")
+    def _spawn_result(self, value) -> LinuxSpawnResult:
+        result = _opaque(value, SPAWN_TYPE, "linux.process.SpawnResult")
+        if not isinstance(result, LinuxSpawnResult):
+            raise TrapSig("invalid linux.process.SpawnResult")
+        return result
+
+    def _status(self, value) -> LinuxExitStatus:
+        status = _opaque(value, STATUS_TYPE, "linux.process.ExitStatus")
+        if not isinstance(status, LinuxExitStatus):
+            raise TrapSig("invalid linux.process.ExitStatus")
         return status
 
     # linux.fd
@@ -144,8 +158,6 @@ class LinuxHost:
     def _read(self, value, max_bytes):
         fd = self._fd(value).fd
         want = int(max_bytes)
-        if want < 0:
-            raise TrapSig("linux.fd.read size is negative")
         while True:
             try:
                 data = os.read(fd, want)
@@ -193,10 +205,12 @@ class LinuxHost:
 
         env = dict(os.environb)
         inherited_fds = [item.fd for item in self.fds if not item.closed]
+        launch_read, launch_write = os.pipe2(os.O_CLOEXEC)
 
         pid = os.fork()
         if pid == 0:
             try:
+                os.close(launch_read)
                 os.setpgid(0, 0 if requested_group is None else requested_group)
                 os.dup2(in_fd, 0, inheritable=True)
                 os.dup2(out_fd, 1, inheritable=True)
@@ -221,22 +235,24 @@ class LinuxHost:
 
                 os.execve(path, argv, env)
             except BaseException as exc:
-                code = 127
-                if isinstance(exc, OSError) and exc.errno not in (errno.ENOENT, errno.ENOTDIR):
-                    code = 126
-                os._exit(code)
+                number = exc.errno if isinstance(exc, OSError) and exc.errno else errno.EIO
+                try:
+                    os.write(launch_write, struct.pack("=i", int(number)))
+                except BaseException:
+                    pass
+                os._exit(127)
 
+        os.close(launch_write)
         pgid = pid if requested_group is None else requested_group
         try:
             os.setpgid(pid, pgid)
         except (ProcessLookupError, PermissionError):
-            # The child sets its group before exec too. EACCES/ESRCH therefore
-            # means the child won the race or already terminated.
             pass
 
         try:
             pidfd = os.pidfd_open(pid, 0)
         except BaseException:
+            os.close(launch_read)
             try:
                 os.kill(pid, signal.SIGKILL)
             except ProcessLookupError:
@@ -247,15 +263,47 @@ class LinuxHost:
                 pass
             raise
 
+        payload = b""
+        while len(payload) < 4:
+            try:
+                part = os.read(launch_read, 4 - len(payload))
+            except InterruptedError:
+                continue
+            if not part:
+                break
+            payload += part
+        os.close(launch_read)
+
+        if payload:
+            number = struct.unpack("=i", payload.ljust(4, b"\0")[:4])[0]
+            try:
+                os.waitid(os.P_PIDFD, pidfd, os.WEXITED)
+            except (ChildProcessError, OSError):
+                pass
+            os.close(pidfd)
+            return OpaqueVal(SPAWN_TYPE, LinuxSpawnResult(None, number))
+
         child = LinuxChild(pid=pid, pidfd=pidfd, pgid=pgid)
         self.children.append(child)
-        return OpaqueVal(CHILD_TYPE, child)
+        return OpaqueVal(SPAWN_TYPE, LinuxSpawnResult(child, None))
+
+    def _spawn_child(self, value):
+        result = self._spawn_result(value)
+        if result.child is None:
+            return None
+        return SomeVal(OpaqueVal(CHILD_TYPE, result.child))
+
+    def _spawn_error(self, value):
+        result = self._spawn_result(value)
+        if result.error_number is None:
+            return None
+        return SomeVal(result.error_number)
 
     def _child_group(self, value):
         child = self._child(value)
         return OpaqueVal(GROUP_TYPE, LinuxGroup(child.pgid))
 
-    def _wait_terminal(self, value):
+    def _wait_exit(self, value):
         child = self._child(value)
         if child.waited:
             raise TrapSig("linux.process.Child was already waited")
@@ -267,7 +315,7 @@ class LinuxHost:
             except InterruptedError:
                 continue
             except OSError as exc:
-                raise TrapSig(f"linux.process.wait_terminal failed: {exc}") from exc
+                raise TrapSig(f"linux.process.wait_exit failed: {exc}") from exc
 
         child.waited = True
         try:
@@ -277,11 +325,11 @@ class LinuxHost:
         child.pidfd = -1
 
         if info.si_code == os.CLD_EXITED:
-            status = LinuxTerminalStatus(True, int(info.si_status))
+            status = LinuxExitStatus(True, int(info.si_status))
         elif info.si_code in (os.CLD_KILLED, os.CLD_DUMPED):
-            status = LinuxTerminalStatus(False, int(info.si_status))
+            status = LinuxExitStatus(False, int(info.si_status))
         else:
-            raise TrapSig("linux.process.wait_terminal received a nonterminal state")
+            raise TrapSig("linux.process.wait_exit received a nonterminal state")
         return OpaqueVal(STATUS_TYPE, status)
 
     def _exit_code(self, value):
@@ -312,18 +360,21 @@ class LinuxHost:
         fd_ty = name_ty(("__host__", "linux", "fd", "Fd"))
         child_ty = host.opaque_type("Child")
         group_ty = host.opaque_type("Group")
-        status_ty = host.opaque_type("TerminalStatus")
+        spawn_ty = host.opaque_type("SpawnResult")
+        status_ty = host.opaque_type("ExitStatus")
         bytes_ro = const_arr(name_ty("u8"))
         argv_ro = const_arr(bytes_ro)
 
         host.function(
             "spawn_exact",
             [bytes_ro, argv_ro, fd_ty, fd_ty, fd_ty, opt(group_ty)],
-            child_ty,
+            spawn_ty,
             self._spawn_exact,
         )
+        host.function("spawn_child", [spawn_ty], opt(child_ty), self._spawn_child)
+        host.function("spawn_error", [spawn_ty], opt(name_ty("i64")), self._spawn_error)
         host.function("group", [child_ty], group_ty, self._child_group)
-        host.function("wait_terminal", [child_ty], status_ty, self._wait_terminal)
+        host.function("wait_exit", [child_ty], status_ty, self._wait_exit)
         host.function("exit_code", [status_ty], opt(name_ty("i64")), self._exit_code)
         host.function("term_signal", [status_ty], opt(name_ty("i64")), self._term_signal)
         return host
