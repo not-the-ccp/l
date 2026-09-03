@@ -46,6 +46,78 @@ fn sum(head: ?ref Node) -> i64 {
         "fn main() -> i64 { var xs: []i64 = [1, 2, 3]; xs[1] = 7; return xs[1]; }",
     ),
     (
+        "mutable array to const view",
+        "fn main() -> i64 { var xs: []i64 = [1, 2]; var view: const []i64 = xs; return view[0]; }",
+    ),
+    (
+        "const array to mutable rejected",
+        "fn main() -> i64 { var view: const []i64 = [1, 2]; var xs: []i64 = view; return xs[0]; }",
+    ),
+    (
+        "const array index write rejected",
+        "fn main() -> i64 { var view: const []i64 = [1, 2]; view[0] = 3; return 0; }",
+    ),
+    (
+        "const array read and iteration",
+        "fn sum(xs: const []i64) -> i64 { var out: i64 = 0; for (x in xs) { out += x; } return out; } fn main() -> i64 { var xs: []i64 = [1, 2]; return sum(xs); }",
+    ),
+    (
+        "const push rejected",
+        "fn main() { var xs: const []i64 = [1]; push(xs, 2); }",
+    ),
+    (
+        "const pop rejected",
+        "fn main() -> i64 { var xs: const []i64 = [1]; return pop(xs); }",
+    ),
+    (
+        "const splice target rejected",
+        "fn main() { var xs: const []i64 = [1]; splice(xs, 0, 1, [2]); }",
+    ),
+    (
+        "const splice replacement accepted",
+        "fn main() -> i64 { var dst: []u8 = []; var src = \"abc\"; splice(dst, 0, 0, src); return len(dst) as i64; }",
+    ),
+    (
+        "inferred string is const",
+        "fn main() { var text = \"x\"; text[0] = 'y'; }",
+    ),
+    (
+        "contextual mutable string",
+        "fn main() -> i64 { var text: []u8 = \"x\"; text[0] = 'y'; return text[0] as i64; }",
+    ),
+    (
+        "generic const parameter accepts mutable",
+        "fn first[T](xs: const []T) -> T { return xs[0]; } fn main() -> i64 { var xs: []i64 = [7]; return first(xs); }",
+    ),
+    (
+        "generic const parameter accepts string",
+        "fn first[T](xs: const []T) -> T { return xs[0]; } fn main() -> i64 { return first(\"x\") as i64; }",
+    ),
+    (
+        "generic mutable parameter rejects inferred string",
+        "fn first_mut[T](xs: []T) -> T { return xs[0]; } fn main() -> i64 { return first_mut(\"x\") as i64; }",
+    ),
+    (
+        "mutable generic result to const context",
+        "fn one[T](x: T) -> []T { return [x]; } fn main() -> i64 { var xs: const []i64 = one(4); return xs[0]; }",
+    ),
+    (
+        "const generic result to mutable context rejected",
+        "fn readonly[T](xs: const []T) -> const []T { return xs; } fn main() -> i64 { var xs: []i64 = readonly([4]); return xs[0]; }",
+    ),
+    (
+        "shallow const outer conversion",
+        "fn main() -> i64 { var inner: []i64 = [1]; var nested: [][]i64 = [inner]; var view: const [][]i64 = nested; view[0][0] = 2; return inner[0]; }",
+    ),
+    (
+        "nested qualifier does not lift",
+        "fn main() -> i64 { var nested: [][]i64 = [[1]]; var view: const []const []i64 = nested; return view[0][0]; }",
+    ),
+    (
+        "const ref slots still permit referent mutation",
+        "struct Box { value: i64, } fn main() -> i64 { var items: []ref Box = [new Box { value: 1 }]; var view: const []ref Box = items; view[0].value = 3; return view[0].value; }",
+    ),
+    (
         "nested array struct place",
         """
 struct Pair { left: i64, right: i64, }
