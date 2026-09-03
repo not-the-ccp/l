@@ -83,7 +83,7 @@ class NativeEmitter:
         elif k=='p_bind':rec=(PK[k],slots[p.a[0]],0,0,None,0)
         elif k=='p_unit':rec=(PK[k],0,0,0,None,0)
         elif k=='p_none':rec=(PK[k],0,0,0,None,0)
-        elif k=='p_bool':rec=(PK[k],1 if p.a[0] else 0,0,None,0)
+        elif k=='p_bool':rec=(PK[k],1 if p.a[0] else 0,0,0,None,0)
         elif k=='p_int':rec=(PK[k],0,0,0,None,parse_int_text(p.a[0]) & ((1<<64)-1))
         elif k=='p_byte':rec=(PK[k],0,0,0,None,p.a[0])
         elif k=='p_some':
