@@ -19,12 +19,14 @@ PYTHON=${PYTHON:-python3}
 
 # Shell parsing and human-interface models are ordinary L consumers. Keep them
 # executable through the native toolchain so parsing, source spans, byte-safe
-# editing, prompt semantics and history behavior stay in lockstep with L.
+# editing, prompt semantics, history and terminal layout stay in lockstep with L.
 "$HERE/lr" "$HERE/tools/shell/syntax_test.l" >/dev/null
 "$HERE/lr" "$HERE/tools/shell/presentation_test.l" >/dev/null
 "$HERE/lr" "$HERE/tools/shell/history_test.l" >/dev/null
 "$HERE/lr" "$HERE/tools/shell/prompt_test.l" >/dev/null
 "$HERE/lr" "$HERE/tools/shell/editor_test.l" >/dev/null
+"$HERE/lr" --root "$HERE" "$HERE/tools/shell/terminal_ui_test.l" >/dev/null
+"$HERE/lc" --check --root "$HERE" "$HERE/tools/shell/main.l" >/dev/null
 
 # Linux hosted-profile parity. Exercise the exact same L programs once through
 # the Python reference host and once through the generated native runtime.
