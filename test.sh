@@ -34,8 +34,8 @@ PYTHON=${PYTHON:-python3}
 # exec failure, explicit stdio wiring, process groups, signals, waits, and a
 # real three-process byte-stream pipeline. The context probe covers cwd changes
 # plus raw byte environment lookup/enumeration/mutation and error paths. The
-# shell executor adds PATH resolution, per-stage status, launch rollback and
-# persistent shell-owned cwd/environment state.
+# job-control probe adds stopped/continued events, opaque child identity,
+# foreground terminal handoff, and tty-mode capture/restore.
 if [ "$(uname -s)" = Linux ]; then
   "$HERE/lr" "$HERE/tools/shell/executor_test.l" >/dev/null
   "$HERE/lr" "$HERE/tools/shell/state_test.l" >/dev/null
@@ -43,17 +43,21 @@ if [ "$(uname -s)" = Linux ]; then
   linux_ref=$("$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_process_probe.l")
   test "$linux_ref" = '3'
   "$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_context_probe.l"
+  "$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_job_control_probe.l"
 
   linux_bin=$(mktemp)
   context_bin=$(mktemp)
-  rm -f "$linux_bin" "$context_bin"
-  trap 'rm -f "$linux_bin" "$context_bin"' EXIT HUP INT TERM
+  job_bin=$(mktemp)
+  rm -f "$linux_bin" "$context_bin" "$job_bin"
+  trap 'rm -f "$linux_bin" "$context_bin" "$job_bin"' EXIT HUP INT TERM
   "$HERE/lc" "$HERE/examples/hosted/linux_process_probe.l" -o "$linux_bin" >/dev/null
   linux_native=$("$linux_bin")
   test "$linux_native" = '3'
   "$HERE/lc" "$HERE/examples/hosted/linux_context_probe.l" -o "$context_bin" >/dev/null
   "$context_bin"
-  rm -f "$linux_bin" "$context_bin"
+  "$HERE/lc" "$HERE/examples/hosted/linux_job_control_probe.l" -o "$job_bin" >/dev/null
+  "$job_bin"
+  rm -f "$linux_bin" "$context_bin" "$job_bin"
   trap - EXIT HUP INT TERM
 fi
 
@@ -97,7 +101,7 @@ rm -f "$bad"
 trap - EXIT HUP INT TERM
 
 "$PYTHON" "$HERE/tests/selfhost_checker_diff.py"
-for t in term_key_events.py code_analysis.py incremental_lsp.py editor_safety.py highlight_stability.py editor_usability.py editor_display.py editor_pty.py lace2_pty.py lace_operator_pty.py shell_pty.py; do
+for t in term_key_events.py code_analysis.py incremental_lsp.py editor_safety.py highlight_stability.py editor_usability.py editor_display.py editor_pty.py lace2_pty.py lace_operator_pty.py shell_pty.py linux_job_control_pty.py; do
   "$PYTHON" "$HERE/tests/$t"
 done
 echo 'L repository test suite PASS'
