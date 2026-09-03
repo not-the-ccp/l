@@ -172,6 +172,26 @@ fn test_final_newline_is_not_a_phantom_line() {
     expect(model.cursor(editor) == 2);
 }
 
+fn test_absolute_line_motions() {
+    var editor = model.create("  one\n\ttwo\nthree\n");
+    model.move_absolute_line(editor, 2);
+    expect(model.cursor(editor) == 7);
+    model.move_absolute_line(editor, 0xffffffffffffffff);
+    expect(model.cursor(editor) == 11);
+    model.move_absolute_line(editor, 1);
+    expect(model.cursor(editor) == 2);
+
+    model.move_absolute_line(editor, 2);
+    var upward = model.line_span_to_absolute_line(editor, 1);
+    expect(upward.start == 0 && upward.end == 11);
+    var downward = model.line_span_to_absolute_line(editor, 3);
+    expect(downward.start == 6 && downward.end == 17);
+
+    var final_newline = model.create("one\ntwo\n");
+    model.move_absolute_line(final_newline, 999);
+    expect(model.cursor(final_newline) == 4);
+}
+
 fn main() {
     test_insert_undo_group();
     test_unicode_atomic_delete();
@@ -182,4 +202,5 @@ fn main() {
     test_saved_state();
     test_modal_cursor_invariants();
     test_final_newline_is_not_a_phantom_line();
+    test_absolute_line_motions();
 }

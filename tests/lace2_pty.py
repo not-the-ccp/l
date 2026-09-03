@@ -177,12 +177,12 @@ def run() -> None:
         transcript += wait_exit(pid, fd)
         os.close(fd)
 
-        # `G` is Lace's document-end motion. A terminating newline must not
-        # make it target the non-character EOF insertion boundary.
+        # Vim-compatible `G` targets first-nonblank on the final real line.
+        # A terminating newline must not create a phantom line below it.
         document_end = root / "document-end.txt"
         document_end.write_bytes(b"one\ntwo\n")
         edit(document_end, b"Gx:wq\r")
-        assert document_end.read_bytes() == b"one\ntw\n", document_end.read_bytes()
+        assert document_end.read_bytes() == b"one\nwo\n", document_end.read_bytes()
 
         last_line_delete = root / "last-line-delete.txt"
         last_line_delete.write_bytes(b"one\ntwo\n")
@@ -197,7 +197,7 @@ def run() -> None:
         assert os.fsencode(str(long_name)) not in transcript, transcript[-2000:]
         os.write(fd, b":help\r")
         help_frame = drain(fd, timeout=.5)
-        full_help = b"i/a/o edit \xc2\xb7 hjkl/arrows/wbe move \xc2\xb7 d/y/c ops \xc2\xb7 v/V select \xc2\xb7 / search \xc2\xb7 :w :q \xc2\xb7 ^VxFF raw byte"
+        full_help = b"i/a/o edit \xc2\xb7 hjkl/arrows/wbe/G/gg move \xc2\xb7 d/y/c ops \xc2\xb7 v/V select \xc2\xb7 / search \xc2\xb7 :w :q \xc2\xb7 ^VxFF raw byte"
         assert full_help not in help_frame, help_frame[-2000:]
         os.write(fd, b":q\r")
         transcript += wait_exit(pid, fd)
