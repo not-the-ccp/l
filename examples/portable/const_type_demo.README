@@ -1,0 +1,1 @@
+Run with `./lr examples/portable/const_type_demo.l` or compile it with `./lc`. The broader CI coverage lives in `signatures_demo.l` and `type_resolution_demo.l`; this file is a small focused probe for nested qualifier placement.
