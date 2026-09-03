@@ -22,6 +22,8 @@ enum {
     H_LINUX_TTY_FOREGROUND,
     H_LINUX_TTY_SET_FOREGROUND,
     H_LINUX_CHILD_SAME,
+    H_LINUX_TTY_CAPTURE,
+    H_LINUX_TTY_RESTORE,
 };
 
 enum {
@@ -39,7 +41,14 @@ struct LinuxJobEvent {
     LinuxJobEvent *next;
 };
 
+typedef struct LinuxTtyMode LinuxTtyMode;
+struct LinuxTtyMode {
+    struct termios attrs;
+    LinuxTtyMode *next;
+};
+
 static LinuxJobEvent *g_linux_job_events = NULL;
+static LinuxTtyMode *g_linux_tty_modes = NULL;
 
 static LinuxJobEvent *linux_job_event_new(LinuxOpaque *child, int kind, int code) {
     LinuxJobEvent *event = calloc(1, sizeof(*event));
@@ -58,6 +67,24 @@ static LinuxJobEvent *linux_job_event_as(LValue value) {
     for (LinuxJobEvent *event = g_linux_job_events; event; event = event->next)
         if ((void *)event == value.as.ptr) return event;
     die("invalid linux.process.wait.Event");
+    return NULL;
+}
+
+static LinuxTtyMode *linux_tty_mode_new(const struct termios *attrs) {
+    LinuxTtyMode *mode = calloc(1, sizeof(*mode));
+    if (!mode) die("out of memory");
+    mode->attrs = *attrs;
+    mode->next = g_linux_tty_modes;
+    g_linux_tty_modes = mode;
+    return mode;
+}
+
+static LinuxTtyMode *linux_tty_mode_as(LValue value) {
+    if (value.tag != V_OPAQUE || !value.as.ptr)
+        die("expected linux.tty.Mode");
+    for (LinuxTtyMode *mode = g_linux_tty_modes; mode; mode = mode->next)
+        if ((void *)mode == value.as.ptr) return mode;
+    die("invalid linux.tty.Mode");
     return NULL;
 }
 
@@ -204,13 +231,27 @@ static LValue linux_job_host_call(LVM *vm, int id, LValue *args, int n) {
         errno = saved;
         return linux_errno_optional(vm, rc);
     }
+    case H_LINUX_TTY_CAPTURE: {
+        if (n != 1) die("linux.tty.capture arity");
+        LinuxOpaque *fd = linux_fd_open_handle(args[0]);
+        struct termios attrs;
+        if (tcgetattr(fd->u.fd.fd, &attrs) < 0) return v_none();
+        return linux_some(vm, v_opaque(linux_tty_mode_new(&attrs)));
+    }
+    case H_LINUX_TTY_RESTORE: {
+        if (n != 2) die("linux.tty.restore arity");
+        LinuxOpaque *fd = linux_fd_open_handle(args[0]);
+        LinuxTtyMode *mode = linux_tty_mode_as(args[1]);
+        errno = 0;
+        return linux_errno_optional(vm, tcsetattr(fd->u.fd.fd, TCSADRAIN, &mode->attrs));
+    }
     }
     die("unknown Linux job-control host function %d", id);
     return v_unit();
 }
 
 static int linux_job_host_id(int id) {
-    return id >= H_LINUX_GROUP_CURRENT && id <= H_LINUX_CHILD_SAME;
+    return id >= H_LINUX_GROUP_CURRENT && id <= H_LINUX_TTY_RESTORE;
 }
 
 static void linux_job_host_cleanup(LVM *vm) {
@@ -219,6 +260,11 @@ static void linux_job_host_cleanup(LVM *vm) {
         LinuxJobEvent *next = g_linux_job_events->next;
         free(g_linux_job_events);
         g_linux_job_events = next;
+    }
+    while (g_linux_tty_modes) {
+        LinuxTtyMode *next = g_linux_tty_modes->next;
+        free(g_linux_tty_modes);
+        g_linux_tty_modes = next;
     }
 }
 
