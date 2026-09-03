@@ -15,7 +15,7 @@ pub struct Editor {
     pub history: ref history.History,
     pub mode: Mode,
     pub visual_anchor: u64,
-    pub yank: []u8,
+    pub yank: const []u8,
     pub yank_linewise: bool,
     pub goal_column: u64,
     pub goal_valid: bool,
@@ -30,7 +30,7 @@ pub struct Span {
     pub end: u64,
 }
 
-pub fn create(data: []u8) -> ref Editor {
+pub fn create(data: const []u8) -> ref Editor {
     var doc = text.from_bytes(data);
     var selections = selection.single(0);
     var h = history.start(doc, selections);
@@ -89,13 +89,13 @@ pub fn mark_saved(editor: ref Editor) {
     editor.saved_history_id = history.current_id(editor.history);
 }
 
-pub fn commit_change(editor: ref Editor, label: []u8) {
+pub fn commit_change(editor: ref Editor, label: const []u8) {
     if (!editor.pending_change) { return; }
     history.commit(editor.history, editor.doc, editor.selections, label);
     editor.pending_change = false;
 }
 
-fn apply_replace(editor: ref Editor, start: u64, end: u64, inserted: []u8, cursor_after: u64) {
+fn apply_replace(editor: ref Editor, start: u64, end: u64, inserted: const []u8, cursor_after: u64) {
     transaction.apply(editor.doc, [transaction.EditSpec {
         start: start,
         end: end,
@@ -106,7 +106,7 @@ fn apply_replace(editor: ref Editor, start: u64, end: u64, inserted: []u8, curso
     editor.goal_valid = false;
 }
 
-fn finish_normal_change(editor: ref Editor, label: []u8) {
+fn finish_normal_change(editor: ref Editor, label: const []u8) {
     // History snapshots must contain the same cursor position the user sees.
     // Committing first used to preserve a one-past-EOL insertion boundary in
     // history, so redo could resurrect an invalid Normal-mode cursor.
@@ -122,7 +122,7 @@ fn line_span(editor: ref Editor, pos: u64) -> Span {
     return Span { start: start, end: end };
 }
 
-fn leading_indent(editor: ref Editor, pos: u64) -> []u8 {
+fn leading_indent(editor: ref Editor, pos: u64) -> const []u8 {
     var start = nav.line_start(editor.doc, pos);
     var end = nav.line_end(editor.doc, pos);
     var cursor_pos = start;
@@ -149,7 +149,7 @@ pub fn leave_insert(editor: ref Editor) {
     commit_change(editor, "insert");
 }
 
-pub fn insert_bytes(editor: ref Editor, value: []u8) {
+pub fn insert_bytes(editor: ref Editor, value: const []u8) {
     var pos = cursor(editor);
     apply_replace(editor, pos, pos, value, pos + len(value));
 }
@@ -333,7 +333,7 @@ pub fn paste(editor: ref Editor, after: bool) {
     finish_normal_change(editor, "paste");
 }
 
-pub fn replace_atom(editor: ref Editor, value: []u8) {
+pub fn replace_atom(editor: ref Editor, value: const []u8) {
     var pos = cursor(editor);
     if (pos >= text.byte_len(editor.doc) || text.byte_at(editor.doc, pos) == '\n') { return; }
     var end = nav.next_atom(editor.doc, pos);
@@ -504,13 +504,13 @@ pub fn move_document_end(editor: ref Editor) {
     editor.goal_valid = false;
 }
 
-pub fn find_forward(editor: ref Editor, needle: []u8, start: u64) -> ?u64 {
+pub fn find_forward(editor: ref Editor, needle: const []u8, start: u64) -> ?u64 {
     if (len(needle) == 0) { return none; }
     var haystack = text.to_bytes(editor.doc);
     return bytes.find(haystack, needle, start);
 }
 
-pub fn find_backward(editor: ref Editor, needle: []u8, before: u64) -> ?u64 {
+pub fn find_backward(editor: ref Editor, needle: const []u8, before: u64) -> ?u64 {
     if (len(needle) == 0) { return none; }
     var haystack = text.to_bytes(editor.doc);
     if (len(needle) > len(haystack)) { return none; }
