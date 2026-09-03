@@ -116,6 +116,7 @@ jobs:
           for path in Path('tools/lace2').glob('*.l'):
               source = path.read_text()
               source = source.replace('import tools.lace2.display_bytes as display;', 'import byte_display as display;')
+              source = source.replace('display.render_debug(', 'display.render_safe(')
               if path.name == 'navigation.l' and 'import utf8;' not in source:
                   source = source.replace('import term;\n', 'import term;\nimport utf8;\n', 1)
               path.write_text(source)
