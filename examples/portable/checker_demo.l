@@ -55,8 +55,7 @@ fn main() -> i64 {
 
     var mutable_generic_string: []u8 = "fn use_mutable[T](items: []T) -> u64 { return len(items); }\nfn main() -> i64 { return use_mutable(\"x\") as i64; }\n";
     var mutable_generic_string_checked = slang_check.check(mutable_generic_string);
-    require(has_error(mutable_generic_string_checked.errors, slang_check.ErrorKind.generic_inference) ||
-        has_error(mutable_generic_string_checked.errors, slang_check.ErrorKind.type_mismatch));
+    require(len(mutable_generic_string_checked.errors) == 0);
 
     var nested_no_lift: []u8 = "fn main() -> i64 { var x: [][]i64 = [[1]]; var y: const []const []i64 = x; return len(y) as i64; }\n";
     var nested_no_lift_checked = slang_check.check(nested_no_lift);
