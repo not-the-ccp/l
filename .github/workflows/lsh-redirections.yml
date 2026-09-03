@@ -1,0 +1,47 @@
+name: lsh redirections
+
+on:
+  push:
+    branches: [feature/lsh-redirection-syntax]
+    paths:
+      - '.github/apply_lsh_redirections.py'
+      - '.github/workflows/lsh-redirections.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  rewrite-test-push:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/lsh-redirection-syntax
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply redirection syntax and execution
+        run: python3 .github/apply_lsh_redirections.py
+
+      - name: Focused parser and executor checks
+        run: |
+          ./build.sh tools
+          ./lr tools/shell/syntax_test.l >/dev/null
+          ./lr tools/shell/executor_test.l >/dev/null
+          ./lc --check tools/shell/main.l >/dev/null
+          python3 tests/shell_pty.py
+
+      - name: Full repository test suite
+        run: ./test.sh
+
+      - name: Commit tested implementation
+        shell: bash
+        run: |
+          rm .github/apply_lsh_redirections.py .github/workflows/lsh-redirections.yml
+          git config user.name 'not-the-ccp'
+          git config user.email '315506978+not-the-ccp@users.noreply.github.com'
+          git add -A
+          git commit -m 'Add native lsh file redirections'
+          git push origin HEAD:feature/lsh-redirection-syntax
