@@ -28,19 +28,45 @@ fn apply(editor: ref model.Editor, start: u64, end: u64, inserted: []u8, cursor:
     editor.goal_valid = false;
 }
 
-pub fn change_current_line(editor: ref model.Editor) {
+pub fn span(editor: ref model.Editor, count: u64) -> model.Span {
+    var wanted = count;
+    if (wanted == 0) { wanted = 1; }
+    var start = nav.line_start(editor.doc, model.cursor(editor));
+    var line = start;
+    var end = start;
+    var n: u64 = 0;
+    var length = text.byte_len(editor.doc);
+    while (n < wanted) {
+        end = nav.line_end(editor.doc, line);
+        if (end < length) { end += 1; }
+        n += 1;
+        if (n >= wanted || end >= length) { break; }
+        line = end;
+    }
+    return model.Span { start: start, end: end };
+}
+
+pub fn change_lines(editor: ref model.Editor, count: u64) {
     var pos = model.cursor(editor);
-    var whole = model.current_line_span(editor);
-    var content_end = nav.line_end(editor.doc, pos);
+    var whole = span(editor, count);
     var indent = line_indent(editor, pos);
+    var replacement = bytes.clone(indent);
 
     editor.yank = text.slice(editor.doc, whole.start, whole.end);
     editor.yank_linewise = true;
 
-    // Preserve the line boundary. `cc` should leave a line to type into,
-    // not splice the following line upward. Preserve existing indentation too.
-    apply(editor, whole.start, content_end, indent, whole.start + len(indent));
+    // A counted line change collapses the selected lines into exactly one
+    // editable line. Preserve one terminating newline only when the selected
+    // range had one, and preserve indentation from the first line.
+    if (whole.end > whole.start && text.byte_at(editor.doc, whole.end - 1) == '\n') {
+        push(replacement, '\n');
+    }
+    apply(editor, whole.start, whole.end, replacement, whole.start + len(indent));
     editor.mode = model.Mode.insert;
+}
+
+pub fn change_current_line(editor: ref model.Editor) {
+    change_lines(editor, 1);
 }
 
 pub fn paste(editor: ref model.Editor, after: bool) {
@@ -63,8 +89,6 @@ pub fn paste(editor: ref model.Editor, after: bool) {
             insert_at = line_end + 1;
             cursor_after = insert_at;
         } else {
-            // The current final line has no terminator. Introduce exactly one
-            // line boundary before the linewise register.
             insert_at = document_end;
             var with_boundary: []u8 = ['\n'];
             bytes.append(with_boundary, inserted);
@@ -74,9 +98,6 @@ pub fn paste(editor: ref model.Editor, after: bool) {
     } else {
         insert_at = line_start;
         cursor_after = insert_at;
-        // A linewise register copied from an unterminated last line needs a
-        // terminator when pasted before another line, otherwise the two lines
-        // would be concatenated.
         if (inserted[len(inserted) - 1] != '\n') { push(inserted, '\n'); }
     }
 
