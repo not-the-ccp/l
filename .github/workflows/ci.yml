@@ -92,9 +92,9 @@ jobs:
           test -s /tmp/linked-list.dot
       - name: Analyze dogfooded binding mutation
         run: |
-          ./lc analyze tools/lace2/main.l --root . --include-stdlib --view model -o /tmp/lace-analysis.json
-          ./lc analyze tools/shell/main.l --root . --include-stdlib --view model -o /tmp/shell-analysis.json
-          ./lc analyze tools/check/lcheck.l --root . --include-stdlib --view model -o /tmp/check-analysis.json
+          ./lc analyze tools/lace2/main.l --include-stdlib --view model -o /tmp/lace-analysis.json
+          ./lc analyze tools/shell/main.l --include-stdlib --view model -o /tmp/shell-analysis.json
+          ./lc analyze tools/check/lcheck.l --include-stdlib --view model -o /tmp/check-analysis.json
           python - <<'PY'
           import json
 
