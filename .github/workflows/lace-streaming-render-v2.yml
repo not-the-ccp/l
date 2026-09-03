@@ -47,6 +47,8 @@ jobs:
         run: python3 .github/apply_lace_streaming_render.py
       - name: Add randomized newline-index differential regression
         run: python3 .github/add_piece_tree_newline_differential.py
+      - name: Add streaming chunk-boundary regressions
+        run: python3 .github/add_stream_chunk_boundary_tests.py
       - name: Compile optimized long-line benchmark
         run: ./lc --root . tools/lace2/long_line_bench.l -o /tmp/lace-long-after
       - name: Measure optimized redraw
@@ -70,7 +72,7 @@ jobs:
       - name: Commit tested implementation
         shell: bash
         run: |
-          rm tools/lace2/long_line_bench.l .github/apply_lace_streaming_render.py .github/add_piece_tree_newline_differential.py .github/workflows/lace-streaming-render-v2.yml
+          rm tools/lace2/long_line_bench.l .github/apply_lace_streaming_render.py .github/add_piece_tree_newline_differential.py .github/add_stream_chunk_boundary_tests.py .github/workflows/lace-streaming-render-v2.yml
           git config user.name 'not-the-ccp'
           git config user.email '315506978+not-the-ccp@users.noreply.github.com'
           git add -A
