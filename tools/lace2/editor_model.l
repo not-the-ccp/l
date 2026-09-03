@@ -60,6 +60,26 @@ pub fn set_cursor(editor: ref Editor, pos: u64) {
     editor.selections = selection.single(pos);
 }
 
+// Insert mode uses byte boundaries between atoms. Command and visual modes use
+// atoms themselves. In particular, a newline that terminates a non-empty line
+// is not an extra character cell the modal cursor can sit on.
+fn command_position(editor: ref Editor, pos: u64) -> u64 {
+    if (pos > text.byte_len(editor.doc)) { trap; }
+    var start = nav.line_start(editor.doc, pos);
+    var end = nav.line_end(editor.doc, pos);
+    if (pos == end && end > start) { return nav.cursor_end(editor.doc, pos); }
+    return pos;
+}
+
+fn set_motion_cursor(editor: ref Editor, pos: u64) {
+    if (editor.mode is Mode.insert) { set_cursor(editor, pos); }
+    else { set_cursor(editor, command_position(editor, pos)); }
+}
+
+fn normalize_command_cursor(editor: ref Editor) {
+    set_cursor(editor, command_position(editor, cursor(editor)));
+}
+
 pub fn dirty(editor: ref Editor) -> bool {
     return editor.pending_change || history.current_id(editor.history) != editor.saved_history_id;
 }
@@ -87,8 +107,12 @@ fn apply_replace(editor: ref Editor, start: u64, end: u64, inserted: []u8, curso
 }
 
 fn finish_normal_change(editor: ref Editor, label: []u8) {
-    commit_change(editor, label);
+    // History snapshots must contain the same cursor position the user sees.
+    // Committing first used to preserve a one-past-EOL insertion boundary in
+    // history, so redo could resurrect an invalid Normal-mode cursor.
     editor.mode = Mode.normal;
+    normalize_command_cursor(editor);
+    commit_change(editor, label);
 }
 
 fn line_span(editor: ref Editor, pos: u64) -> Span {
@@ -117,11 +141,12 @@ pub fn enter_insert(editor: ref Editor, pos: u64) {
 }
 
 pub fn leave_insert(editor: ref Editor) {
-    commit_change(editor, "insert");
     editor.mode = Mode.normal;
     var pos = cursor(editor);
     var start = nav.line_start(editor.doc, pos);
     if (pos > start) { set_cursor(editor, nav.previous_atom(editor.doc, pos)); }
+    normalize_command_cursor(editor);
+    commit_change(editor, "insert");
 }
 
 pub fn insert_bytes(editor: ref Editor, value: []u8) {
@@ -261,6 +286,7 @@ pub fn undo(editor: ref Editor) {
         some(value) { editor.selections = value; }
     }
     editor.mode = Mode.normal;
+    normalize_command_cursor(editor);
     editor.goal_valid = false;
 }
 
@@ -274,6 +300,7 @@ pub fn redo(editor: ref Editor) {
         some(value) { editor.selections = value; }
     }
     editor.mode = Mode.normal;
+    normalize_command_cursor(editor);
     editor.goal_valid = false;
 }
 
@@ -285,6 +312,7 @@ pub fn enter_visual(editor: ref Editor, linewise: bool) {
 
 pub fn leave_visual(editor: ref Editor) {
     editor.mode = Mode.normal;
+    normalize_command_cursor(editor);
 }
 
 pub fn visual_span(editor: ref Editor) -> ?Span {
@@ -314,7 +342,7 @@ pub fn move_left(editor: ref Editor, count: u64) {
     var start = nav.line_start(editor.doc, pos);
     var n: u64 = 0;
     while (n < count && pos > start) { pos = nav.previous_atom(editor.doc, pos); n += 1; }
-    set_cursor(editor, pos);
+    set_motion_cursor(editor, pos);
     editor.goal_valid = false;
 }
 
@@ -323,7 +351,7 @@ pub fn move_right(editor: ref Editor, count: u64) {
     var end = nav.line_end(editor.doc, pos);
     var n: u64 = 0;
     while (n < count && pos < end) { pos = nav.next_atom(editor.doc, pos); n += 1; }
-    set_cursor(editor, pos);
+    set_motion_cursor(editor, pos);
     editor.goal_valid = false;
 }
 
@@ -331,7 +359,7 @@ pub fn move_word_forward(editor: ref Editor, count: u64) {
     var pos = cursor(editor);
     var n: u64 = 0;
     while (n < count) { pos = nav.word_forward(editor.doc, pos); n += 1; }
-    set_cursor(editor, pos);
+    set_motion_cursor(editor, pos);
     editor.goal_valid = false;
 }
 
@@ -339,7 +367,7 @@ pub fn move_word_backward(editor: ref Editor, count: u64) {
     var pos = cursor(editor);
     var n: u64 = 0;
     while (n < count) { pos = nav.word_backward(editor.doc, pos); n += 1; }
-    set_cursor(editor, pos);
+    set_motion_cursor(editor, pos);
     editor.goal_valid = false;
 }
 
@@ -351,19 +379,20 @@ pub fn move_word_end(editor: ref Editor, count: u64) {
         if (n + 1 < count && pos < text.byte_len(editor.doc)) { pos = nav.next_atom(editor.doc, pos); }
         n += 1;
     }
-    set_cursor(editor, pos);
+    set_motion_cursor(editor, pos);
     editor.goal_valid = false;
 }
 
 pub fn move_line_start(editor: ref Editor, first_nonblank: bool) {
     var pos = cursor(editor);
-    if (first_nonblank) { set_cursor(editor, nav.first_nonblank(editor.doc, pos)); }
-    else { set_cursor(editor, nav.line_start(editor.doc, pos)); }
+    if (first_nonblank) { set_motion_cursor(editor, nav.first_nonblank(editor.doc, pos)); }
+    else { set_motion_cursor(editor, nav.line_start(editor.doc, pos)); }
     editor.goal_valid = false;
 }
 
 pub fn move_line_end(editor: ref Editor) {
-    set_cursor(editor, nav.line_end(editor.doc, cursor(editor)));
+    if (editor.mode is Mode.insert) { set_cursor(editor, nav.line_end(editor.doc, cursor(editor))); }
+    else { set_cursor(editor, nav.cursor_end(editor.doc, cursor(editor))); }
     editor.goal_valid = false;
 }
 
@@ -379,11 +408,11 @@ pub fn move_vertical(editor: ref Editor, down: bool, count: u64) {
         pos = nav.move_vertical(editor.doc, pos, down, editor.goal_column, editor.tab_width);
         n += 1;
     }
-    set_cursor(editor, pos);
+    set_motion_cursor(editor, pos);
 }
 
 pub fn move_document_start(editor: ref Editor) {
-    set_cursor(editor, 0);
+    set_motion_cursor(editor, 0);
     editor.goal_valid = false;
 }
 
@@ -392,8 +421,8 @@ pub fn move_document_end(editor: ref Editor) {
     if (length == 0) { set_cursor(editor, 0); }
     else {
         var end = nav.line_end(editor.doc, length);
-        if (end == length && end > nav.line_start(editor.doc, end)) { set_cursor(editor, nav.previous_atom(editor.doc, end)); }
-        else { set_cursor(editor, end); }
+        if (end == length && end > nav.line_start(editor.doc, end)) { set_motion_cursor(editor, nav.previous_atom(editor.doc, end)); }
+        else { set_motion_cursor(editor, end); }
     }
     editor.goal_valid = false;
 }

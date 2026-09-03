@@ -104,6 +104,54 @@ fn test_saved_state() {
     expect(model.dirty(editor));
 }
 
+fn test_modal_cursor_invariants() {
+    // Normal/visual motion stays on atoms. The newline separator is an
+    // insertion boundary, not an invisible extra cursor cell.
+    var editor = model.create("abc\nxy\n");
+    model.move_right(editor, 99);
+    expect(model.cursor(editor) == 2);
+    model.move_line_end(editor);
+    expect(model.cursor(editor) == 2);
+
+    // Preserve the desired screen column, but clamp a short destination line
+    // to its final atom rather than the newline after it.
+    model.move_vertical(editor, true, 1);
+    expect(model.cursor(editor) == 5);
+
+    // `^` on an all-whitespace line must still land on a visible atom.
+    var whitespace = model.create("   \n");
+    model.move_line_start(whitespace, true);
+    expect(model.cursor(whitespace) == 2);
+
+    // Normal edits that remove the old final atom clamp the resulting cursor
+    // before the history snapshot is created.
+    var removed = model.create("abc\n");
+    model.set_cursor(removed, 2);
+    model.delete_forward(removed, 1);
+    expect_bytes(text.to_bytes(removed.doc), "ab\n");
+    expect(model.cursor(removed) == 1);
+
+    // Insert mode may use the EOL insertion boundary, but Escape and redo must
+    // both restore the visible Normal-mode atom rather than that boundary.
+    var inserted = model.create("abc\n");
+    model.enter_insert(inserted, 3);
+    model.insert_bytes(inserted, "X");
+    model.leave_insert(inserted);
+    expect_bytes(text.to_bytes(inserted.doc), "abcX\n");
+    expect(model.cursor(inserted) == 3);
+    model.undo(inserted);
+    expect_bytes(text.to_bytes(inserted.doc), "abc\n");
+    model.redo(inserted);
+    expect_bytes(text.to_bytes(inserted.doc), "abcX\n");
+    expect(model.cursor(inserted) == 3);
+
+    // Insert-mode End remains an insertion boundary; this must not be clamped.
+    var insertion = model.create("abc\n");
+    model.enter_insert(insertion, 0);
+    model.move_line_end(insertion);
+    expect(model.cursor(insertion) == 3);
+}
+
 fn main() {
     test_insert_undo_group();
     test_unicode_atomic_delete();
@@ -112,4 +160,5 @@ fn main() {
     test_open_line_indent();
     test_motion_spans_and_search();
     test_saved_state();
+    test_modal_cursor_invariants();
 }
