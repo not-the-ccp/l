@@ -2,6 +2,7 @@ import bytes;
 import sys;
 import linux.fd as fd;
 import linux.process as process;
+import linux.process.launch as process_launch;
 import syntax;
 
 pub enum ProcessResult {
@@ -96,8 +97,7 @@ fn path_candidate(directory: const []u8, name: const []u8) -> []u8 {
     return out;
 }
 
-fn spawn_at(path: const []u8, argv: const []const []u8, input: fd.Fd, output: fd.Fd, error: fd.Fd, group: ?process.Group) -> SpawnAttempt {
-    var result = process.spawn_exact(path, argv, input, output, error, group);
+fn spawn_result(result: process.SpawnResult) -> SpawnAttempt {
     match (process.spawn_child(result)) {
         some(child) { return SpawnAttempt.ok(child); }
         none {}
@@ -108,7 +108,35 @@ fn spawn_at(path: const []u8, argv: const []const []u8, input: fd.Fd, output: fd
     }
 }
 
-fn spawn_command(command: syntax.Command, input: fd.Fd, output: fd.Fd, error: fd.Fd, group: ?process.Group) -> SpawnAttempt {
+fn spawn_at(
+    path: const []u8,
+    argv: const []const []u8,
+    input: fd.Fd,
+    output: fd.Fd,
+    error: fd.Fd,
+    group: ?process.Group,
+    terminal: ?fd.Fd,
+) -> SpawnAttempt {
+    match (terminal) {
+        none {
+            return spawn_result(process.spawn_exact(path, argv, input, output, error, group));
+        }
+        some(terminal_fd) {
+            return spawn_result(process_launch.foreground_exact(
+                path, argv, input, output, error, group, terminal_fd
+            ));
+        }
+    }
+}
+
+fn spawn_command(
+    command: syntax.Command,
+    input: fd.Fd,
+    output: fd.Fd,
+    error: fd.Fd,
+    group: ?process.Group,
+    terminal: ?fd.Fd,
+) -> SpawnAttempt {
     if (len(command.words) == 0 || len(command.words[0].value) == 0) {
         return SpawnAttempt.not_found;
     }
@@ -116,7 +144,7 @@ fn spawn_command(command: syntax.Command, input: fd.Fd, output: fd.Fd, error: fd
     var argv = argv_for(command);
     var name = command.words[0].value;
     if (contains_slash(name)) {
-        return spawn_at(name, argv, input, output, error, group);
+        return spawn_at(name, argv, input, output, error, group, terminal);
     }
 
     match (sys.getenv("PATH")) {
@@ -126,7 +154,7 @@ fn spawn_command(command: syntax.Command, input: fd.Fd, output: fd.Fd, error: fd
             var last_error: ?i64 = none;
             for (directory in directories) {
                 var candidate = path_candidate(directory, name);
-                match (spawn_at(candidate, argv, input, output, error, group)) {
+                match (spawn_at(candidate, argv, input, output, error, group, terminal)) {
                     SpawnAttempt.ok(child) { return SpawnAttempt.ok(child); }
                     SpawnAttempt.failed(number) {
                         if (!path_miss(number)) { last_error = some(number); }
@@ -155,7 +183,7 @@ fn close_stdio(input: fd.Fd, output: fd.Fd, error: fd.Fd) {
     fd.close(error);
 }
 
-fn rollback(children: []process.Child, group: ?process.Group, pipes: [][]fd.Fd, input: fd.Fd, output: fd.Fd, error: fd.Fd) {
+fn kill_children(children: []process.Child, group: ?process.Group) {
     var group_killed = false;
     match (group) {
         some(value) {
@@ -172,7 +200,10 @@ fn rollback(children: []process.Child, group: ?process.Group, pipes: [][]fd.Fd, 
             process.send(child, process.sigkill());
         }
     }
+}
 
+fn rollback(children: []process.Child, group: ?process.Group, pipes: [][]fd.Fd, input: fd.Fd, output: fd.Fd, error: fd.Fd) {
+    kill_children(children, group);
     close_pipes(pipes);
     close_stdio(input, output, error);
     for (child in children) {
@@ -191,7 +222,9 @@ fn failure(command: syntax.Command, number: i64) -> LaunchFailure {
 // Launch owns temporary stdio/pipe handles only until all stages have either
 // spawned or rollback has completed. Child processes keep their duplicated
 // descriptors, so a returned LiveJob contains only process handles + pgrp.
-pub fn launch(pipeline: syntax.Pipeline) -> LaunchResult {
+// A foreground terminal is an extra borrowed handle: foreground_exact performs
+// the race-free pgrp/tty handoff before each child reaches exec.
+fn launch_impl(pipeline: syntax.Pipeline, terminal: ?fd.Fd) -> LaunchResult {
     if (len(pipeline.commands) == 0) {
         return LaunchResult.ok(LiveJob { children: [], group: none });
     }
@@ -214,7 +247,7 @@ pub fn launch(pipeline: syntax.Pipeline) -> LaunchResult {
         if (i + 1 < len(pipeline.commands)) { stage_output = pipes[i][1]; }
 
         var command = pipeline.commands[i];
-        match (spawn_command(command, stage_input, stage_output, error, group)) {
+        match (spawn_command(command, stage_input, stage_output, error, group, terminal)) {
             SpawnAttempt.ok(child) {
                 push(children, child);
                 if (i == 0) { group = some(process.group(child)); }
@@ -233,6 +266,24 @@ pub fn launch(pipeline: syntax.Pipeline) -> LaunchResult {
     close_pipes(pipes);
     close_stdio(input, output, error);
     return LaunchResult.ok(LiveJob { children: children, group: group });
+}
+
+pub fn launch(pipeline: syntax.Pipeline) -> LaunchResult {
+    return launch_impl(pipeline, none);
+}
+
+pub fn launch_foreground(pipeline: syntax.Pipeline, terminal: fd.Fd) -> LaunchResult {
+    return launch_impl(pipeline, some(terminal));
+}
+
+// Abort is for a successfully returned LiveJob that a higher layer can no
+// longer adopt. It is intentionally separate from wait(): abort first kills the
+// process group transactionally, then reaps every child handle.
+pub fn abort(job: LiveJob) {
+    kill_children(job.children, job.group);
+    for (child in job.children) {
+        process.wait_exit(child);
+    }
 }
 
 pub fn wait(job: LiveJob) -> JobResult {
