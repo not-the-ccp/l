@@ -764,7 +764,10 @@ static void proc_close_one(Proc *p) {
     }
 }
 
+#include "linux_host.inc"
+
 static LValue host_call(LVM *vm, int id, LValue *args, int n) {
+    if (linux_host_id(id)) return linux_host_call(vm, id, args, n);
     switch (id) {
     case H_STDIO_READ: {
         if (n != 1) die("stdio.read arity");
@@ -1545,6 +1548,7 @@ static void vm_cleanup(LVM *vm) {
         tcsetattr(0, TCSANOW, &vm->saved_term);
         vm->term_raw = 0;
     }
+    linux_host_cleanup(vm);
     for (Proc *p = vm->procs; p;) {
         Proc *n = p->next;
         proc_close_one(p);

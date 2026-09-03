@@ -23,6 +23,10 @@ from run_lang import (
     TermHost,
 )
 
+IS_LINUX = sys.platform.startswith("linux")
+if IS_LINUX:
+    from linux_host import LinuxHost
+
 ARTIFACT_MAGIC = "LBC1"
 
 
@@ -34,7 +38,19 @@ def stdlib_sources() -> dict[tuple[str, ...], str]:
     return out
 
 
-HOST_MODULES = {("stdio",), ("fs",), ("sys",), ("proc",), ("term",)}
+HOST_MODULES = {
+    ("stdio",),
+    ("fs",),
+    ("sys",),
+    ("proc",),
+    ("term",),
+}
+if IS_LINUX:
+    HOST_MODULES |= {
+        ("linux", "fd"),
+        ("linux", "process"),
+    }
+
 
 def module_name(root: Path, path: Path) -> tuple[str, ...]:
     rel = path.resolve().relative_to(root.resolve())
@@ -92,7 +108,8 @@ def project_sources(entry: Path, root: Path) -> tuple[dict[tuple[str, ...], str]
     load(entry_mod, entry)
     return sources, entry_mod
 
-def make_hosts(argv: list[str]):
+
+def make_hosts_full(argv: list[str]):
     ph = ProcessHost()
     th = TermHost()
     hosts = {
@@ -102,26 +119,45 @@ def make_hosts(argv: list[str]):
         ("proc",): ph.module(),
         ("term",): th.module(),
     }
+    lh = None
+    if IS_LINUX:
+        lh = LinuxHost()
+        hosts.update(lh.modules())
+    return hosts, ph, th, lh
+
+
+def make_hosts(argv: list[str]):
+    """Compatibility surface for tooling that only needs host type information.
+
+    Existing callers intentionally retain the historical three-value return.
+    Code that executes platform-owned Linux resources uses make_hosts_full() so
+    those resources have an explicit cleanup owner.
+    """
+    hosts, ph, th, _lh = make_hosts_full(argv)
     return hosts, ph, th
 
 
-def cleanup(ph: ProcessHost, th: TermHost):
+def cleanup(ph: ProcessHost, th: TermHost, lh=None):
     try:
         th.leave()
     finally:
-        ph.cleanup()
+        try:
+            ph.cleanup()
+        finally:
+            if lh is not None:
+                lh.cleanup()
 
 
 def build_program(entry: Path, root: Path, argv: list[str]):
     sources, mod = project_sources(entry, root)
-    hosts, ph, th = make_hosts(argv)
+    hosts, ph, th, lh = make_hosts_full(argv)
     try:
         p = Program(sources, hosts)
         if "main" not in p.tops.get(mod, {}):
             raise LangError(f"entry module {'.'.join(mod)} has no main function")
-        return p, mod, hosts, ph, th
+        return p, mod, hosts, ph, th, lh
     except Exception:
-        cleanup(ph, th)
+        cleanup(ph, th, lh)
         raise
 
 
@@ -137,7 +173,6 @@ def exit_status(v) -> int:
     if isinstance(v, bool):
         return 0 if v else 1
     if isinstance(v, int):
-        # Shells only preserve the low 8 bits; keep the convention unsurprising.
         return v & 0xFF
     return 0
 
@@ -145,19 +180,18 @@ def exit_status(v) -> int:
 def cmd_check(ns) -> int:
     entry = Path(ns.file)
     root = Path(ns.root) if ns.root else entry.resolve().parent
-    p, mod, hosts, ph, th = build_program(entry, root, [])
+    p, mod, hosts, ph, th, lh = build_program(entry, root, [])
     try:
-        # Program construction performs parse, module linking, and static checking.
         print(f"OK: {entry} ({'.'.join(mod)})")
         return 0
     finally:
-        cleanup(ph, th)
+        cleanup(ph, th, lh)
 
 
 def cmd_run(ns) -> int:
     entry = Path(ns.file)
     root = Path(ns.root) if ns.root else entry.resolve().parent
-    p, mod, hosts, ph, th = build_program(entry, root, ns.args)
+    p, mod, hosts, ph, th, lh = build_program(entry, root, ns.args)
     try:
         entry_name = internal_name(mod, "main")
         if ns.ast:
@@ -168,7 +202,7 @@ def cmd_run(ns) -> int:
             print(printable_result(result))
         return exit_status(result)
     finally:
-        cleanup(ph, th)
+        cleanup(ph, th, lh)
 
 
 def serializable_bc(p: Program) -> BCCompiler:
@@ -183,7 +217,7 @@ def serializable_bc(p: Program) -> BCCompiler:
 def cmd_compile(ns) -> int:
     entry = Path(ns.file)
     root = Path(ns.root) if ns.root else entry.resolve().parent
-    p, mod, hosts, ph, th = build_program(entry, root, [])
+    p, mod, hosts, ph, th, lh = build_program(entry, root, [])
     try:
         bc = serializable_bc(p)
         out = Path(ns.output) if ns.output else entry.with_suffix(".lbc")
@@ -197,7 +231,7 @@ def cmd_compile(ns) -> int:
         print(out)
         return 0
     finally:
-        cleanup(ph, th)
+        cleanup(ph, th, lh)
 
 
 def cmd_exec(ns) -> int:
@@ -205,14 +239,14 @@ def cmd_exec(ns) -> int:
     payload = pickle.loads(path.read_bytes())
     if not isinstance(payload, dict) or payload.get("magic") != ARTIFACT_MAGIC:
         raise SystemExit("not an LBC1 bytecode artifact")
-    hosts, ph, th = make_hosts(ns.args)
+    hosts, ph, th, lh = make_hosts_full(ns.args)
     try:
         result = BCVM(payload["bytecode"], hosts).run(payload["entry"])
         if ns.print_result:
             print(printable_result(result))
         return exit_status(result)
     finally:
-        cleanup(ph, th)
+        cleanup(ph, th, lh)
 
 
 def cmd_edit(ns) -> int:
