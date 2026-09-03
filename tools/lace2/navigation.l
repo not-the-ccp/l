@@ -93,6 +93,16 @@ pub fn line_end(doc: ref text.Text, pos: u64) -> u64 {
     return cursor;
 }
 
+// Last addressable atom for command/selection modes on this line. `line_end`
+// is deliberately the insertion boundary before a newline (or EOF), whereas
+// a modal command cursor belongs on the last atom of a non-empty line.
+pub fn cursor_end(doc: ref text.Text, pos: u64) -> u64 {
+    var start = line_start(doc, pos);
+    var end = line_end(doc, pos);
+    if (end > start) { return previous_atom(doc, end); }
+    return start;
+}
+
 pub fn previous_line_start(doc: ref text.Text, pos: u64) -> ?u64 {
     var start = line_start(doc, pos);
     if (start == 0) { return none; }
