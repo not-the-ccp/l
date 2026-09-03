@@ -20,6 +20,20 @@ jobs:
           fetch-depth: 0
       - name: Apply motion implementation
         run: python3 .github/apply_lace_absolute_lines.py
+      - name: Correct Visual gg expectation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('tests/lace_operator_pty.py')
+          s = p.read_text()
+          old = 'case(root, "visual-gg.txt", b"aa\\n bb"'  # impossible sentinel; keep replacement guarded below
+          needle = 'case(root, "visual-gg.txt", b"aa\\nbb\\ncc\\n", b"jvggd", b"a\\ncc\\n")'
+          replacement = 'case(root, "visual-gg.txt", b"aa\\nbb\\ncc\\n", b"jvggd", b"b\\ncc\\n")'
+          if s.count(needle) != 1:
+              raise SystemExit('visual gg expectation changed')
+          p.write_text(s.replace(needle, replacement, 1))
+          PY
       - name: Build editor
         run: ./build.sh tools
       - name: Focused model regression
