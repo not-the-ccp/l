@@ -9,7 +9,9 @@ fn csi_count(out: []u8, count: u64, final: u8) {
     push(out, final);
 }
 
-fn style(role: terminal_ui.Role) -> []u8 {
+// Style fragments are immutable protocol constants. Returning a const view
+// avoids pretending callers may mutate a shared/static terminal sequence.
+fn style(role: terminal_ui.Role) -> const []u8 {
     if (role == terminal_ui.Role.prompt_cwd) { return "\x1b[34m"; }
     if (role == terminal_ui.Role.prompt_status) { return "\x1b[31m"; }
     if (role == terminal_ui.Role.prompt_marker) { return "\x1b[2m"; }
