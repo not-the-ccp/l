@@ -44,7 +44,8 @@ fn empty_error_value() -> []u8 {
     return [];
 }
 
-fn push_error(out: []Error, kind: ErrorKind, module: []u8, name: []u8, target: []u8, start: u64, end: u64) {
+fn push_error(out: []Error, kind: ErrorKind, module: const []u8, name: const []u8,
+    target: const []u8, start: u64, end: u64) {
     push(out, Error {
         kind: kind,
         module: bytes.clone(module),
@@ -55,12 +56,12 @@ fn push_error(out: []Error, kind: ErrorKind, module: []u8, name: []u8, target: [
     });
 }
 
-fn reserved(name: []u8) -> bool {
+fn reserved(name: const []u8) -> bool {
     return bytes.equal(name, "len") || bytes.equal(name, "push") ||
         bytes.equal(name, "pop") || bytes.equal(name, "splice");
 }
 
-fn contains_name(names: [][]u8, name: []u8) -> bool {
+fn contains_name(names: const [][]u8, name: const []u8) -> bool {
     for (existing in names) {
         if (bytes.equal(existing, name)) {
             return true;
@@ -84,7 +85,7 @@ pub fn import_local_name(item: slang_index.Import) -> []u8 {
     return bytes.slice(item.path, start, len(item.path));
 }
 
-pub fn find_module(modules: []Module, name: []u8) -> ?u64 {
+pub fn find_module(modules: const []Module, name: const []u8) -> ?u64 {
     for (var i: u64 = 0; i < len(modules); i += 1) {
         if (bytes.equal(modules[i].name, name)) {
             return some(i);
@@ -93,11 +94,11 @@ pub fn find_module(modules: []Module, name: []u8) -> ?u64 {
     return none;
 }
 
-fn host_exists(host_modules: [][]u8, name: []u8) -> bool {
+fn host_exists(host_modules: const [][]u8, name: const []u8) -> bool {
     return contains_name(host_modules, name);
 }
 
-fn check_module_names(modules: []Module, out: []Error) {
+fn check_module_names(modules: const []Module, out: []Error) {
     for (var i: u64 = 0; i < len(modules); i += 1) {
         for (var j = i + 1; j < len(modules); j += 1) {
             if (bytes.equal(modules[i].name, modules[j].name)) {
@@ -107,7 +108,7 @@ fn check_module_names(modules: []Module, out: []Error) {
     }
 }
 
-fn claim_name(out: []Error, module: Module, seen: [][]u8, name: []u8, start: u64, end: u64) {
+fn claim_name(out: []Error, module: Module, seen: [][]u8, name: const []u8, start: u64, end: u64) {
     if (reserved(name)) {
         push_error(out, ErrorKind.reserved_name, module.name, name, empty_error_value(), start, end);
         return;
@@ -119,7 +120,7 @@ fn claim_name(out: []Error, module: Module, seen: [][]u8, name: []u8, start: u64
     push(seen, bytes.clone(name));
 }
 
-fn check_module(module: Module, modules: []Module, host_modules: [][]u8, out: []Error) {
+fn check_module(module: Module, modules: const []Module, host_modules: const [][]u8, out: []Error) {
     // Syntax errors belong to slang_syntax/slang_index. Avoid cascading semantic
     // diagnostics from an incomplete module.
     if (len(module.index.errors) > 0) {
@@ -146,7 +147,7 @@ fn check_module(module: Module, modules: []Module, host_modules: [][]u8, out: []
     }
 }
 
-fn visit(modules: []Module, states: []u8, index: u64, out: []Error) {
+fn visit(modules: const []Module, states: []u8, index: u64, out: []Error) {
     if (states[index] == 2) {
         return;
     }
@@ -169,7 +170,7 @@ fn visit(modules: []Module, states: []u8, index: u64, out: []Error) {
     states[index] = 2;
 }
 
-pub fn validate(modules: []Module, host_modules: [][]u8) -> []Error {
+pub fn validate(modules: const []Module, host_modules: const [][]u8) -> []Error {
     var out: []Error = [];
     check_module_names(modules, out);
     for (module in modules) {
@@ -185,7 +186,7 @@ pub fn validate(modules: []Module, host_modules: [][]u8) -> []Error {
     return out;
 }
 
-fn find_decl(module: Module, name: []u8) -> ?slang_index.Decl {
+fn find_decl(module: Module, name: const []u8) -> ?slang_index.Decl {
     for (decl in module.index.declarations) {
         if (bytes.equal(decl.name, name)) {
             return some(decl);
@@ -194,7 +195,7 @@ fn find_decl(module: Module, name: []u8) -> ?slang_index.Decl {
     return none;
 }
 
-pub fn member(modules: []Module, module_name: []u8, name: []u8) -> MemberLookup {
+pub fn member(modules: const []Module, module_name: const []u8, name: const []u8) -> MemberLookup {
     match (find_module(modules, module_name)) {
         none {
             return MemberLookup { status: MemberStatus.missing_module, declaration: none };

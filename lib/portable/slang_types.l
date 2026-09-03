@@ -71,7 +71,7 @@ struct NameParts {
     rest: []u8,
 }
 
-pub fn parse_module(name: []u8, source: []u8) -> Module {
+pub fn parse_module(name: const []u8, source: const []u8) -> Module {
     return Module {
         name: bytes.clone(name),
         index: slang_index.index(source),
@@ -81,7 +81,7 @@ pub fn parse_module(name: []u8, source: []u8) -> Module {
 
 fn empty_bytes() -> []u8 { return []; }
 
-fn resolved(kind: ResolvedKind, module: []u8, name: []u8, children: []ref ResolvedType,
+fn resolved(kind: ResolvedKind, module: const []u8, name: const []u8, children: []ref ResolvedType,
     parameter_count: u64, source: ref slang_decls.Type) -> ref ResolvedType {
     return new ResolvedType {
         kind: kind,
@@ -94,7 +94,7 @@ fn resolved(kind: ResolvedKind, module: []u8, name: []u8, children: []ref Resolv
     };
 }
 
-fn push_error(out: []Error, kind: ErrorKind, module: Module, declaration: []u8,
+fn push_error(out: []Error, kind: ErrorKind, module: Module, declaration: const []u8,
     type: ref slang_decls.Type, expected: u64, actual: u64) {
     push(out, Error {
         kind: kind,
@@ -108,7 +108,7 @@ fn push_error(out: []Error, kind: ErrorKind, module: Module, declaration: []u8,
     });
 }
 
-fn primitive(name: []u8) -> bool {
+fn primitive(name: const []u8) -> bool {
     return bytes.equal(name, "bool") ||
         bytes.equal(name, "i8") || bytes.equal(name, "i16") ||
         bytes.equal(name, "i32") || bytes.equal(name, "i64") ||
@@ -117,14 +117,14 @@ fn primitive(name: []u8) -> bool {
         bytes.equal(name, "f32") || bytes.equal(name, "f64");
 }
 
-fn generic_exists(generics: []slang_decls.GenericParam, name: []u8) -> bool {
+fn generic_exists(generics: const []slang_decls.GenericParam, name: const []u8) -> bool {
     for (generic in generics) {
         if (bytes.equal(generic.name, name)) { return true; }
     }
     return false;
 }
 
-fn split_name(name: []u8) -> NameParts {
+fn split_name(name: const []u8) -> NameParts {
     match (bytes.find_byte(name, '.', 0)) {
         none {
             return NameParts { qualified: false, first: bytes.clone(name), rest: [] };
@@ -139,21 +139,21 @@ fn split_name(name: []u8) -> NameParts {
     }
 }
 
-fn find_module(modules: []Module, name: []u8) -> ?u64 {
+fn find_module(modules: const []Module, name: const []u8) -> ?u64 {
     for (var i: u64 = 0; i < len(modules); i += 1) {
         if (bytes.equal(modules[i].name, name)) { return some(i); }
     }
     return none;
 }
 
-fn find_decl(module: Module, name: []u8) -> ?slang_decls.Decl {
+fn find_decl(module: Module, name: const []u8) -> ?slang_decls.Decl {
     for (decl in module.declarations.declarations) {
         if (bytes.equal(decl.name, name)) { return some(decl); }
     }
     return none;
 }
 
-fn find_import(module: Module, local: []u8) -> ?slang_index.Import {
+fn find_import(module: Module, local: const []u8) -> ?slang_index.Import {
     for (item in module.index.imports) {
         var bound = slang_project.import_local_name(item);
         if (bytes.equal(bound, local)) { return some(item); }
@@ -165,15 +165,16 @@ fn type_decl(kind: slang_decls.DeclKind) -> bool {
     return kind is slang_decls.DeclKind.structure || kind is slang_decls.DeclKind.enumeration;
 }
 
-fn host_type(host_types: []HostType, module: []u8, name: []u8) -> bool {
+fn host_type(host_types: const []HostType, module: const []u8, name: const []u8) -> bool {
     for (type in host_types) {
         if (bytes.equal(type.module, module) && bytes.equal(type.name, name)) { return true; }
     }
     return false;
 }
 
-fn resolve_children(modules: []Module, module_index: u64, generics: []slang_decls.GenericParam,
-    source: ref slang_decls.Type, host_types: []HostType, declaration: []u8, out: []Error) -> []ref ResolvedType {
+fn resolve_children(modules: const []Module, module_index: u64,
+    generics: const []slang_decls.GenericParam, source: ref slang_decls.Type,
+    host_types: const []HostType, declaration: const []u8, out: []Error) -> []ref ResolvedType {
     var children: []ref ResolvedType = [];
     for (child in source.children) {
         push(children, resolve_one(modules, module_index, generics, child, host_types, declaration, out));
@@ -181,7 +182,7 @@ fn resolve_children(modules: []Module, module_index: u64, generics: []slang_decl
     return children;
 }
 
-fn arity(out: []Error, module: Module, declaration: []u8, source: ref slang_decls.Type,
+fn arity(out: []Error, module: Module, declaration: const []u8, source: ref slang_decls.Type,
     expected: u64) -> bool {
     var actual = len(source.children);
     if (actual != expected) {
@@ -191,9 +192,9 @@ fn arity(out: []Error, module: Module, declaration: []u8, source: ref slang_decl
     return true;
 }
 
-fn resolve_local(modules: []Module, module_index: u64, generics: []slang_decls.GenericParam,
-    source: ref slang_decls.Type, children: []ref ResolvedType, declaration: []u8,
-    out: []Error) -> ref ResolvedType {
+fn resolve_local(modules: const []Module, module_index: u64,
+    generics: const []slang_decls.GenericParam, source: ref slang_decls.Type,
+    children: []ref ResolvedType, declaration: const []u8, out: []Error) -> ref ResolvedType {
     var module = modules[module_index];
 
     if (generic_exists(generics, source.name)) {
@@ -221,9 +222,9 @@ fn resolve_local(modules: []Module, module_index: u64, generics: []slang_decls.G
     }
 }
 
-fn resolve_qualified(modules: []Module, module_index: u64, source: ref slang_decls.Type,
-    parts: NameParts, children: []ref ResolvedType, host_types: []HostType,
-    declaration: []u8, out: []Error) -> ref ResolvedType {
+fn resolve_qualified(modules: const []Module, module_index: u64, source: ref slang_decls.Type,
+    parts: NameParts, children: []ref ResolvedType, host_types: const []HostType,
+    declaration: const []u8, out: []Error) -> ref ResolvedType {
     var module = modules[module_index];
     match (find_import(module, parts.first)) {
         none {
@@ -266,9 +267,9 @@ fn resolve_qualified(modules: []Module, module_index: u64, source: ref slang_dec
     }
 }
 
-fn resolve_one(modules: []Module, module_index: u64, generics: []slang_decls.GenericParam,
-    source: ref slang_decls.Type, host_types: []HostType, declaration: []u8,
-    out: []Error) -> ref ResolvedType {
+fn resolve_one(modules: const []Module, module_index: u64,
+    generics: const []slang_decls.GenericParam, source: ref slang_decls.Type,
+    host_types: const []HostType, declaration: const []u8, out: []Error) -> ref ResolvedType {
     var children = resolve_children(modules, module_index, generics, source, host_types, declaration, out);
 
     if (source.kind is slang_decls.TypeKind.unit) {
@@ -297,8 +298,9 @@ fn resolve_one(modules: []Module, module_index: u64, generics: []slang_decls.Gen
     return resolve_qualified(modules, module_index, source, parts, children, host_types, declaration, out);
 }
 
-pub fn resolve(modules: []Module, module_index: u64, generics: []slang_decls.GenericParam,
-    source: ref slang_decls.Type, host_types: []HostType, declaration: []u8) -> ResolveResult {
+pub fn resolve(modules: const []Module, module_index: u64,
+    generics: const []slang_decls.GenericParam, source: ref slang_decls.Type,
+    host_types: const []HostType, declaration: const []u8) -> ResolveResult {
     var errors: []Error = [];
     var type = resolve_one(modules, module_index, generics, source, host_types, declaration, errors);
     return ResolveResult { type: type, errors: errors };
@@ -322,8 +324,8 @@ fn duplicate_generics(module: Module, declaration: slang_decls.Decl, out: []Erro
     }
 }
 
-fn validate_decl(modules: []Module, module_index: u64, declaration: slang_decls.Decl,
-    host_types: []HostType, out: []Error) {
+fn validate_decl(modules: const []Module, module_index: u64, declaration: slang_decls.Decl,
+    host_types: const []HostType, out: []Error) {
     var module = modules[module_index];
     duplicate_generics(module, declaration, out);
 
@@ -348,7 +350,7 @@ fn validate_decl(modules: []Module, module_index: u64, declaration: slang_decls.
     }
 }
 
-pub fn validate(modules: []Module, host_types: []HostType) -> []Error {
+pub fn validate(modules: const []Module, host_types: const []HostType) -> []Error {
     var out: []Error = [];
     for (var i: u64 = 0; i < len(modules); i += 1) {
         if (len(modules[i].index.errors) > 0 || len(modules[i].declarations.errors) > 0) {

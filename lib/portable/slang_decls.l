@@ -1034,7 +1034,7 @@ fn parse_function(parser: ref Parser, exported: bool, start: u64) -> Decl {
     return decl;
 }
 
-pub fn parse(text: []u8) -> Module {
+pub fn parse(text: const []u8) -> Module {
     var errors = slang_syntax.errors(text);
     if (len(errors) > 0) { return Module { declarations: [], errors: errors }; }
 

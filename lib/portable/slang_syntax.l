@@ -44,7 +44,7 @@ fn push_token(out: []Token, kind: Kind, text: []u8, start: u64, end: u64) {
     push(out, Token { kind: kind, text: text, start: start, end: end });
 }
 
-fn number_end(text: []u8, start: u64) -> u64 {
+fn number_end(text: const []u8, start: u64) -> u64 {
     var i = start;
     if (i + 2 <= len(text) && text[i] == '0' && i + 1 < len(text) && (text[i + 1] == 'x' || text[i + 1] == 'X')) {
         i += 2;
@@ -72,7 +72,7 @@ fn number_end(text: []u8, start: u64) -> u64 {
     return i;
 }
 
-fn quoted_end(text: []u8, start: u64, quote: u8) -> u64 {
+fn quoted_end(text: const []u8, start: u64, quote: u8) -> u64 {
     var i = start + 1;
     while (i < len(text) && text[i] != '\n') {
         if (text[i] == '\\') {
@@ -87,7 +87,7 @@ fn quoted_end(text: []u8, start: u64, quote: u8) -> u64 {
     return i;
 }
 
-pub fn scan(text: []u8) -> []Token {
+pub fn scan(text: const []u8) -> []Token {
     var out: []Token = [];
     var i: u64 = 0;
     while (i < len(text)) {
@@ -145,7 +145,7 @@ fn skip_comments(p: ref Parser) {
     while (p.pos < len(p.tokens) && p.tokens[p.pos].kind is Kind.comment) { p.pos += 1; }
 }
 fn current(p: ref Parser) -> Token { skip_comments(p); return p.tokens[p.pos]; }
-fn at(p: ref Parser, text: []u8) -> bool { return bytes.equal(current(p).text, text); }
+fn at(p: ref Parser, text: const []u8) -> bool { return bytes.equal(current(p).text, text); }
 fn at_kind(p: ref Parser, kind: Kind) -> bool { return current(p).kind == kind; }
 fn eof(p: ref Parser) -> bool { return at_kind(p, Kind.eof); }
 fn advance(p: ref Parser) -> Token {
@@ -153,10 +153,10 @@ fn advance(p: ref Parser) -> Token {
     if (!(token.kind is Kind.eof)) { p.pos += 1; skip_comments(p); }
     return token;
 }
-fn report(p: ref Parser, token: Token, message: []u8) {
+fn report(p: ref Parser, token: Token, message: const []u8) {
     push(p.errors, Error { start: token.start, end: token.end, message: bytes.clone(message) });
 }
-fn need(p: ref Parser, text: []u8) -> bool {
+fn need(p: ref Parser, text: const []u8) -> bool {
     if (at(p, text)) { advance(p); return true; }
     var token = current(p); report(p, token, "expected token");
     if (!eof(p)) { advance(p); }
@@ -234,7 +234,7 @@ fn parse_params(p: ref Parser) {
     need(p, ")");
 }
 
-fn precedence(token: []u8) -> u64 {
+fn precedence(token: const []u8) -> u64 {
     if (bytes.equal(token, "||")) { return 1; }
     if (bytes.equal(token, "&&")) { return 2; }
     if (bytes.equal(token, "==") || bytes.equal(token, "!=") || bytes.equal(token, "<") || bytes.equal(token, "<=") || bytes.equal(token, ">") || bytes.equal(token, ">=") || bytes.equal(token, "is")) { return 3; }
@@ -353,7 +353,7 @@ fn parse_expr(p: ref Parser, min_prec: u64) {
     }
 }
 
-fn assignment_op(text: []u8) -> bool {
+fn assignment_op(text: const []u8) -> bool {
     return bytes.equal(text, "=") || bytes.equal(text, "+=") || bytes.equal(text, "-=") || bytes.equal(text, "*=") ||
         bytes.equal(text, "/=") || bytes.equal(text, "%=") || bytes.equal(text, "<<=") || bytes.equal(text, ">>=") ||
         bytes.equal(text, "&=") || bytes.equal(text, "|=") || bytes.equal(text, "^=");
@@ -477,7 +477,7 @@ fn parse_decl(p: ref Parser) {
     var token = current(p); report(p, token, "expected declaration"); if (!eof(p)) { advance(p); }
 }
 
-pub fn errors(text: []u8) -> []Error {
+pub fn errors(text: const []u8) -> []Error {
     var p = new Parser { tokens: scan(text), pos: 0, errors: [] };
     while (!eof(p)) {
         var before = p.pos;
