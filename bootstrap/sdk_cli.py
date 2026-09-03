@@ -15,6 +15,7 @@ if _impl.IS_LINUX:
 
     _impl.HOST_MODULES |= {
         ("linux", "process", "group"),
+        ("linux", "process", "child"),
         ("linux", "process", "wait"),
         ("linux", "tty"),
     }
