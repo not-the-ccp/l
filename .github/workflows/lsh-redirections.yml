@@ -5,6 +5,7 @@ on:
     branches: [feature/lsh-redirection-syntax]
     paths:
       - '.github/apply_lsh_redirections.py'
+      - '.github/fix_lsh_redirections_transform.py'
       - '.github/workflows/lsh-redirections.yml'
 
 permissions:
@@ -21,6 +22,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Correct staged transform
+        run: python3 .github/fix_lsh_redirections_transform.py
 
       - name: Apply redirection syntax and execution
         run: python3 .github/apply_lsh_redirections.py
@@ -39,7 +43,7 @@ jobs:
       - name: Commit tested implementation
         shell: bash
         run: |
-          rm .github/apply_lsh_redirections.py .github/workflows/lsh-redirections.yml
+          rm .github/apply_lsh_redirections.py .github/fix_lsh_redirections_transform.py .github/workflows/lsh-redirections.yml
           git config user.name 'not-the-ccp'
           git config user.email '315506978+not-the-ccp@users.noreply.github.com'
           git add -A
