@@ -2,6 +2,7 @@ import bytes;
 import slang_decls;
 import slang_names;
 import slang_types;
+import strconv;
 
 // First executable semantic-checking layer for the self-hosting frontend.
 //
@@ -37,6 +38,7 @@ pub enum ErrorKind {
     generic_inference,
     duplicate_pattern,
     non_exhaustive_match,
+    literal_range,
 }
 
 pub struct Error {
@@ -265,6 +267,50 @@ fn integer(type: ref slang_types.ResolvedType) -> bool {
         bytes.equal(type.name, "i32") || bytes.equal(type.name, "i64") ||
         bytes.equal(type.name, "u8") || bytes.equal(type.name, "u16") ||
         bytes.equal(type.name, "u32") || bytes.equal(type.name, "u64");
+}
+
+fn integer_width(type: ref slang_types.ResolvedType) -> u64 {
+    if (is_primitive(type, "i8") || is_primitive(type, "u8")) { return 8; }
+    if (is_primitive(type, "i16") || is_primitive(type, "u16")) { return 16; }
+    if (is_primitive(type, "i32") || is_primitive(type, "u32")) { return 32; }
+    if (is_primitive(type, "i64") || is_primitive(type, "u64")) { return 64; }
+    return 0;
+}
+
+fn signed_integer(type: ref slang_types.ResolvedType) -> bool {
+    return is_primitive(type, "i8") || is_primitive(type, "i16") ||
+        is_primitive(type, "i32") || is_primitive(type, "i64");
+}
+
+fn positive_integer_limit(type: ref slang_types.ResolvedType) -> u64 {
+    var width = integer_width(type);
+    if (signed_integer(type)) {
+        if (width == 64) { return 9223372036854775807; }
+        return ((1 as u64) << (width - 1)) - 1;
+    }
+    if (width == 64) { return 18446744073709551615; }
+    return ((1 as u64) << width) - 1;
+}
+
+fn negative_integer_magnitude_limit(type: ref slang_types.ResolvedType) -> u64 {
+    var width = integer_width(type);
+    if (width == 64) { return 9223372036854775808; }
+    return (1 as u64) << (width - 1);
+}
+
+fn positive_literal_fits(text: []u8, type: ref slang_types.ResolvedType) -> bool {
+    match (strconv.parse_u64_literal(text)) {
+        none { return false; }
+        some(value) { return value <= positive_integer_limit(type); }
+    }
+}
+
+fn negative_literal_fits(text: []u8, type: ref slang_types.ResolvedType) -> bool {
+    if (!signed_integer(type)) { return false; }
+    match (strconv.parse_u64_literal(text)) {
+        none { return false; }
+        some(value) { return value <= negative_integer_magnitude_limit(type); }
+    }
 }
 
 fn floating(type: ref slang_types.ResolvedType) -> bool {
@@ -874,6 +920,9 @@ fn expr_type(checker: ref Checker, expr: ref slang_decls.Expr,
     } else if (expr.kind is slang_decls.ExprKind.integer) {
         type = primitive_type("i64");
         match (expected) { none { } some(want) { if (integer(want)) { type = want; } } }
+        if (!positive_literal_fits(expr.text, type)) {
+            push_error(checker, ErrorKind.literal_range, expr.text, expr.start, expr.end);
+        }
     } else if (expr.kind is slang_decls.ExprKind.float) {
         type = primitive_type("f64");
         match (expected) { none { } some(want) { if (floating(want)) { type = want; } } }
@@ -925,7 +974,24 @@ fn expr_type(checker: ref Checker, expr: ref slang_decls.Expr,
         type = array_type(elem);
     } else if (expr.kind is slang_decls.ExprKind.unary) {
         var child_expected = expected;
-        var child = expr_type(checker, expr.children[0], child_expected);
+        var child = invalid_type();
+        var handled_signed_min = false;
+        if (bytes.equal(expr.op, "-") && expr.children[0].kind is slang_decls.ExprKind.integer) {
+            match (expected) {
+                none { }
+                some(want) {
+                    if (signed_integer(want)) {
+                        if (!negative_literal_fits(expr.children[0].text, want)) {
+                            push_error(checker, ErrorKind.literal_range, expr.children[0].text,
+                                expr.start, expr.end);
+                        }
+                        child = record_expr(checker, expr.children[0], want);
+                        handled_signed_min = true;
+                    }
+                }
+            }
+        }
+        if (!handled_signed_min) { child = expr_type(checker, expr.children[0], child_expected); }
         if (bytes.equal(expr.op, "!")) {
             if (!is_primitive(child, "bool")) { push_error(checker, ErrorKind.boolean_required, expr.op, expr.start, expr.end); }
         } else if (bytes.equal(expr.op, "~")) {
