@@ -4,6 +4,7 @@ HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PYTHON=${PYTHON:-python3}
 "$HERE/build.sh" tools
 "$HERE/tests/build_atomicity.sh"
+"$PYTHON" "$HERE/tests/native_embed.py"
 "$PYTHON" "$HERE/conformance/core_conformance.py"
 "$PYTHON" "$HERE/tests/const_arrays.py"
 "$HERE/lr" "$HERE/tests/utf8_portable.l" >/dev/null
