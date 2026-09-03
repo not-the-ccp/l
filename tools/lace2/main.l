@@ -294,18 +294,58 @@ fn do_motion(ui: ref Ui, key: []u8, count: u64) -> bool {
     return false;
 }
 
-fn operator_command(ui: ref Ui, op: u8) {
+fn counted_motion_span(editor: ref model.Editor, motion: u8, count: u64) -> ?model.Span {
+    var wanted = count;
+    if (wanted == 0) { wanted = 1; }
+    var start = model.cursor(editor);
+    var target = start;
+    var cursor = start;
+    var n: u64 = 0;
+
+    if (motion == 'w') {
+        while (n < wanted) { target = nav.word_forward(editor.doc, target); n += 1; }
+    } else if (motion == 'b') {
+        while (n < wanted) { target = nav.word_backward(editor.doc, target); n += 1; }
+    } else if (motion == 'e') {
+        var length = text.byte_len(editor.doc);
+        while (n < wanted) {
+            target = nav.word_end(editor.doc, cursor);
+            if (target < length) { target = nav.next_atom(editor.doc, target); }
+            cursor = target;
+            n += 1;
+        }
+    } else if (motion == '$') {
+        while (n < wanted) {
+            target = nav.line_end(editor.doc, cursor);
+            n += 1;
+            if (n < wanted) {
+                var next = nav.next_line_start(editor.doc, target);
+                match (next) { none { break; } some(value) { cursor = value; } }
+            }
+        }
+    } else {
+        return model.motion_span(editor, motion);
+    }
+
+    if (target < start) { return some(model.Span { start: target, end: start }); }
+    return some(model.Span { start: start, end: target });
+}
+
+fn operator_command(ui: ref Ui, op: u8, outer_count: u64) {
     var second_opt = term.read_key();
     match (second_opt) {
         none { return; }
         some(second) {
+            var parsed = read_count(second);
+            if (len(parsed.key) == 0) { return; }
+            var total = outer_count * parsed.count;
             var span_opt: ?model.Span = none;
             var is_linewise = false;
-            if (key_is(second, op)) {
-                span_opt = some(model.current_line_span(ui.editor));
+            if (key_is(parsed.key, op)) {
+                span_opt = some(linewise.span(ui.editor, total));
                 is_linewise = true;
-            } else if (len(second) == 1) {
-                span_opt = model.motion_span(ui.editor, second[0]);
+            } else if (len(parsed.key) == 1) {
+                span_opt = counted_motion_span(ui.editor, parsed.key[0], total);
             }
             match (span_opt) {
                 none { return; }
@@ -315,7 +355,7 @@ fn operator_command(ui: ref Ui, op: u8) {
                         model.set_cursor(ui.editor, span.start);
                         set_message(ui, "yanked");
                     } else if (op == 'c' && is_linewise) {
-                        linewise.change_current_line(ui.editor);
+                        linewise.change_lines(ui.editor, total);
                     } else if (op == 'c') {
                         model.delete_span(ui.editor, span, false, true);
                     } else {
@@ -543,7 +583,7 @@ fn normal_command(ui: ref Ui, first: []u8) {
         else { model.enter_insert(ui.editor, pos); }
         return;
     }
-    if (key_is(key, 'S')) { linewise.change_current_line(ui.editor); return; }
+    if (key_is(key, 'S')) { linewise.change_lines(ui.editor, count); return; }
     if (key_is(key, 'X')) {
         var pos = model.cursor(ui.editor);
         var start = pos;
@@ -559,9 +599,9 @@ fn normal_command(ui: ref Ui, first: []u8) {
         else if (key_is(key, 'C')) { model.enter_insert(ui.editor, pos); }
         return;
     }
-    if (key_is(key, 'd') || key_is(key, 'y') || key_is(key, 'c')) { operator_command(ui, key[0]); return; }
+    if (key_is(key, 'd') || key_is(key, 'y') || key_is(key, 'c')) { operator_command(ui, key[0], count); return; }
     if (key_is(key, 'Y')) {
-        var span = model.current_line_span(ui.editor);
+        var span = linewise.span(ui.editor, count);
         model.yank_span(ui.editor, span, true);
         set_message(ui, "yanked line");
         return;
