@@ -28,36 +28,25 @@ jobs:
 
           p = Path('tests/lace_operator_pty.py')
           s = p.read_text()
-          needle = 'case(root, "visual-gg.txt", b"aa\\nbb\\ncc\\n", b"jvggd", b"a\\ncc\\n")'
-          replacement = 'case(root, "visual-gg.txt", b"aa\\nbb\\ncc\\n", b"jvggd", b"b\\ncc\\n")'
-          if s.count(needle) != 1:
+          old = 'case(root, "visual-gg.txt", b"aa\\nbb\\ncc\\n", b"jvggd", b"a\\ncc\\n")'
+          new = 'case(root, "visual-gg.txt", b"aa\\nbb\\ncc\\n", b"jvggd", b"b\\ncc\\n")'
+          if s.count(old) != 1:
               raise SystemExit('visual gg expectation changed')
-          p.write_text(s.replace(needle, replacement, 1))
+          p.write_text(s.replace(old, new, 1))
 
           p = Path('tests/lace2_pty.py')
           s = p.read_text()
-          old = '''        # `G` is Lace's document-end motion. A terminating newline must not
-          # make it target the non-character EOF insertion boundary.
-          document_end = root / "document-end.txt"
-          document_end.write_bytes(b"one\\ntwo\\n")
-          edit(document_end, b"Gx:wq\\r")
-          assert document_end.read_bytes() == b"one\\ntw\\n", document_end.read_bytes()
-'''
-          new = '''        # Vim-compatible `G` targets first-nonblank on the final real line.
-          # A terminating newline must not create a phantom line below it.
-          document_end = root / "document-end.txt"
-          document_end.write_bytes(b"one\\ntwo\\n")
-          edit(document_end, b"Gx:wq\\r")
-          assert document_end.read_bytes() == b"one\\nwo\\n", document_end.read_bytes()
-'''
-          if s.count(old) != 1:
-              raise SystemExit('legacy G expectation changed')
-          s = s.replace(old, new, 1)
-          old_help = 'full_help = b"i/a/o edit \\xc2\\xb7 hjkl/arrows/wbe move \\xc2\\xb7 d/y/c ops \\xc2\\xb7 v/V select \\xc2\\xb7 / search \\xc2\\xb7 :w :q \\xc2\\xb7 ^VxFF raw byte"'
-          new_help = 'full_help = b"i/a/o edit \\xc2\\xb7 hjkl/arrows/wbe/G/gg move \\xc2\\xb7 d/y/c ops \\xc2\\xb7 v/V select \\xc2\\xb7 / search \\xc2\\xb7 :w :q \\xc2\\xb7 ^VxFF raw byte"'
-          if s.count(old_help) != 1:
-              raise SystemExit('help expectation changed')
-          p.write_text(s.replace(old_help, new_help, 1))
+          replacements = [
+              ("        # `G` is Lace's document-end motion. A terminating newline must not", "        # Vim-compatible `G` targets first-nonblank on the final real line."),
+              ("        # make it target the non-character EOF insertion boundary.", "        # A terminating newline must not create a phantom line below it."),
+              ('        assert document_end.read_bytes() == b"one\\ntw\\n", document_end.read_bytes()', '        assert document_end.read_bytes() == b"one\\nwo\\n", document_end.read_bytes()'),
+              ('full_help = b"i/a/o edit \\xc2\\xb7 hjkl/arrows/wbe move \\xc2\\xb7 d/y/c ops \\xc2\\xb7 v/V select \\xc2\\xb7 / search \\xc2\\xb7 :w :q \\xc2\\xb7 ^VxFF raw byte"', 'full_help = b"i/a/o edit \\xc2\\xb7 hjkl/arrows/wbe/G/gg move \\xc2\\xb7 d/y/c ops \\xc2\\xb7 v/V select \\xc2\\xb7 / search \\xc2\\xb7 :w :q \\xc2\\xb7 ^VxFF raw byte"'),
+          ]
+          for old, new in replacements:
+              if s.count(old) != 1:
+                  raise SystemExit(f'compatibility expectation changed: {old}')
+              s = s.replace(old, new, 1)
+          p.write_text(s)
           PY
       - name: Build editor
         run: ./build.sh tools
