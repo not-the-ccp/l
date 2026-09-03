@@ -35,4 +35,19 @@ fn main() {
     expect(nav.word_backward(words, 12) == 8);
     expect(nav.word_end(words, 0) == 4);
     expect(nav.word_end(words, 5) == 6);
+
+    // A terminating newline closes the final logical line. EOF after it must
+    // not become another navigable line.
+    var ended = text.from_bytes("one\ntwo\n");
+    var length = text.byte_len(ended);
+    expect(nav.line_start(ended, length) == 4);
+    expect(nav.cursor_end(ended, length) == 6);
+    var after_last = nav.next_line_start(ended, 4);
+    match (after_last) { none { } some(_) { trap; } }
+
+    // Consecutive terminating newlines still represent real empty lines; only
+    // the insertion boundary after the final terminator is non-navigable.
+    var blanks = text.from_bytes("\n\n");
+    expect(nav.line_start(blanks, text.byte_len(blanks)) == 1);
+    expect(nav.cursor_end(blanks, text.byte_len(blanks)) == 1);
 }
