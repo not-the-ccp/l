@@ -90,3 +90,21 @@ jobs:
         run: |
           ./lc analyze examples/core/linked_list.l --view cfg --format dot -o /tmp/linked-list.dot
           test -s /tmp/linked-list.dot
+      - name: Analyze dogfooded binding mutation
+        run: |
+          ./lc analyze tools/lace2/main.l --root . --include-stdlib --view model -o /tmp/lace-analysis.json
+          ./lc analyze tools/shell/main.l --root . --include-stdlib --view model -o /tmp/shell-analysis.json
+          ./lc analyze tools/check/lcheck.l --root . --include-stdlib --view model -o /tmp/check-analysis.json
+          python - <<'PY'
+          import json
+
+          for name in ('lace', 'shell', 'check'):
+              with open(f'/tmp/{name}-analysis.json', encoding='utf-8') as f:
+                  summary = json.load(f)['summary']
+              total = summary['local_bindings']
+              rebound = summary['rebound_local_bindings']
+              assert total > 0
+              assert 0 <= rebound <= total
+              pct = 100.0 * rebound / total
+              print(f'{name}: {rebound}/{total} explicit local bindings rebound ({pct:.1f}%)')
+          PY
