@@ -14,6 +14,25 @@ PYTHON=${PYTHON:-python3}
 "$HERE/lr" "$HERE/examples/portable/bytes_demo.l" >/dev/null
 "$HERE/lr" "$HERE/examples/portable/const_readers_demo.l" >/dev/null
 
+# Linux hosted-profile parity. Exercise the exact same L program once through
+# the Python reference host and once through the generated native runtime.
+# The probe covers owned/duplicated FDs, partial I/O + EOF, synchronous exec
+# failure, explicit stdio wiring, process groups, pidfd-backed waits when
+# available, and a real three-process byte-stream pipeline.
+if [ "$(uname -s)" = Linux ]; then
+  linux_ref=$("$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_process_probe.l")
+  test "$linux_ref" = '3'
+
+  linux_bin=$(mktemp)
+  rm -f "$linux_bin"
+  trap 'rm -f "$linux_bin"' EXIT HUP INT TERM
+  "$HERE/lc" "$HERE/examples/hosted/linux_process_probe.l" -o "$linux_bin" >/dev/null
+  linux_native=$("$linux_bin")
+  test "$linux_native" = '3'
+  rm -f "$linux_bin"
+  trap - EXIT HUP INT TERM
+fi
+
 # Self-hosting frontend slices run as native executables. Check syntax,
 # top-level identity, full body-AST traversal on small and substantial real
 # programs, and semantic checking of a real Core program.
