@@ -96,7 +96,7 @@ rm -f "$bad"
 trap - EXIT HUP INT TERM
 
 "$PYTHON" "$HERE/tests/selfhost_checker_diff.py"
-for t in term_key_events.py code_analysis.py incremental_lsp.py editor_safety.py highlight_stability.py editor_usability.py editor_display.py editor_pty.py lace2_pty.py; do
+for t in term_key_events.py code_analysis.py incremental_lsp.py editor_safety.py highlight_stability.py editor_usability.py editor_display.py editor_pty.py lace2_pty.py shell_pty.py; do
   "$PYTHON" "$HERE/tests/$t"
 done
 echo 'L repository test suite PASS'
