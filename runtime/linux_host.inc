@@ -1,14 +1,40 @@
 /* Linux-only hosted profile used by native L executables.
  *
- * This file is included by native_vm.c after its common runtime helpers are
- * available. Opaque values are tracked until VM teardown so aliases remain
- * valid handles rather than dangling C pointers.
+ * Native host IDs 25..39 are reserved by bootstrap/native_compile.py. Keeping
+ * their implementation here avoids teaching the portable VM representation
+ * about Linux descriptor/process internals. The native runtime already permits
+ * only one active LVM per process (g_vm); this profile follows the same model
+ * and owns opaque handles until lvm_run teardown so copied L values cannot
+ * dangle.
  */
 #ifdef __linux__
+
+#include <sys/syscall.h>
+/* syscall() can be hidden by feature-test macros even though the symbol is
+ * supplied by libc. Keep the declaration local to this Linux-only profile. */
+extern long syscall(long number, ...);
 
 #ifndef P_PIDFD
 #define P_PIDFD 3
 #endif
+
+enum {
+    H_LINUX_FD_STDIN = 25,
+    H_LINUX_FD_STDOUT,
+    H_LINUX_FD_STDERR,
+    H_LINUX_FD_DUP,
+    H_LINUX_FD_PIPE,
+    H_LINUX_FD_CLOSE,
+    H_LINUX_FD_READ,
+    H_LINUX_FD_WRITE,
+    H_LINUX_PROCESS_SPAWN_EXACT,
+    H_LINUX_PROCESS_SPAWN_CHILD,
+    H_LINUX_PROCESS_SPAWN_ERROR,
+    H_LINUX_PROCESS_GROUP,
+    H_LINUX_PROCESS_WAIT_EXIT,
+    H_LINUX_PROCESS_EXIT_CODE,
+    H_LINUX_PROCESS_TERM_SIGNAL,
+};
 
 enum {
     LX_FD = 1,
@@ -18,9 +44,10 @@ enum {
     LX_EXIT_STATUS,
 };
 
+typedef struct LinuxOpaque LinuxOpaque;
 struct LinuxOpaque {
     int kind;
-    struct LinuxOpaque *next;
+    LinuxOpaque *next;
     union {
         struct {
             int fd;
@@ -36,7 +63,7 @@ struct LinuxOpaque {
             pid_t pgid;
         } group;
         struct {
-            struct LinuxOpaque *child;
+            LinuxOpaque *child;
             int has_error;
             int error_number;
         } spawn;
@@ -47,12 +74,15 @@ struct LinuxOpaque {
     } u;
 };
 
+static LinuxOpaque *g_linux_opaques = NULL;
+
 static LinuxOpaque *linux_new(LVM *vm, int kind) {
+    (void)vm;
     LinuxOpaque *o = calloc(1, sizeof(*o));
     if (!o) die("out of memory");
     o->kind = kind;
-    o->next = vm->linux_opaques;
-    vm->linux_opaques = o;
+    o->next = g_linux_opaques;
+    g_linux_opaques = o;
     return o;
 }
 
@@ -138,12 +168,13 @@ static void linux_child_report_errno(int fd, int number) {
 }
 
 static void linux_child_close_inherited(LVM *vm, int keep_fd) {
-    for (LinuxOpaque *o = vm->linux_opaques; o; o = o->next) {
+    (void)vm;
+    for (LinuxOpaque *o = g_linux_opaques; o; o = o->next) {
         if (o->kind != LX_FD || o->u.fd.closed) continue;
         int fd = o->u.fd.fd;
         if (fd > 2 && fd != keep_fd) (void)close(fd);
     }
-    for (Proc *p = vm->procs; p; p = p->next) {
+    for (Proc *p = g_vm ? g_vm->procs : NULL; p; p = p->next) {
         if (p->in_fd > 2 && p->in_fd != keep_fd) (void)close(p->in_fd);
         if (p->out_fd > 2 && p->out_fd != keep_fd) (void)close(p->out_fd);
     }
@@ -447,7 +478,8 @@ static LValue linux_host_call(LVM *vm, int id, LValue *args, int n) {
 }
 
 static void linux_host_cleanup(LVM *vm) {
-    for (LinuxOpaque *o = vm->linux_opaques; o; o = o->next) {
+    (void)vm;
+    for (LinuxOpaque *o = g_linux_opaques; o; o = o->next) {
         if (o->kind == LX_FD && !o->u.fd.closed) {
             (void)close(o->u.fd.fd);
             o->u.fd.closed = 1;
@@ -466,21 +498,28 @@ static void linux_host_cleanup(LVM *vm) {
             o->u.child.waited = 1;
         }
     }
-    while (vm->linux_opaques) {
-        LinuxOpaque *next = vm->linux_opaques->next;
-        free(vm->linux_opaques);
-        vm->linux_opaques = next;
+    while (g_linux_opaques) {
+        LinuxOpaque *next = g_linux_opaques->next;
+        free(g_linux_opaques);
+        g_linux_opaques = next;
     }
 }
 
 #else
 
+/* Keep native_vm.c's dispatch hook linkable on non-Linux builds. */
+static int linux_host_id(int id) { (void)id; return 0; }
 static LValue linux_host_call(LVM *vm, int id, LValue *args, int n) {
     (void)vm; (void)id; (void)args; (void)n;
     die("Linux host profile is unavailable on this platform");
     return v_unit();
 }
-
 static void linux_host_cleanup(LVM *vm) { (void)vm; }
 
+#endif
+
+#ifdef __linux__
+static int linux_host_id(int id) {
+    return id >= H_LINUX_FD_STDIN && id <= H_LINUX_PROCESS_TERM_SIGNAL;
+}
 #endif
