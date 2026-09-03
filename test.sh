@@ -50,12 +50,18 @@ if [ "$(uname -s)" = Linux ]; then
   "$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_job_control_probe.l"
   "$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_signal_disposition_probe.l"
 
+  fd_path=$(mktemp)
+  rm -f "$fd_path"
+  "$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_fd_file_probe.l" "$fd_path"
+  rm -f "$fd_path"
+
   linux_bin=$(mktemp)
   context_bin=$(mktemp)
   job_bin=$(mktemp)
   signal_bin=$(mktemp)
-  rm -f "$linux_bin" "$context_bin" "$job_bin" "$signal_bin"
-  trap 'rm -f "$linux_bin" "$context_bin" "$job_bin" "$signal_bin"' EXIT HUP INT TERM
+  fd_bin=$(mktemp)
+  rm -f "$linux_bin" "$context_bin" "$job_bin" "$signal_bin" "$fd_bin"
+  trap 'rm -f "$linux_bin" "$context_bin" "$job_bin" "$signal_bin" "$fd_bin" "${fd_path:-}"' EXIT HUP INT TERM
   "$HERE/lc" "$HERE/examples/hosted/linux_process_probe.l" -o "$linux_bin" >/dev/null
   linux_native=$("$linux_bin")
   test "$linux_native" = '3'
@@ -65,7 +71,10 @@ if [ "$(uname -s)" = Linux ]; then
   "$job_bin"
   "$HERE/lc" "$HERE/examples/hosted/linux_signal_disposition_probe.l" -o "$signal_bin" >/dev/null
   "$signal_bin"
-  rm -f "$linux_bin" "$context_bin" "$job_bin" "$signal_bin"
+  "$HERE/lc" "$HERE/examples/hosted/linux_fd_file_probe.l" -o "$fd_bin" >/dev/null
+  "$fd_bin" "$fd_path"
+  rm -f "$fd_path"
+  rm -f "$linux_bin" "$context_bin" "$job_bin" "$signal_bin" "$fd_bin"
   trap - EXIT HUP INT TERM
 fi
 

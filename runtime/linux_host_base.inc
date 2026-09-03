@@ -53,11 +53,20 @@ enum {
 };
 
 enum {
+    H_LINUX_FD_OPEN_READ = 76,
+    H_LINUX_FD_CREATE_TRUNCATE,
+    H_LINUX_FD_CREATE_APPEND,
+    H_LINUX_FD_OPEN_FD,
+    H_LINUX_FD_OPEN_ERROR,
+};
+
+enum {
     LX_FD = 1,
     LX_CHILD,
     LX_GROUP,
     LX_SPAWN_RESULT,
     LX_EXIT_STATUS,
+    LX_OPEN_RESULT,
 };
 
 typedef struct LinuxOpaque LinuxOpaque;
@@ -87,6 +96,11 @@ struct LinuxOpaque {
             int exited;
             int code;
         } status;
+        struct {
+            LinuxOpaque *fd;
+            int has_error;
+            int error_number;
+        } open_result;
     } u;
 };
 
@@ -165,6 +179,28 @@ static int linux_bytes_has_byte(LValue v, unsigned char needle) {
     for (size_t i = 0; i < a->u.array.len; i++)
         if ((unsigned char)(a->u.array.items[i].as.u & 255) == needle) return 1;
     return 0;
+}
+
+static LValue linux_open_result(LVM *vm, int fd, int error_number) {
+    LinuxOpaque *result = linux_new(vm, LX_OPEN_RESULT);
+    if (fd >= 0) {
+        result->u.open_result.fd = linux_own_fd(vm, fd);
+    } else {
+        result->u.open_result.has_error = 1;
+        result->u.open_result.error_number = error_number;
+    }
+    return v_opaque(result);
+}
+
+static LValue linux_open_path(LVM *vm, LValue path_value, int flags) {
+    if (linux_bytes_has_nul(path_value)) return linux_open_result(vm, -1, EINVAL);
+    char *path = array_cstr(path_value);
+    errno = 0;
+    int fd = open(path, flags | O_CLOEXEC, 0666);
+    int e = errno;
+    free(path);
+    if (fd < 0) return linux_open_result(vm, -1, e ? e : EIO);
+    return linux_open_result(vm, fd, 0);
 }
 
 static void linux_free_argv(char **av, size_t n) {
@@ -419,6 +455,27 @@ static LValue linux_host_call(LVM *vm, int id, LValue *args, int n) {
         out->u.array.items[0] = v_opaque(linux_own_fd(vm, ends[0]));
         out->u.array.items[1] = v_opaque(linux_own_fd(vm, ends[1]));
         return v_obj(out);
+    }
+    case H_LINUX_FD_OPEN_READ:
+    case H_LINUX_FD_CREATE_TRUNCATE:
+    case H_LINUX_FD_CREATE_APPEND: {
+        if (n != 1) die("linux.fd file-open arity");
+        int flags = id == H_LINUX_FD_OPEN_READ ? O_RDONLY
+            : id == H_LINUX_FD_CREATE_TRUNCATE ? (O_WRONLY | O_CREAT | O_TRUNC)
+            : (O_WRONLY | O_CREAT | O_APPEND);
+        return linux_open_path(vm, args[0], flags);
+    }
+    case H_LINUX_FD_OPEN_FD: {
+        if (n != 1) die("linux.fd.open_fd arity");
+        LinuxOpaque *result = linux_as(args[0], LX_OPEN_RESULT, "linux.fd.OpenResult");
+        if (!result->u.open_result.fd) return v_none();
+        return linux_some(vm, v_opaque(result->u.open_result.fd));
+    }
+    case H_LINUX_FD_OPEN_ERROR: {
+        if (n != 1) die("linux.fd.open_error arity");
+        LinuxOpaque *result = linux_as(args[0], LX_OPEN_RESULT, "linux.fd.OpenResult");
+        if (!result->u.open_result.has_error) return v_none();
+        return linux_some(vm, v_int((uint64_t)(int64_t)result->u.open_result.error_number));
     }
     case H_LINUX_FD_CLOSE: {
         if (n != 1) die("linux.fd.close arity");
@@ -726,6 +783,7 @@ static void linux_host_cleanup(LVM *vm) { (void)vm; }
 
 #ifdef __linux__
 static int linux_host_id(int id) {
-    return id >= H_LINUX_FD_STDIN && id <= H_LINUX_ENV_UNSET;
+    return (id >= H_LINUX_FD_STDIN && id <= H_LINUX_ENV_UNSET) ||
+        (id >= H_LINUX_FD_OPEN_READ && id <= H_LINUX_FD_OPEN_ERROR);
 }
 #endif

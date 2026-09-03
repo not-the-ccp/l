@@ -26,6 +26,11 @@ _impl.HOST.update({
     (("linux", "process", "launch"), "foreground_exact"): 73,
     (("linux", "process", "signal"), "ignore"): 74,
     (("linux", "process", "signal"), "default"): 75,
+    (("linux", "fd"), "open_read"): 76,
+    (("linux", "fd"), "create_truncate"): 77,
+    (("linux", "fd"), "create_append"): 78,
+    (("linux", "fd"), "open_fd"): 79,
+    (("linux", "fd"), "open_error"): 80,
 })
 
 globals().update({
