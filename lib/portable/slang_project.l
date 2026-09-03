@@ -24,7 +24,7 @@ pub struct Error {
 }
 
 pub struct Module {
-    pub name: []u8,
+    pub name: const []u8,
     pub index: slang_index.ModuleIndex,
 }
 

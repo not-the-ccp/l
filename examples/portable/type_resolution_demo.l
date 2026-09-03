@@ -6,7 +6,7 @@ fn require(ok: bool) {
     if (!ok) { trap; }
 }
 
-fn count(errors: []slang_types.Error, kind: slang_types.ErrorKind) -> u64 {
+fn count(errors: const []slang_types.Error, kind: slang_types.ErrorKind) -> u64 {
     var total: u64 = 0;
     for (error in errors) {
         if (error.kind == kind) { total += 1; }
@@ -14,7 +14,7 @@ fn count(errors: []slang_types.Error, kind: slang_types.ErrorKind) -> u64 {
     return total;
 }
 
-fn find_decl(module: slang_types.Module, name: []u8) -> slang_decls.Decl {
+fn find_decl(module: slang_types.Module, name: const []u8) -> slang_decls.Decl {
     for (decl in module.declarations.declarations) {
         if (bytes.equal(decl.name, name)) { return decl; }
     }

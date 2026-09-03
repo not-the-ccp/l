@@ -4,7 +4,7 @@ fn require(ok: bool) {
     if (!ok) { trap; }
 }
 
-fn has_error(errors: []slang_check.Error, kind: slang_check.ErrorKind) -> bool {
+fn has_error(errors: const []slang_check.Error, kind: slang_check.ErrorKind) -> bool {
     for (error in errors) {
         if (error.kind == kind) { return true; }
     }

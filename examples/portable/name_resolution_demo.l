@@ -5,14 +5,14 @@ fn require(ok: bool) {
     if (!ok) { trap; }
 }
 
-fn has_error(errors: []slang_names.Error, kind: slang_names.ErrorKind, name: []u8) -> bool {
+fn has_error(errors: const []slang_names.Error, kind: slang_names.ErrorKind, name: const []u8) -> bool {
     for (error in errors) {
         if (error.kind == kind && bytes.equal(error.name, name)) { return true; }
     }
     return false;
 }
 
-fn has_use(uses: []slang_names.Use, status: slang_names.UseStatus, root: []u8) -> bool {
+fn has_use(uses: const []slang_names.Use, status: slang_names.UseStatus, root: const []u8) -> bool {
     for (use in uses) {
         if (use.status == status && bytes.equal(use.root, root)) { return true; }
     }
