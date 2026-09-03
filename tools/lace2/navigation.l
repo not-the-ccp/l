@@ -49,16 +49,19 @@ pub fn line_start(doc: ref text.Text, pos: u64) -> u64 {
     if (cursor == length && length > 0 && text.byte_at(doc, length - 1) == '\n') {
         cursor -= 1;
     }
-    while (cursor > 0 && text.byte_at(doc, cursor - 1) != '\n') { cursor -= 1; }
-    return cursor;
+    match (text.previous_newline(doc, cursor)) {
+        none { return 0; }
+        some(offset) { return offset + 1; }
+    }
 }
 
 pub fn line_end(doc: ref text.Text, pos: u64) -> u64 {
     var length = text.byte_len(doc);
     if (pos > length) { trap; }
-    var cursor = pos;
-    while (cursor < length && text.byte_at(doc, cursor) != '\n') { cursor += 1; }
-    return cursor;
+    match (text.next_newline(doc, pos)) {
+        none { return length; }
+        some(offset) { return offset; }
+    }
 }
 
 // Last addressable atom for command/selection modes on this line. `line_end`
@@ -109,39 +112,63 @@ fn tab_advance(column: u64, tab_width: u64) -> u64 {
     return width - (column % width);
 }
 
+const STREAM_CHUNK_BYTES: u64 = 4096;
+
+fn window_end(primary_start: u64, limit: u64) -> u64 {
+    var remaining = limit - primary_start;
+    var primary = remaining;
+    if (primary > STREAM_CHUNK_BYTES) { primary = STREAM_CHUNK_BYTES; }
+    var lookahead = remaining - primary;
+    if (lookahead > 3) { lookahead = 3; }
+    return primary_start + primary + lookahead;
+}
+
 pub fn screen_column(doc: ref text.Text, line: u64, pos: u64, tab_width: u64) -> u64 {
     if (line > pos || pos > text.byte_len(doc)) { trap; }
-    var bytes = text.slice(doc, line, pos);
-    var offset: u64 = 0;
+    var absolute = line;
     var column: u64 = 0;
-    while (offset < len(bytes)) {
-        var unit = display.next_unit(bytes, offset);
-        if (unit.kind is display.UnitKind.tab) {
-            column += tab_advance(column, tab_width);
-        } else {
-            var shown = display.representation(bytes, unit);
-            column += term.text_width(shown);
+    while (absolute < pos) {
+        var remaining = pos - absolute;
+        var primary = remaining;
+        if (primary > STREAM_CHUNK_BYTES) { primary = STREAM_CHUNK_BYTES; }
+        var chunk = text.slice(doc, absolute, window_end(absolute, pos));
+        var offset: u64 = 0;
+        while (offset < primary) {
+            var unit = display.next_unit(chunk, offset);
+            if (unit.kind is display.UnitKind.tab) {
+                column += tab_advance(column, tab_width);
+            } else {
+                column += term.text_width(display.representation(chunk, unit));
+            }
+            offset = unit.end;
         }
-        offset = unit.end;
+        absolute += offset;
     }
     return column;
 }
 
 pub fn offset_for_column(doc: ref text.Text, line: u64, target: u64, tab_width: u64) -> u64 {
     var end = line_end(doc, line);
-    var bytes = text.slice(doc, line, end);
-    var offset: u64 = 0;
+    var absolute = line;
     var column: u64 = 0;
-    while (offset < len(bytes)) {
-        var unit = display.next_unit(bytes, offset);
-        var advance: u64 = 0;
-        if (unit.kind is display.UnitKind.tab) { advance = tab_advance(column, tab_width); }
-        else { advance = term.text_width(display.representation(bytes, unit)); }
-        if (column + advance > target) { break; }
-        column += advance;
-        offset = unit.end;
+    while (absolute < end) {
+        var remaining = end - absolute;
+        var primary = remaining;
+        if (primary > STREAM_CHUNK_BYTES) { primary = STREAM_CHUNK_BYTES; }
+        var chunk = text.slice(doc, absolute, window_end(absolute, end));
+        var offset: u64 = 0;
+        while (offset < primary) {
+            var unit = display.next_unit(chunk, offset);
+            var advance: u64 = 0;
+            if (unit.kind is display.UnitKind.tab) { advance = tab_advance(column, tab_width); }
+            else { advance = term.text_width(display.representation(chunk, unit)); }
+            if (column + advance > target) { return absolute + unit.start; }
+            column += advance;
+            offset = unit.end;
+        }
+        absolute += offset;
     }
-    return line + offset;
+    return end;
 }
 
 pub fn move_vertical(doc: ref text.Text, pos: u64, down: bool, goal_column: u64, tab_width: u64) -> u64 {

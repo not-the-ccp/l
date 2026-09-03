@@ -41,6 +41,32 @@ fn main() {
     expect(escaped_frame.cursor_col == 9);
     expect(bytes.find(escaped_frame.bytes, "F>\x1b[0mX\x1b[0m", 0) is some(_));
 
+    var long_line: []u8 = [];
+    for (var i: u64 = 0; i < 20000; i += 1) { push(long_line, 'a'); }
+    push(long_line, '\n');
+    var long_editor = model.create(long_line);
+    model.set_cursor(long_editor, 16384);
+    var long_frame = render.draw(long_editor, "", "", 0, 1, 16380, 6, 20);
+    expect(long_frame.cursor_visible);
+    expect(long_frame.cursor_col == 11);
+    expect(len(long_frame.bytes) < 1000);
+
+    var boundary_line: []u8 = [];
+    for (var i: u64 = 0; i < 4095; i += 1) { push(boundary_line, 'a'); }
+    push(boundary_line, 0xe2);
+    push(boundary_line, 0x82);
+    push(boundary_line, 0xac);
+    push(boundary_line, 'z');
+    push(boundary_line, '\n');
+    var boundary_editor = model.create(boundary_line);
+    model.set_cursor(boundary_editor, 4095);
+    var boundary_frame = render.draw(boundary_editor, "", "", 0, 1, 4093, 6, 20);
+    expect(boundary_frame.cursor_visible);
+    expect(boundary_frame.cursor_col == 9);
+    // The euro sign must be emitted as its original three UTF-8 bytes. If the
+    // chunk boundary split it into invalid-byte escapes this sequence vanishes.
+    expect(bytes.find(boundary_frame.bytes, [0xe2, 0x82, 0xac], 0) is some(_));
+
     // Terminal chrome must never emit an unbounded status or message row.
     // Before clipping, either of these strings wrapped into the editing area
     // on a narrow terminal and made the screen look corrupted.

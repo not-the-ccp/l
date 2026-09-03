@@ -351,6 +351,95 @@ fn check_node(text: ref Text, node_opt: ?ref Node) -> Stats {
     }
 }
 
+fn find_next_newline(text: ref Text, node_opt: ?ref Node, start: u64) -> ?u64 {
+    match (node_opt) {
+        none { return none; }
+        some(root) {
+            if (start >= root.byte_len || root.newline_count == 0) { return none; }
+            var left_len = node_bytes(root.left);
+            var piece_end = left_len + root.piece.length;
+
+            if (start < left_len && node_newlines(root.left) > 0) {
+                match (find_next_newline(text, root.left, start)) {
+                    none {}
+                    some(offset) { return some(offset); }
+                }
+            }
+
+            var piece_start: u64 = 0;
+            if (start > left_len) { piece_start = start - left_len; }
+            if (piece_start < root.piece.length && root.piece.newlines > 0) {
+                var src = piece_source(text, root.piece.source);
+                var i = piece_start;
+                while (i < root.piece.length) {
+                    if (src[root.piece.start + i] == '\n') { return some(left_len + i); }
+                    i += 1;
+                }
+            }
+
+            if (node_newlines(root.right) > 0) {
+                var right_start: u64 = 0;
+                if (start > piece_end) { right_start = start - piece_end; }
+                match (find_next_newline(text, root.right, right_start)) {
+                    none {}
+                    some(offset) { return some(piece_end + offset); }
+                }
+            }
+            return none;
+        }
+    }
+}
+
+fn find_previous_newline(text: ref Text, node_opt: ?ref Node, before: u64) -> ?u64 {
+    match (node_opt) {
+        none { return none; }
+        some(root) {
+            if (before == 0 || root.newline_count == 0) { return none; }
+            if (before > root.byte_len) { trap; }
+            var left_len = node_bytes(root.left);
+            var piece_end = left_len + root.piece.length;
+
+            if (before > piece_end && node_newlines(root.right) > 0) {
+                match (find_previous_newline(text, root.right, before - piece_end)) {
+                    none {}
+                    some(offset) { return some(piece_end + offset); }
+                }
+            }
+
+            if (before > left_len && root.piece.newlines > 0) {
+                var piece_before = before - left_len;
+                if (piece_before > root.piece.length) { piece_before = root.piece.length; }
+                var src = piece_source(text, root.piece.source);
+                var i = piece_before;
+                while (i > 0) {
+                    i -= 1;
+                    if (src[root.piece.start + i] == '\n') { return some(left_len + i); }
+                }
+            }
+
+            if (node_newlines(root.left) > 0) {
+                var left_before = before;
+                if (left_before > left_len) { left_before = left_len; }
+                match (find_previous_newline(text, root.left, left_before)) {
+                    none {}
+                    some(offset) { return some(offset); }
+                }
+            }
+            return none;
+        }
+    }
+}
+
+pub fn next_newline(text: ref Text, start: u64) -> ?u64 {
+    if (start > byte_len(text)) { trap; }
+    return find_next_newline(text, text.root, start);
+}
+
+pub fn previous_newline(text: ref Text, before: u64) -> ?u64 {
+    if (before > byte_len(text)) { trap; }
+    return find_previous_newline(text, text.root, before);
+}
+
 pub fn from_bytes(data: const []u8) -> ref Text {
     var text = new Text {
         original: bytes.clone(data),

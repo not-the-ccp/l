@@ -73,8 +73,7 @@ fn mode_name(editor: ref model.Editor) -> []u8 {
     return "NORMAL";
 }
 
-fn selected(editor: ref model.Editor, pos: u64) -> bool {
-    var span_opt = model.visual_span(editor);
+fn selected(span_opt: ?model.Span, pos: u64) -> bool {
     match (span_opt) {
         none { return false; }
         some(span) { return pos >= span.start && pos < span.end; }
@@ -132,6 +131,17 @@ fn append_left_clipped(out: []u8, shown: const []u8, clip_columns: u64) -> u64 {
     return painted;
 }
 
+const RENDER_CHUNK_BYTES: u64 = 4096;
+
+fn render_window_end(start: u64, end: u64) -> u64 {
+    var remaining = end - start;
+    var primary = remaining;
+    if (primary > RENDER_CHUNK_BYTES) { primary = RENDER_CHUNK_BYTES; }
+    var lookahead = remaining - primary;
+    if (lookahead > 3) { lookahead = 3; }
+    return start + primary + lookahead;
+}
+
 fn render_line(
     out: []u8,
     editor: ref model.Editor,
@@ -147,54 +157,66 @@ fn render_line(
     if (cols <= GUTTER_WIDTH) { return; }
     var content_cols = cols - GUTTER_WIDTH;
     var end = nav.line_end(editor.doc, line_start);
-    var line = text.slice(editor.doc, line_start, end);
-    var offset: u64 = 0;
+    var absolute = line_start;
     var logical_column: u64 = 0;
     var painted: u64 = 0;
     var cursor_pos = model.cursor(editor);
+    var visual = model.visual_span(editor);
+    var finished = false;
 
-    while (offset < len(line)) {
-        var unit = display.next_unit(line, offset);
-        var shown: []u8 = [];
-        var width: u64 = 0;
-        if (unit.kind is display.UnitKind.tab) {
-            var tab = editor.tab_width;
-            if (tab == 0) { tab = 4; }
-            width = tab - (logical_column % tab);
-        } else {
-            shown = display.representation(line, unit);
-            width = term.text_width(shown);
-        }
-
-        var document_pos = line_start + unit.start;
-        if (cursor_pos == document_pos && logical_column >= hscroll && logical_column - hscroll <= content_cols) {
-            frame.cursor_row = row;
-            frame.cursor_col = GUTTER_WIDTH + 1 + (logical_column - hscroll);
-            frame.cursor_visible = true;
-        }
-
-        if (logical_column + width > hscroll) {
-            var left_clip: u64 = 0;
-            if (logical_column < hscroll) { left_clip = hscroll - logical_column; }
-            var visible_width = width - left_clip;
-            if (painted + visible_width > content_cols) { break; }
-            append_unit_style(out, editor, unit, selected(editor, document_pos));
+    while (absolute < end && !finished) {
+        var remaining = end - absolute;
+        var primary = remaining;
+        if (primary > RENDER_CHUNK_BYTES) { primary = RENDER_CHUNK_BYTES; }
+        var chunk = text.slice(editor.doc, absolute, render_window_end(absolute, end));
+        var offset: u64 = 0;
+        while (offset < primary) {
+            var unit = display.next_unit(chunk, offset);
+            var shown: []u8 = [];
+            var width: u64 = 0;
             if (unit.kind is display.UnitKind.tab) {
-                if (left_clip == 0) { painted += append_tab(out, logical_column, editor.tab_width); }
-                else { append_spaces(out, visible_width); painted += visible_width; }
-            } else if (left_clip == 0) {
-                bytes.append(out, shown);
-                painted += width;
+                var tab = editor.tab_width;
+                if (tab == 0) { tab = 4; }
+                width = tab - (logical_column % tab);
             } else {
-                painted += append_left_clipped(out, shown, left_clip);
+                shown = display.representation(chunk, unit);
+                width = term.text_width(shown);
             }
-            bytes.append(out, "\x1b[0m");
+
+            var document_pos = absolute + unit.start;
+            if (cursor_pos == document_pos && logical_column >= hscroll && logical_column - hscroll <= content_cols) {
+                frame.cursor_row = row;
+                frame.cursor_col = GUTTER_WIDTH + 1 + (logical_column - hscroll);
+                frame.cursor_visible = true;
+            }
+
+            if (logical_column + width > hscroll) {
+                var left_clip: u64 = 0;
+                if (logical_column < hscroll) { left_clip = hscroll - logical_column; }
+                var visible_width = width - left_clip;
+                if (painted + visible_width > content_cols) {
+                    finished = true;
+                    break;
+                }
+                append_unit_style(out, editor, unit, selected(visual, document_pos));
+                if (unit.kind is display.UnitKind.tab) {
+                    if (left_clip == 0) { painted += append_tab(out, logical_column, editor.tab_width); }
+                    else { append_spaces(out, visible_width); painted += visible_width; }
+                } else if (left_clip == 0) {
+                    bytes.append(out, shown);
+                    painted += width;
+                } else {
+                    painted += append_left_clipped(out, shown, left_clip);
+                }
+                bytes.append(out, "\x1b[0m");
+            }
+            logical_column += width;
+            offset = unit.end;
         }
-        logical_column += width;
-        offset = unit.end;
+        absolute += offset;
     }
 
-    if (cursor_pos == end && logical_column >= hscroll && logical_column - hscroll <= content_cols) {
+    if (!finished && cursor_pos == end && logical_column >= hscroll && logical_column - hscroll <= content_cols) {
         frame.cursor_row = row;
         frame.cursor_col = GUTTER_WIDTH + 1 + (logical_column - hscroll);
         frame.cursor_visible = true;
