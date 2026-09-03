@@ -108,6 +108,9 @@ class LinuxJobHost:
     def _same_group(self, left, right):
         return self.linux._group(left).pgid == self.linux._group(right).pgid
 
+    def _same_child(self, left, right):
+        return self.linux._child(left) is self.linux._child(right)
+
     def _wait_child(self, value):
         child = self.linux._child(value)
         if child.waited:
@@ -179,6 +182,12 @@ class LinuxJobHost:
         host.function("same", [group_ty, group_ty], name_ty("bool"), self._same_group)
         return host
 
+    def child_module(self) -> HostModule:
+        host = HostModule(("linux", "process", "child"))
+        child_ty = name_ty(("__host__", "linux", "process", "Child"))
+        host.function("same", [child_ty, child_ty], name_ty("bool"), self._same_child)
+        return host
+
     def wait_module(self) -> HostModule:
         host = HostModule(("linux", "process", "wait"))
         child_ty = name_ty(("__host__", "linux", "process", "Child"))
@@ -207,6 +216,7 @@ class LinuxJobHost:
     def modules(self) -> dict[tuple[str, ...], HostModule]:
         return {
             ("linux", "process", "group"): self.group_module(),
+            ("linux", "process", "child"): self.child_module(),
             ("linux", "process", "wait"): self.wait_module(),
             ("linux", "tty"): self.tty_module(),
         }
