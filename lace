@@ -1,11 +1,16 @@
 #!/bin/sh
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-if [ ! -x "$HERE/build/lace" ] || [ "$HERE/tools/lace/lace.l" -nt "$HERE/build/lace" ] || [ "$HERE/runtime/native_vm.c" -nt "$HERE/build/lace" ]; then
+OUT="$HERE/build/lace"
+needs_build=false
+if [ ! -x "$OUT" ]; then
+  needs_build=true
+elif [ "$HERE/runtime/native_vm.c" -nt "$OUT" ] || [ "$HERE/build.sh" -nt "$OUT" ]; then
+  needs_build=true
+elif find "$HERE/tools/lace2" "$HERE/lib/portable" -type f -name '*.l' -newer "$OUT" -print -quit | grep -q .; then
+  needs_build=true
+fi
+if [ "$needs_build" = true ]; then
   "$HERE/build.sh" lace >/dev/null
 fi
-# Lace locates adjacent LSP executables via its own executable path, so ensure them too.
-for s in l-lsp json-lsp ini-lsp; do
-  if [ ! -x "$HERE/build/$s" ]; then "$HERE/build.sh" "$s" >/dev/null; fi
-done
-exec "$HERE/build/lace" "$@"
+exec "$OUT" "$@"
