@@ -116,14 +116,15 @@ def make_hosts(argv: list[str]):
     return hosts, ph, th, lh
 
 
-def cleanup(ph: ProcessHost, th: TermHost, lh: LinuxHost):
+def cleanup(ph: ProcessHost, th: TermHost, lh: LinuxHost | None = None):
     try:
         th.leave()
     finally:
         try:
             ph.cleanup()
         finally:
-            lh.cleanup()
+            if lh is not None:
+                lh.cleanup()
 
 
 def build_program(entry: Path, root: Path, argv: list[str]):
