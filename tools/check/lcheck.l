@@ -84,6 +84,7 @@ fn write_check_error(kind: slang_check.ErrorKind) {
     if (kind is slang_check.ErrorKind.generic_inference) { stdio.write("cannot infer generic type arguments"); return; }
     if (kind is slang_check.ErrorKind.duplicate_pattern) { stdio.write("duplicate match arm"); return; }
     if (kind is slang_check.ErrorKind.non_exhaustive_match) { stdio.write("non-exhaustive match"); return; }
+    if (kind is slang_check.ErrorKind.literal_range) { stdio.write("integer literal does not fit contextual type"); return; }
     stdio.write("function may fall off the end");
 }
 

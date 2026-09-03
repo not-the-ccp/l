@@ -143,6 +143,8 @@ def module_case(name, sources, module, fn, expected, should_error=False):
 
 ok("unit", "fn main() { return; }", "unit")
 ok("integer wrap", "fn main() -> i8 { var x: i8 = 127; x += 1; return x; }", -128)
+compile_error("default integer literal must fit i64", "fn main() { var x = 9223372036854775808; }", "does not fit i64")
+ok("u64 maximum literal", "fn main() -> bool { var x: u64 = 18446744073709551615; return x == 18446744073709551615; }", True)
 ok("signed min division wraps", "fn main() -> i8 { var x: i8 = -128; return x / -1; }", -128)
 ok("signed arithmetic right shift", r'''
 fn main() -> bool {
