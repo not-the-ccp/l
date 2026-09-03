@@ -26,6 +26,7 @@ CHILD_TYPE = ("linux", "process", "Child")
 GROUP_TYPE = ("linux", "process", "Group")
 SPAWN_TYPE = ("linux", "process", "SpawnResult")
 STATUS_TYPE = ("linux", "process", "ExitStatus")
+OPEN_TYPE = ("linux", "fd", "OpenResult")
 
 
 @dataclass
@@ -57,6 +58,12 @@ class LinuxSpawnResult:
 class LinuxExitStatus:
     exited: bool
     code: int
+
+
+@dataclass(frozen=True)
+class LinuxOpenResult:
+    fd: LinuxFd | None
+    error_number: int | None
 
 
 def _bytes(value: ArrayObj) -> bytes:
@@ -140,6 +147,12 @@ class LinuxHost:
             raise TrapSig("invalid linux.process.ExitStatus")
         return status
 
+    def _open_result(self, value) -> LinuxOpenResult:
+        result = _opaque(value, OPEN_TYPE, "linux.fd.OpenResult")
+        if not isinstance(result, LinuxOpenResult):
+            raise TrapSig("invalid linux.fd.OpenResult")
+        return result
+
     # linux.fd
 
     def _dup_std(self, fd: int):
@@ -151,6 +164,39 @@ class LinuxHost:
     def _pipe(self):
         read_fd, write_fd = os.pipe2(os.O_CLOEXEC)
         return ArrayObj([self._own_fd(read_fd), self._own_fd(write_fd)])
+
+    def _open_file(self, path_value, flags: int):
+        path = _bytes(path_value)
+        if b"\0" in path:
+            return OpaqueVal(OPEN_TYPE, LinuxOpenResult(None, errno.EINVAL))
+        try:
+            raw = os.open(path, flags | os.O_CLOEXEC, 0o666)
+            owned = self._own_fd(raw).payload
+            return OpaqueVal(OPEN_TYPE, LinuxOpenResult(owned, None))
+        except BaseException as exc:
+            result = _errno_result(exc)
+            return OpaqueVal(OPEN_TYPE, LinuxOpenResult(None, int(result.value)))
+
+    def _open_read(self, path_value):
+        return self._open_file(path_value, os.O_RDONLY)
+
+    def _create_truncate(self, path_value):
+        return self._open_file(path_value, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
+
+    def _create_append(self, path_value):
+        return self._open_file(path_value, os.O_WRONLY | os.O_CREAT | os.O_APPEND)
+
+    def _open_fd(self, value):
+        result = self._open_result(value)
+        if result.fd is None:
+            return None
+        return SomeVal(OpaqueVal(FD_TYPE, result.fd))
+
+    def _open_error(self, value):
+        result = self._open_result(value)
+        if result.error_number is None:
+            return None
+        return SomeVal(result.error_number)
 
     def _close(self, value):
         fd = _opaque(value, FD_TYPE, "linux.fd.Fd")
@@ -495,6 +541,12 @@ class LinuxHost:
         host.function("stderr", [], fd_ty, lambda: self._dup_std(2))
         host.function("dup", [fd_ty], fd_ty, self._dup)
         host.function("pipe", [], arr(fd_ty), self._pipe)
+        open_ty = host.opaque_type("OpenResult")
+        host.function("open_read", [bytes_ro], open_ty, self._open_read)
+        host.function("create_truncate", [bytes_ro], open_ty, self._create_truncate)
+        host.function("create_append", [bytes_ro], open_ty, self._create_append)
+        host.function("open_fd", [open_ty], opt(fd_ty), self._open_fd)
+        host.function("open_error", [open_ty], opt(name_ty("i64")), self._open_error)
         host.function("close", [fd_ty], UNIT, self._close)
         host.function("read", [fd_ty, name_ty("u64")], opt(arr(name_ty("u8"))), self._read)
         host.function("write", [fd_ty, bytes_ro], name_ty("u64"), self._write)
