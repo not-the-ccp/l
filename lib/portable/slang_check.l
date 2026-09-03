@@ -257,6 +257,27 @@ fn unify_type(checker: ref Checker, pattern: ref slang_types.ResolvedType,
     return unify_type_exact(checker, pattern, actual, bindings, start, end, soft);
 }
 
+fn contextual_expected(checker: ref Checker, template: ref slang_types.ResolvedType,
+    value: ref slang_decls.Expr, bindings: ref TypeBindings) -> ?ref slang_types.ResolvedType {
+    if (fully_bound(template, bindings)) {
+        return some(substitute_type(template, bindings));
+    }
+
+    // String literals have a fixed u8 element type but their outer array
+    // capability is contextual. Infer generic element variables from that
+    // fixed information before typing the literal, so []T materializes a fresh
+    // mutable string while const []T keeps the ordinary read-only inference.
+    if (value.kind is slang_decls.ExprKind.string && array_like(template) &&
+        len(template.children) == 1) {
+        var u8 = primitive_type("u8");
+        if (unify_type_exact(checker, template.children[0], u8, bindings,
+            value.start, value.end, true) && fully_bound(template, bindings)) {
+            return some(substitute_type(template, bindings));
+        }
+    }
+    return none;
+}
+
 fn unify_result_expected(checker: ref Checker, result: ref slang_types.ResolvedType,
     expected: ref slang_types.ResolvedType, bindings: ref TypeBindings,
     start: u64, end: u64) {
@@ -614,8 +635,7 @@ fn enum_value_type(checker: ref Checker, decl: slang_decls.Decl,
             seed_nominal_bindings(checker, decl, expected, bindings, start, end);
             for (var i: u64 = 0; i < len(arguments); i += 1) {
                 var template = resolve_syntax_type(checker, decl.generics, variant.payload[i], decl.name);
-                var expected_arg: ?ref slang_types.ResolvedType = none;
-                if (fully_bound(template, bindings)) { expected_arg = some(substitute_type(template, bindings)); }
+                var expected_arg = contextual_expected(checker, template, arguments[i], bindings);
                 var actual = expr_type(checker, arguments[i], expected_arg);
                 unify_type(checker, template, actual, bindings, arguments[i].start, arguments[i].end, false);
             }
@@ -836,8 +856,7 @@ fn instantiate_generic_call(checker: ref Checker, decl: slang_decls.Decl,
     }
     for (var i: u64 = 0; i < len(args); i += 1) {
         var template = resolve_syntax_type(checker, decl.generics, decl.parameters[i].type, decl.name);
-        var expected_arg: ?ref slang_types.ResolvedType = none;
-        if (fully_bound(template, bindings)) { expected_arg = some(substitute_type(template, bindings)); }
+        var expected_arg = contextual_expected(checker, template, args[i], bindings);
         var actual = expr_type(checker, args[i], expected_arg);
         unify_type(checker, template, actual, bindings, args[i].start, args[i].end, false);
     }
@@ -952,8 +971,7 @@ fn struct_literal_type(checker: ref Checker, expr: ref slang_decls.Expr,
                     if (bytes.equal(field.name, supplied.name)) {
                         found = true;
                         var template = resolve_syntax_type(checker, decl.generics, field.type, decl.name);
-                        var expected_field: ?ref slang_types.ResolvedType = none;
-                        if (fully_bound(template, bindings)) { expected_field = some(substitute_type(template, bindings)); }
+                        var expected_field = contextual_expected(checker, template, supplied.value, bindings);
                         var actual = expr_type(checker, supplied.value, expected_field);
                         unify_type(checker, template, actual, bindings, supplied.start, supplied.end, false);
                     }
