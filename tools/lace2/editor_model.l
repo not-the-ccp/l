@@ -207,25 +207,88 @@ pub fn yank_span(editor: ref Editor, span: Span, linewise: bool) {
     editor.yank_linewise = linewise;
 }
 
-pub fn current_line_span(editor: ref Editor) -> Span {
-    return line_span(editor, cursor(editor));
+pub fn line_count_span(editor: ref Editor, count: u64) -> Span {
+    var span = line_span(editor, cursor(editor));
+    var end = span.end;
+    var n: u64 = 1;
+    while (n < count && end < text.byte_len(editor.doc)) {
+        var next = line_span(editor, end);
+        if (next.end <= end) { break; }
+        end = next.end;
+        n += 1;
+    }
+    return Span { start: span.start, end: end };
 }
 
-pub fn motion_span(editor: ref Editor, motion: u8) -> ?Span {
+pub fn current_line_span(editor: ref Editor) -> Span {
+    return line_count_span(editor, 1);
+}
+
+pub fn motion_span_count(editor: ref Editor, motion: u8, count: u64) -> ?Span {
     var pos = cursor(editor);
     var target = pos;
-    if (motion == 'w') { target = nav.word_forward(editor.doc, pos); }
-    else if (motion == 'b') { target = nav.word_backward(editor.doc, pos); }
+    var n: u64 = 0;
+    if (motion == 'w') {
+        while (n < count) {
+            var next = nav.word_forward(editor.doc, target);
+            if (next == target) { break; }
+            target = next;
+            n += 1;
+        }
+    }
+    else if (motion == 'b') {
+        while (n < count) {
+            var next = nav.word_backward(editor.doc, target);
+            if (next == target) { break; }
+            target = next;
+            n += 1;
+        }
+    }
     else if (motion == 'e') {
-        target = nav.word_end(editor.doc, pos);
-        if (target < text.byte_len(editor.doc)) { target = nav.next_atom(editor.doc, target); }
+        while (n < count) {
+            if (target >= text.byte_len(editor.doc)) { break; }
+            var end = nav.word_end(editor.doc, target);
+            var next = end;
+            if (next < text.byte_len(editor.doc)) { next = nav.next_atom(editor.doc, next); }
+            if (next == target) { break; }
+            target = next;
+            n += 1;
+        }
     }
     else if (motion == '0') { target = nav.line_start(editor.doc, pos); }
-    else if (motion == '$') { target = nav.line_end(editor.doc, pos); }
+    else if (motion == '^') { target = nav.first_nonblank(editor.doc, pos); }
+    else if (motion == '$') {
+        n = 1;
+        while (n < count) {
+            var next_line = nav.next_line_start(editor.doc, target);
+            match (next_line) {
+                none { break; }
+                some(value) { target = value; n += 1; }
+            }
+        }
+        target = nav.line_end(editor.doc, target);
+    }
     else { return none; }
 
     if (target < pos) { return some(Span { start: target, end: pos }); }
     return some(Span { start: pos, end: target });
+}
+
+pub fn motion_span(editor: ref Editor, motion: u8) -> ?Span {
+    return motion_span_count(editor, motion, 1);
+}
+
+pub fn change_motion_span(editor: ref Editor, motion: u8, count: u64) -> ?Span {
+    if (motion == 'w') {
+        var pos = cursor(editor);
+        if (pos < text.byte_len(editor.doc)) {
+            var value = text.byte_at(editor.doc, pos);
+            if (value != ' ' && value != '\t' && value != '\r' && value != '\n') {
+                return motion_span_count(editor, 'e', count);
+            }
+        }
+    }
+    return motion_span_count(editor, motion, count);
 }
 
 pub fn open_line(editor: ref Editor, below: bool) {
@@ -358,7 +421,12 @@ pub fn move_right(editor: ref Editor, count: u64) {
 pub fn move_word_forward(editor: ref Editor, count: u64) {
     var pos = cursor(editor);
     var n: u64 = 0;
-    while (n < count) { pos = nav.word_forward(editor.doc, pos); n += 1; }
+    while (n < count) {
+        var next = nav.word_forward(editor.doc, pos);
+        if (next == pos) { break; }
+        pos = next;
+        n += 1;
+    }
     set_motion_cursor(editor, pos);
     editor.goal_valid = false;
 }
@@ -366,17 +434,24 @@ pub fn move_word_forward(editor: ref Editor, count: u64) {
 pub fn move_word_backward(editor: ref Editor, count: u64) {
     var pos = cursor(editor);
     var n: u64 = 0;
-    while (n < count) { pos = nav.word_backward(editor.doc, pos); n += 1; }
+    while (n < count) {
+        var next = nav.word_backward(editor.doc, pos);
+        if (next == pos) { break; }
+        pos = next;
+        n += 1;
+    }
     set_motion_cursor(editor, pos);
     editor.goal_valid = false;
 }
 
 pub fn move_word_end(editor: ref Editor, count: u64) {
     var pos = cursor(editor);
+    var length = text.byte_len(editor.doc);
     var n: u64 = 0;
     while (n < count) {
+        if (pos >= length) { break; }
         pos = nav.word_end(editor.doc, pos);
-        if (n + 1 < count && pos < text.byte_len(editor.doc)) { pos = nav.next_atom(editor.doc, pos); }
+        if (n + 1 < count && pos < length) { pos = nav.next_atom(editor.doc, pos); }
         n += 1;
     }
     set_motion_cursor(editor, pos);
@@ -405,7 +480,9 @@ pub fn move_vertical(editor: ref Editor, down: bool, count: u64) {
     }
     var n: u64 = 0;
     while (n < count) {
-        pos = nav.move_vertical(editor.doc, pos, down, editor.goal_column, editor.tab_width);
+        var next = nav.move_vertical(editor.doc, pos, down, editor.goal_column, editor.tab_width);
+        if (next == pos) { break; }
+        pos = next;
         n += 1;
     }
     set_motion_cursor(editor, pos);

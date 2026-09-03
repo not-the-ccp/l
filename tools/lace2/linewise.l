@@ -28,19 +28,26 @@ fn apply(editor: ref model.Editor, start: u64, end: u64, inserted: []u8, cursor:
     editor.goal_valid = false;
 }
 
-pub fn change_current_line(editor: ref model.Editor) {
+pub fn change_lines(editor: ref model.Editor, count: u64) {
     var pos = model.cursor(editor);
-    var whole = model.current_line_span(editor);
-    var content_end = nav.line_end(editor.doc, pos);
+    var whole = model.line_count_span(editor, count);
     var indent = line_indent(editor, pos);
+    var content_end = whole.end;
+    if (content_end > whole.start && text.byte_at(editor.doc, content_end - 1) == '\n') {
+        content_end -= 1;
+    }
 
     editor.yank = text.slice(editor.doc, whole.start, whole.end);
     editor.yank_linewise = true;
 
-    // Preserve the line boundary. `cc` should leave a line to type into,
-    // not splice the following line upward. Preserve existing indentation too.
+    // Preserve one line boundary for the insertion line, even when a
+    // counted change consumes several source lines.
     apply(editor, whole.start, content_end, indent, whole.start + len(indent));
     editor.mode = model.Mode.insert;
+}
+
+pub fn change_current_line(editor: ref model.Editor) {
+    change_lines(editor, 1);
 }
 
 pub fn paste(editor: ref model.Editor, after: bool) {

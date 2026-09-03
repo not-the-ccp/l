@@ -159,6 +159,7 @@ fn read_count(first: []u8) -> CountKey {
     if (len(first) != 1 || first[0] < '1' || first[0] > '9') {
         return CountKey { count: 1, key: first };
     }
+    var maximum: u64 = 0xffffffffffffffff;
     var count: u64 = (first[0] - '0') as u64;
     while (true) {
         var next_opt = term.read_key();
@@ -166,13 +167,21 @@ fn read_count(first: []u8) -> CountKey {
             none { return CountKey { count: count, key: [] }; }
             some(next) {
                 if (len(next) == 1 && next[0] >= '0' && next[0] <= '9') {
-                    count = count * 10 + ((next[0] - '0') as u64);
+                    var digit = (next[0] - '0') as u64;
+                    if (count > (maximum - digit) / 10) { count = maximum; }
+                    else { count = count * 10 + digit; }
                 } else {
                     return CountKey { count: count, key: next };
                 }
             }
         }
     }
+}
+
+fn combine_counts(first: u64, second: u64) -> u64 {
+    var maximum: u64 = 0xffffffffffffffff;
+    if (first != 0 && second > maximum / first) { return maximum; }
+    return first * second;
 }
 
 fn drop_prompt_atom(value: []u8) {
@@ -294,18 +303,25 @@ fn do_motion(ui: ref Ui, key: []u8, count: u64) -> bool {
     return false;
 }
 
-fn operator_command(ui: ref Ui, op: u8) {
+fn operator_command(ui: ref Ui, op: u8, prefix_count: u64) {
     var second_opt = term.read_key();
     match (second_opt) {
         none { return; }
         some(second) {
+            var parsed = read_count(second);
+            if (len(parsed.key) == 0) { return; }
+            var count = combine_counts(prefix_count, parsed.count);
             var span_opt: ?model.Span = none;
             var is_linewise = false;
-            if (key_is(second, op)) {
-                span_opt = some(model.current_line_span(ui.editor));
+            if (key_is(parsed.key, op)) {
+                span_opt = some(model.line_count_span(ui.editor, count));
                 is_linewise = true;
-            } else if (len(second) == 1) {
-                span_opt = model.motion_span(ui.editor, second[0]);
+            } else if (len(parsed.key) == 1) {
+                if (op == 'c') {
+                    span_opt = model.change_motion_span(ui.editor, parsed.key[0], count);
+                } else {
+                    span_opt = model.motion_span_count(ui.editor, parsed.key[0], count);
+                }
             }
             match (span_opt) {
                 none { return; }
@@ -315,7 +331,7 @@ fn operator_command(ui: ref Ui, op: u8) {
                         model.set_cursor(ui.editor, span.start);
                         set_message(ui, "yanked");
                     } else if (op == 'c' && is_linewise) {
-                        linewise.change_current_line(ui.editor);
+                        linewise.change_lines(ui.editor, count);
                     } else if (op == 'c') {
                         model.delete_span(ui.editor, span, false, true);
                     } else {
@@ -543,7 +559,7 @@ fn normal_command(ui: ref Ui, first: []u8) {
         else { model.enter_insert(ui.editor, pos); }
         return;
     }
-    if (key_is(key, 'S')) { linewise.change_current_line(ui.editor); return; }
+    if (key_is(key, 'S')) { linewise.change_lines(ui.editor, count); return; }
     if (key_is(key, 'X')) {
         var pos = model.cursor(ui.editor);
         var start = pos;
@@ -559,10 +575,11 @@ fn normal_command(ui: ref Ui, first: []u8) {
         else if (key_is(key, 'C')) { model.enter_insert(ui.editor, pos); }
         return;
     }
-    if (key_is(key, 'd') || key_is(key, 'y') || key_is(key, 'c')) { operator_command(ui, key[0]); return; }
+    if (key_is(key, 'd') || key_is(key, 'y') || key_is(key, 'c')) { operator_command(ui, key[0], count); return; }
     if (key_is(key, 'Y')) {
-        var span = model.current_line_span(ui.editor);
+        var span = model.line_count_span(ui.editor, count);
         model.yank_span(ui.editor, span, true);
+        model.set_cursor(ui.editor, span.start);
         set_message(ui, "yanked line");
         return;
     }
