@@ -5,20 +5,20 @@ import tools.lace2.selection as selection;
 pub struct EditSpec {
     pub start: u64,
     pub end: u64,
-    pub inserted: []u8,
+    pub inserted: const []u8,
 }
 
 pub struct AppliedEdit {
     pub start: u64,
-    pub removed: []u8,
-    pub inserted: []u8,
+    pub removed: const []u8,
+    pub inserted: const []u8,
 }
 
 pub struct Transaction {
-    pub edits: []AppliedEdit,
+    pub edits: const []AppliedEdit,
 }
 
-fn validate_specs(doc: ref text.Text, specs: []EditSpec) {
+fn validate_specs(doc: ref text.Text, specs: const []EditSpec) {
     var last_end: u64 = 0;
     var first = true;
     for (spec in specs) {
@@ -29,7 +29,7 @@ fn validate_specs(doc: ref text.Text, specs: []EditSpec) {
     }
 }
 
-pub fn apply(doc: ref text.Text, specs: []EditSpec) -> Transaction {
+pub fn apply(doc: ref text.Text, specs: const []EditSpec) -> Transaction {
     validate_specs(doc, specs);
 
     var applied: []AppliedEdit = [];
