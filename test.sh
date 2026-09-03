@@ -14,10 +14,11 @@ PYTHON=${PYTHON:-python3}
 "$HERE/lr" "$HERE/examples/portable/bytes_demo.l" >/dev/null
 "$HERE/lr" "$HERE/examples/portable/const_readers_demo.l" >/dev/null
 
-# Shell syntax is a normal portable L consumer. Keep its parser executable
-# through the native toolchain so parse-state and source-span changes cannot
-# silently drift from what L itself can compile and run.
+# Shell syntax and presentation are normal portable L consumers. Keep both
+# executable through the native toolchain so the editor cannot drift from the
+# parser that execution actually uses.
 "$HERE/lr" "$HERE/tools/shell/syntax_test.l" >/dev/null
+"$HERE/lr" "$HERE/tools/shell/presentation_test.l" >/dev/null
 
 # Linux hosted-profile parity. Exercise the exact same L programs once through
 # the Python reference host and once through the generated native runtime.
