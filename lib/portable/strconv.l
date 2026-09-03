@@ -7,7 +7,7 @@ pub fn digit_value(value: u8) -> ?u8 {
     return none;
 }
 
-pub fn parse_u64(src: []u8) -> ?u64 {
+pub fn parse_u64(src: const []u8) -> ?u64 {
     if (len(src) == 0) {
         return none;
     }
@@ -57,7 +57,7 @@ pub fn format_u64(value: u64) -> []u8 {
 const I64_MAX_U: u64 = 9223372036854775807;
 const I64_MIN_MAG: u64 = 9223372036854775808;
 
-pub fn parse_i64(src: []u8) -> ?i64 {
+pub fn parse_i64(src: const []u8) -> ?i64 {
     if (len(src) == 0) { return none; }
     var negative = false;
     var start: u64 = 0;
