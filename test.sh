@@ -14,13 +14,21 @@ PYTHON=${PYTHON:-python3}
 "$HERE/lr" "$HERE/examples/portable/bytes_demo.l" >/dev/null
 "$HERE/lr" "$HERE/examples/portable/const_readers_demo.l" >/dev/null
 
+# Shell syntax is a normal portable L consumer. Keep its parser executable
+# through the native toolchain so parse-state and source-span changes cannot
+# silently drift from what L itself can compile and run.
+"$HERE/lr" "$HERE/tools/shell/syntax_test.l" >/dev/null
+
 # Linux hosted-profile parity. Exercise the exact same L programs once through
 # the Python reference host and once through the generated native runtime.
 # The process probe covers owned/duplicated FDs, partial I/O + EOF, synchronous
 # exec failure, explicit stdio wiring, process groups, signals, waits, and a
 # real three-process byte-stream pipeline. The context probe covers cwd changes
-# plus raw byte environment lookup/enumeration/mutation and error paths.
+# plus raw byte environment lookup/enumeration/mutation and error paths. The
+# shell executor adds PATH resolution, per-stage status, and launch rollback.
 if [ "$(uname -s)" = Linux ]; then
+  "$HERE/lr" "$HERE/tools/shell/executor_test.l" >/dev/null
+
   linux_ref=$("$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_process_probe.l")
   test "$linux_ref" = '3'
   "$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_context_probe.l"
