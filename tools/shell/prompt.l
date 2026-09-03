@@ -9,14 +9,14 @@ pub enum SegmentRole {
 
 pub struct Segment {
     pub role: SegmentRole,
-    pub text: []u8,
+    pub text: const []u8,
 }
 
 pub struct Prompt {
     pub segments: []Segment,
 }
 
-fn display_cwd(cwd: ?[]u8, home: ?[]u8) -> []u8 {
+fn display_cwd(cwd: ?[]u8, home: ?[]u8) -> const []u8 {
     match (cwd) {
         none {
             return "?";
@@ -44,7 +44,8 @@ fn display_cwd(cwd: ?[]u8, home: ?[]u8) -> []u8 {
 
 // Build semantic prompt segments rather than terminal escape sequences. Themes
 // can color/dim roles independently, while a no-style renderer can flatten the
-// exact same model.
+// exact same model. Segment text is exposed read-only even when its backing
+// array was assembled mutably during construction.
 pub fn build(cwd: ?[]u8, home: ?[]u8, last_status: i64, continuation: bool) -> Prompt {
     var segments: []Segment = [];
     if (continuation) {
