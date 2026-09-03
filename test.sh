@@ -62,6 +62,7 @@ fi
 "$HERE/lr" --root "$HERE" "$HERE/tools/lace2/navigation_test.l" >/dev/null
 "$HERE/lr" --root "$HERE" "$HERE/tools/lace2/editor_model_test.l" >/dev/null
 "$HERE/lr" --root "$HERE" "$HERE/tools/lace2/linewise_test.l" >/dev/null
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/operator_model_test.l" >/dev/null
 "$HERE/lr" --root "$HERE" "$HERE/tools/lace2/render_test.l" >/dev/null
 "$HERE/lc" --check --root "$HERE" "$HERE/tools/lace2/main.l" >/dev/null
 
@@ -96,7 +97,7 @@ rm -f "$bad"
 trap - EXIT HUP INT TERM
 
 "$PYTHON" "$HERE/tests/selfhost_checker_diff.py"
-for t in term_key_events.py code_analysis.py incremental_lsp.py editor_safety.py highlight_stability.py editor_usability.py editor_display.py editor_pty.py lace2_pty.py shell_pty.py; do
+for t in term_key_events.py code_analysis.py incremental_lsp.py editor_safety.py highlight_stability.py editor_usability.py editor_display.py editor_pty.py lace2_pty.py lace_operator_pty.py shell_pty.py; do
   "$PYTHON" "$HERE/tests/$t"
 done
 echo 'L repository test suite PASS'
