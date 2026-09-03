@@ -31,6 +31,24 @@ fn safe_inline(value: []u8) -> []u8 {
     return out;
 }
 
+// Append complete display atoms only while they fit on this terminal row.
+// Status/message text used to be written unbounded, so a long path or :help
+// wrapped into the buffer and visually corrupted the screen.
+fn append_fitted(out: []u8, value: []u8, max_columns: u64) -> u64 {
+    var offset: u64 = 0;
+    var columns: u64 = 0;
+    while (offset < len(value)) {
+        var unit = display.next_unit(value, offset);
+        var shown = display.representation(value, unit);
+        var width = term.text_width(shown);
+        if (columns + width > max_columns) { break; }
+        bytes.append(out, shown);
+        columns += width;
+        offset = unit.end;
+    }
+    return columns;
+}
+
 fn append_move(out: []u8, row: u64, col: u64) {
     bytes.append(out, "\x1b[");
     strconv.append_u64(out, row);
@@ -142,16 +160,16 @@ fn render_line(
 }
 
 fn append_status(out: []u8, editor: ref model.Editor, path: []u8, cols: u64) {
-    var safe_path = safe_inline(path);
-    bytes.append(out, "\x1b[2K\x1b[7m ");
-    bytes.append(out, mode_name(editor));
-    bytes.append(out, "  ");
-    if (model.dirty(editor)) { bytes.append(out, "[+] "); }
-    bytes.append(out, safe_path);
-    bytes.append(out, "  byte ");
-    strconv.append_u64(out, model.cursor(editor));
-    var visible = term.text_width(mode_name(editor)) + term.text_width(safe_path) + 16;
-    if (model.dirty(editor)) { visible += 4; }
+    var status: []u8 = [' '];
+    bytes.append(status, mode_name(editor));
+    bytes.append(status, "  ");
+    if (model.dirty(editor)) { bytes.append(status, "[+] "); }
+    bytes.append(status, safe_inline(path));
+    bytes.append(status, "  byte ");
+    bytes.append(status, strconv.format_u64(model.cursor(editor)));
+
+    bytes.append(out, "\x1b[2K\x1b[7m");
+    var visible = append_fitted(out, status, cols);
     if (visible < cols) { append_spaces(out, cols - visible); }
     bytes.append(out, "\x1b[0m");
 }
@@ -209,7 +227,8 @@ pub fn draw(
         append_status(out, editor, path, cols);
         append_move(out, rows, 1);
         bytes.append(out, "\x1b[2K");
-        bytes.append(out, safe_inline(message));
+        var safe_message = safe_inline(message);
+        append_fitted(out, safe_message, cols);
     }
 
     if (frame.cursor_visible) {
