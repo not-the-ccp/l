@@ -60,11 +60,11 @@ pub fn frame_buffer() -> ref FrameBuffer {
     return new FrameBuffer { data: [] };
 }
 
-pub fn frame_feed(reader: ref FrameBuffer, chunk: []u8) {
+pub fn frame_feed(reader: ref FrameBuffer, chunk: const []u8) {
     bytes.append(reader.data, chunk);
 }
 
-fn header_length(header: []u8) -> ?u64 {
+fn header_length(header: const []u8) -> ?u64 {
     var line_start: u64 = 0;
     while (line_start < len(header)) {
         var line_end_opt = bytes.find(header, "\r\n", line_start);
@@ -107,7 +107,7 @@ pub fn frame_take(reader: ref FrameBuffer) -> ?[]u8 {
     }
 }
 
-pub fn frame_encode(body: []u8) -> []u8 {
+pub fn frame_encode(body: const []u8) -> []u8 {
     var out: []u8 = [];
     bytes.append(out, "Content-Length: ");
     strconv.append_u64(out, len(body));
@@ -120,14 +120,14 @@ pub fn documents() -> ref Documents {
     return new Documents { docs: [] };
 }
 
-fn find_doc_index(store: ref Documents, uri: []u8) -> ?u64 {
+fn find_doc_index(store: ref Documents, uri: const []u8) -> ?u64 {
     for (var i: u64 = 0; i < len(store.docs); i += 1) {
         if (bytes.equal(store.docs[i].uri, uri)) { return some(i); }
     }
     return none;
 }
 
-pub fn document_get(store: ref Documents, uri: []u8) -> ?ref Document {
+pub fn document_get(store: ref Documents, uri: const []u8) -> ?ref Document {
     var index_opt = find_doc_index(store, uri);
     match (index_opt) {
         none { return none; }
@@ -135,7 +135,7 @@ pub fn document_get(store: ref Documents, uri: []u8) -> ?ref Document {
     }
 }
 
-fn line_index(text: []u8) -> []u64 {
+fn line_index(text: const []u8) -> []u64 {
     var lines: []u64 = [0];
     for (var i: u64 = 0; i < len(text); i += 1) {
         if (text[i] == '\n') { push(lines, i + 1); }
@@ -155,7 +155,7 @@ pub fn document_offset(doc: ref Document, pos: Position) -> u64 {
     return start + utf8.utf16_to_byte(line, pos.character);
 }
 
-pub fn document_apply_change(doc: ref Document, value: Range, replacement: []u8) {
+pub fn document_apply_change(doc: ref Document, value: Range, replacement: const []u8) {
     var start = document_offset(doc, value.start);
     var end = document_offset(doc, value.end);
     if (start > end || end > len(doc.text)) { trap; }
@@ -185,7 +185,7 @@ pub fn document_apply_change(doc: ref Document, value: Range, replacement: []u8)
     }
 }
 
-pub fn document_open(store: ref Documents, uri: []u8, text: []u8, version: i64) -> ref Document {
+pub fn document_open(store: ref Documents, uri: const []u8, text: const []u8, version: i64) -> ref Document {
     var existing = document_get(store, uri);
     match (existing) {
         some(doc) {
@@ -203,7 +203,7 @@ pub fn document_open(store: ref Documents, uri: []u8, text: []u8, version: i64) 
     }
 }
 
-pub fn document_close(store: ref Documents, uri: []u8) {
+pub fn document_close(store: ref Documents, uri: const []u8) {
     var index_opt = find_doc_index(store, uri);
     match (index_opt) {
         none { return; }
@@ -219,7 +219,7 @@ pub fn range(start_line: u64, start_char: u64, end_line: u64, end_char: u64) -> 
     return Range { start: position(start_line, start_char), end: position(end_line, end_char) };
 }
 
-pub fn position_from_offset(text: []u8, offset: u64) -> Position {
+pub fn position_from_offset(text: const []u8, offset: u64) -> Position {
     if (offset > len(text)) { trap; }
     var line: u64 = 0;
     var line_start: u64 = 0;
@@ -235,7 +235,7 @@ pub fn position_from_offset(text: []u8, offset: u64) -> Position {
     return position(line, utf8.utf16_len(prefix));
 }
 
-pub fn offset_from_position(text: []u8, pos: Position) -> u64 {
+pub fn offset_from_position(text: const []u8, pos: Position) -> u64 {
     var line: u64 = 0;
     var start: u64 = 0;
     while (line < pos.line && start < len(text)) {
@@ -282,7 +282,7 @@ pub fn symbol_json(value: Symbol) -> json.Json {
     return obj;
 }
 
-pub fn semantic_data(tokens: []SemanticToken) -> json.Json {
+pub fn semantic_data(tokens: const []SemanticToken) -> json.Json {
     var data = json.array();
     var prev_line: u64 = 0;
     var prev_start: u64 = 0;
@@ -303,7 +303,7 @@ pub fn semantic_data(tokens: []SemanticToken) -> json.Json {
     return result;
 }
 
-pub fn parse_message(body: []u8) -> Message {
+pub fn parse_message(body: const []u8) -> Message {
     var parsed = json.parse(body);
     var root = json.Json.null;
     match (parsed) {
@@ -374,7 +374,7 @@ pub fn notification(method: []u8, params: json.Json) -> []u8 {
     return frame_encode(json.stringify(obj));
 }
 
-pub fn publish_diagnostics(uri: []u8, diagnostics: []Diagnostic) -> []u8 {
+pub fn publish_diagnostics(uri: []u8, diagnostics: const []Diagnostic) -> []u8 {
     var params = json.object();
     json.put(params, "uri", json.Json.string(uri));
     var items = json.array();
@@ -444,7 +444,7 @@ pub fn get_range(params: json.Json) -> ?Range {
     }
 }
 
-pub fn initialize_result(server_name: []u8, semantic_types: [][]u8, formatting: bool, definition: bool, hover: bool, completion: bool, symbols: bool) -> json.Json {
+pub fn initialize_result(server_name: []u8, semantic_types: const [][]u8, formatting: bool, definition: bool, hover: bool, completion: bool, symbols: bool) -> json.Json {
     var caps = json.object();
     json.put(caps, "positionEncoding", json.Json.string("utf-16"));
     json.put(caps, "textDocumentSync", json.u64_value(2));
