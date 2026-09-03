@@ -47,13 +47,14 @@ jobs:
               source = source.replace(old, new, 1)
           path.write_text(source)
 
-          test = Path('tools/lace2/editor_model_test.l')
-          source = test.read_text()
-          old = 'fn expect_bytes(actual: []u8, expected: []u8) {'
-          new = 'fn expect_bytes(actual: const []u8, expected: const []u8) {'
-          if source.count(old) != 1:
-              raise SystemExit('editor_model_test expect_bytes signature changed')
-          test.write_text(source.replace(old, new, 1))
+          for test_name in ['editor_model_test.l', 'linewise_test.l']:
+              test = Path('tools/lace2') / test_name
+              source = test.read_text()
+              old = 'fn expect_bytes(actual: []u8, expected: []u8) {'
+              new = 'fn expect_bytes(actual: const []u8, expected: const []u8) {'
+              if source.count(old) != 1:
+                  raise SystemExit(f'{test_name}: expect_bytes signature changed')
+              test.write_text(source.replace(old, new, 1))
           PY
       - name: Full repository test suite
         run: ./test.sh
