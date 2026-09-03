@@ -38,6 +38,11 @@ HOST={
 (('linux','process'),'spawn_error'):35, (('linux','process'),'group'):36,
 (('linux','process'),'wait_exit'):37, (('linux','process'),'exit_code'):38,
 (('linux','process'),'term_signal'):39,
+(('linux','process'),'send'):40, (('linux','process'),'send_group'):41,
+(('linux','process'),'sigint'):42, (('linux','process'),'sigquit'):43,
+(('linux','process'),'sigterm'):44, (('linux','process'),'sigkill'):45,
+(('linux','process'),'sigstop'):46, (('linux','process'),'sigtstp'):47,
+(('linux','process'),'sigcont'):48, (('linux','process'),'sighup'):49,
 }
 
 class NativeEmitter:
