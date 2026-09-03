@@ -6,7 +6,7 @@ fn expect(ok: bool) {
     if (!ok) { trap; }
 }
 
-fn expect_bytes(actual: []u8, expected: []u8) {
+fn expect_bytes(actual: const []u8, expected: const []u8) {
     if (!bytes.equal(actual, expected)) { trap; }
 }
 
