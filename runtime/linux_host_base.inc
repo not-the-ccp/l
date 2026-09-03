@@ -286,6 +286,17 @@ static LValue linux_spawn_exact_impl(LVM *vm, LValue *args, int n, int foregroun
         die("invalid optional linux.process.Group");
     }
 
+    pid_t previous_foreground = -1;
+    if (foreground_fd >= 0) {
+        previous_foreground = tcgetpgrp(foreground_fd);
+        if (previous_foreground < 0) {
+            int e = errno ? errno : EIO;
+            free(path);
+            linux_free_argv(av, ac);
+            return linux_spawn_error_result(vm, e);
+        }
+    }
+
     int launch[2];
     if (linux_pipe_cloexec(launch) < 0) {
         int e = errno;
@@ -363,6 +374,8 @@ static LValue linux_spawn_exact_impl(LVM *vm, LValue *args, int n, int foregroun
         memcpy(&number, payload, got < sizeof(number) ? got : sizeof(number));
         int st;
         while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
+        if (previous_foreground >= 0)
+            (void)linux_tcsetpgrp_no_sigttou(foreground_fd, previous_foreground);
         return linux_spawn_error_result(vm, number);
     }
 

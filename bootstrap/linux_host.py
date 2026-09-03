@@ -283,6 +283,16 @@ class LinuxHost:
         elif group_value is not None:
             raise TrapSig("invalid optional linux.process.Group")
 
+        previous_foreground = None
+        if foreground_fd is not None:
+            try:
+                previous_foreground = os.tcgetpgrp(foreground_fd)
+            except OSError as exc:
+                return OpaqueVal(
+                    SPAWN_TYPE,
+                    LinuxSpawnResult(None, int(exc.errno or errno.EIO)),
+                )
+
         env = dict(os.environb)
         inherited_fds = [item.fd for item in self.fds if not item.closed]
         launch_read, launch_write = os.pipe2(os.O_CLOEXEC)
@@ -351,6 +361,11 @@ class LinuxHost:
                 os.waitpid(pid, 0)
             except ChildProcessError:
                 pass
+            if previous_foreground is not None:
+                try:
+                    self._set_foreground_pgid(foreground_fd, previous_foreground)
+                except OSError:
+                    pass
             raise
 
         payload = b""
@@ -371,6 +386,11 @@ class LinuxHost:
             except (ChildProcessError, OSError):
                 pass
             os.close(pidfd)
+            if previous_foreground is not None:
+                try:
+                    self._set_foreground_pgid(foreground_fd, previous_foreground)
+                except OSError:
+                    pass
             return OpaqueVal(SPAWN_TYPE, LinuxSpawnResult(None, number))
 
         child = LinuxChild(pid=pid, pidfd=pidfd, pgid=pgid)

@@ -58,6 +58,23 @@ fn main() -> i64 {
     require(foreground_is(input, shell_group));
     var shell_mode = mode_or_trap(input);
 
+    // A failed foreground exec must be transactional with respect to tty
+    // ownership. PATH-style probing cannot leave the terminal attached to the
+    // short-lived failed child process group.
+    var missing_argv = ["definitely-missing-l-job-probe"];
+    var missing = launch.foreground_exact(
+        "/definitely/missing/l-job-probe", missing_argv, input, output, error, none, input
+    );
+    match (process.spawn_child(missing)) {
+        some(_) { trap; }
+        none {}
+    }
+    match (process.spawn_error(missing)) {
+        some(_) {}
+        none { trap; }
+    }
+    require(foreground_is(input, shell_group));
+
     var argv = ["cat"];
     var child = child_or_trap(launch.foreground_exact(
         "/bin/cat", argv, input, output, error, none, input
