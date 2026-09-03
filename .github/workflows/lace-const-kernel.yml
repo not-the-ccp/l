@@ -26,12 +26,12 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          def replace(path: str, old: str, new: str) -> None:
+          def replace(path: str, old: str, new: str, count: int = 1) -> None:
               p = Path(path)
               text = p.read_text()
-              if text.count(old) != 1:
-                  raise SystemExit(f"{path}: expected exactly one {old!r}, got {text.count(old)}")
-              p.write_text(text.replace(old, new, 1))
+              if text.count(old) != count:
+                  raise SystemExit(f"{path}: expected {count} occurrence(s) of {old!r}, got {text.count(old)}")
+              p.write_text(text.replace(old, new, count))
 
           p = "tools/lace2/piece_tree.l"
           replace(p, "    original: []u8,", "    original: const []u8,")
@@ -42,10 +42,8 @@ jobs:
           replace(p, "pub fn replace(text: ref Text, start: u64, end: u64, replacement: []u8) {", "pub fn replace(text: ref Text, start: u64, end: u64, replacement: const []u8) {")
 
           p = "tools/lace2/transaction.l"
-          replace(p, "    pub inserted: []u8,", "    pub inserted: const []u8,")
+          replace(p, "    pub inserted: []u8,", "    pub inserted: const []u8,", 2)
           replace(p, "    pub removed: []u8,", "    pub removed: const []u8,")
-          # AppliedEdit has a second inserted field after EditSpec's field.
-          replace(p, "    pub inserted: []u8,", "    pub inserted: const []u8,")
           replace(p, "    pub edits: []AppliedEdit,", "    pub edits: const []AppliedEdit,")
           replace(p, "fn validate_specs(doc: ref text.Text, specs: []EditSpec) {", "fn validate_specs(doc: ref text.Text, specs: const []EditSpec) {")
           replace(p, "pub fn apply(doc: ref text.Text, specs: []EditSpec) -> Transaction {", "pub fn apply(doc: ref text.Text, specs: const []EditSpec) -> Transaction {")
