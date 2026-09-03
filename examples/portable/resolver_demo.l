@@ -7,11 +7,11 @@ fn require(ok: bool) {
     }
 }
 
-fn module(name: []u8, source: []u8) -> slang_project.Module {
+fn module(name: const []u8, source: const []u8) -> slang_project.Module {
     return slang_project.Module { name: name, index: slang_index.index(source) };
 }
 
-fn count(errors: []slang_project.Error, kind: slang_project.ErrorKind) -> u64 {
+fn count(errors: const []slang_project.Error, kind: slang_project.ErrorKind) -> u64 {
     var total: u64 = 0;
     for (error in errors) {
         if (error.kind == kind) {
