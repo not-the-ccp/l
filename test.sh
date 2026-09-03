@@ -7,6 +7,7 @@ PYTHON=${PYTHON:-python3}
 "$PYTHON" "$HERE/conformance/core_conformance.py"
 "$PYTHON" "$HERE/tests/const_arrays.py"
 "$HERE/lr" "$HERE/tests/utf8_portable.l" >/dev/null
+"$HERE/lr" "$HERE/tests/byte_display_portable.l" >/dev/null
 "$HERE/lc" --check "$HERE/examples/hosted/project/main.l" >/dev/null
 "$HERE/lr" "$HERE/examples/hosted/hello.l" -- smoke >/dev/null
 
