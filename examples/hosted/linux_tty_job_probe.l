@@ -1,6 +1,7 @@
 import linux.fd as fd;
 import linux.process as process;
 import linux.process.group as groups;
+import linux.process.launch as launch;
 import linux.process.wait as wait;
 import linux.tty as tty;
 
@@ -58,15 +59,16 @@ fn main() -> i64 {
     var shell_mode = mode_or_trap(input);
 
     var argv = ["cat"];
-    var child = child_or_trap(process.spawn_exact(
-        "/bin/cat", argv, input, output, error, none
+    var child = child_or_trap(launch.foreground_exact(
+        "/bin/cat", argv, input, output, error, none, input
     ));
     var job = process.group(child);
     require(!groups.same(shell_group, job));
 
-    write_all(output, "READY\n");
-    require_ok(tty.set_foreground(input, job));
+    // foreground_exact establishes terminal ownership before exec, so
+    // a program that immediately reads the tty cannot race into SIGTTIN.
     require(foreground_is(input, job));
+    write_all(output, "READY\n");
 
     // The harness sends the terminal's VSUSP byte (Ctrl-Z). The tty driver, not
     // this process, must stop the foreground process group.

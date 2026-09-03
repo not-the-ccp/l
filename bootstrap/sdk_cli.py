@@ -14,6 +14,7 @@ if _impl.IS_LINUX:
     from linux_job_host import LinuxJobHost
 
     _impl.HOST_MODULES |= {
+        ("linux", "process", "launch"),
         ("linux", "process", "group"),
         ("linux", "process", "child"),
         ("linux", "process", "wait"),

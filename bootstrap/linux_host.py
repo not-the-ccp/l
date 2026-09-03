@@ -253,8 +253,18 @@ class LinuxHost:
 
     # linux.process
 
-    def _spawn_exact(self, path_value, argv_value, stdin_value, stdout_value,
-                     stderr_value, group_value):
+    def _set_foreground_pgid(self, descriptor: int, pgid: int) -> None:
+        old_mask = None
+        try:
+            if hasattr(signal, "pthread_sigmask"):
+                old_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTTOU})
+            os.tcsetpgrp(descriptor, pgid)
+        finally:
+            if old_mask is not None:
+                signal.pthread_sigmask(signal.SIG_SETMASK, old_mask)
+
+    def _spawn_exact_impl(self, path_value, argv_value, stdin_value, stdout_value,
+                          stderr_value, group_value, foreground_fd: int | None):
         path = _bytes(path_value)
         argv = _argv(argv_value)
         if not path or b"\0" in path:
@@ -282,6 +292,8 @@ class LinuxHost:
             try:
                 os.close(launch_read)
                 os.setpgid(0, 0 if requested_group is None else requested_group)
+                if foreground_fd is not None:
+                    self._set_foreground_pgid(foreground_fd, os.getpgrp())
                 os.dup2(in_fd, 0, inheritable=True)
                 os.dup2(out_fd, 1, inheritable=True)
                 os.dup2(err_fd, 2, inheritable=True)
@@ -318,6 +330,14 @@ class LinuxHost:
             os.setpgid(pid, pgid)
         except (ProcessLookupError, PermissionError):
             pass
+        if foreground_fd is not None:
+            try:
+                self._set_foreground_pgid(foreground_fd, pgid)
+            except OSError:
+                # The child performs the same handoff before exec and reports
+                # setup failure through the launch pipe. This parent call is
+                # the race-closing half of the standard job-control pattern.
+                pass
 
         try:
             pidfd = os.pidfd_open(pid, 0)
@@ -356,6 +376,21 @@ class LinuxHost:
         child = LinuxChild(pid=pid, pidfd=pidfd, pgid=pgid)
         self.children.append(child)
         return OpaqueVal(SPAWN_TYPE, LinuxSpawnResult(child, None))
+
+    def _spawn_exact(self, path_value, argv_value, stdin_value, stdout_value,
+                     stderr_value, group_value):
+        return self._spawn_exact_impl(
+            path_value, argv_value, stdin_value, stdout_value, stderr_value,
+            group_value, None
+        )
+
+    def _spawn_foreground_exact(self, path_value, argv_value, stdin_value, stdout_value,
+                                stderr_value, group_value, terminal_value):
+        terminal_fd = self._fd(terminal_value).fd
+        return self._spawn_exact_impl(
+            path_value, argv_value, stdin_value, stdout_value, stderr_value,
+            group_value, terminal_fd
+        )
 
     def _spawn_child(self, value):
         result = self._spawn_result(value)

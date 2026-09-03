@@ -24,6 +24,7 @@ enum {
     H_LINUX_CHILD_SAME,
     H_LINUX_TTY_CAPTURE,
     H_LINUX_TTY_RESTORE,
+    H_LINUX_LAUNCH_FOREGROUND_EXACT,
 };
 
 enum {
@@ -220,16 +221,13 @@ static LValue linux_job_host_call(LVM *vm, int id, LValue *args, int n) {
         if (n != 2) die("linux.tty.set_foreground arity");
         LinuxOpaque *fd = linux_fd_open_handle(args[0]);
         LinuxOpaque *group = linux_as(args[1], LX_GROUP, "linux.process.Group");
-        sigset_t block, old;
-        sigemptyset(&block);
-        sigaddset(&block, SIGTTOU);
-        int have_old = sigprocmask(SIG_BLOCK, &block, &old) == 0;
-        errno = 0;
-        int rc = tcsetpgrp(fd->u.fd.fd, group->u.group.pgid);
-        int saved = errno;
-        if (have_old) (void)sigprocmask(SIG_SETMASK, &old, NULL);
-        errno = saved;
-        return linux_errno_optional(vm, rc);
+        return linux_errno_optional(vm,
+            linux_tcsetpgrp_no_sigttou(fd->u.fd.fd, group->u.group.pgid));
+    }
+    case H_LINUX_LAUNCH_FOREGROUND_EXACT: {
+        if (n != 7) die("linux.process.launch.foreground_exact arity");
+        LinuxOpaque *terminal = linux_fd_open_handle(args[6]);
+        return linux_spawn_exact_impl(vm, args, 6, terminal->u.fd.fd);
     }
     case H_LINUX_TTY_CAPTURE: {
         if (n != 1) die("linux.tty.capture arity");
@@ -251,7 +249,7 @@ static LValue linux_job_host_call(LVM *vm, int id, LValue *args, int n) {
 }
 
 static int linux_job_host_id(int id) {
-    return id >= H_LINUX_GROUP_CURRENT && id <= H_LINUX_TTY_RESTORE;
+    return id >= H_LINUX_GROUP_CURRENT && id <= H_LINUX_LAUNCH_FOREGROUND_EXACT;
 }
 
 static void linux_job_host_cleanup(LVM *vm) {

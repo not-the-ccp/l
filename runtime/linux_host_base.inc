@@ -234,6 +234,151 @@ static LValue linux_errno_optional(LVM *vm, int rc) {
     return linux_some(vm, v_int((uint64_t)(int64_t)(errno ? errno : EIO)));
 }
 
+static int linux_tcsetpgrp_no_sigttou(int fd, pid_t pgid) {
+    sigset_t block, old;
+    sigemptyset(&block);
+    sigaddset(&block, SIGTTOU);
+    int have_old = sigprocmask(SIG_BLOCK, &block, &old) == 0;
+    errno = 0;
+    int rc = tcsetpgrp(fd, pgid);
+    int saved = errno;
+    if (have_old) (void)sigprocmask(SIG_SETMASK, &old, NULL);
+    errno = saved;
+    return rc;
+}
+
+static LValue linux_spawn_exact_impl(LVM *vm, LValue *args, int n, int foreground_fd) {
+    if (n != 6) die("linux.process.spawn_exact arity");
+    if (args[0].tag != V_OBJ || args[0].as.obj->kind != O_ARRAY ||
+        args[0].as.obj->u.array.len == 0 || linux_bytes_has_nul(args[0]))
+        die("linux.process.spawn_exact requires a nonempty NUL-free path");
+    if (args[1].tag != V_OBJ || args[1].as.obj->kind != O_ARRAY ||
+        args[1].as.obj->u.array.len == 0)
+        die("linux.process.spawn_exact requires a nonempty argv");
+
+    char *path = array_cstr(args[0]);
+    LObj *aa = args[1].as.obj;
+    size_t ac = aa->u.array.len;
+    char **av = xmalloc((ac + 1) * sizeof(char *));
+    for (size_t i = 0; i < ac; i++) {
+        if (linux_bytes_has_nul(aa->u.array.items[i])) {
+            free(path);
+            linux_free_argv(av, i);
+            die("linux.process.spawn_exact argv contains NUL");
+        }
+        av[i] = array_cstr(aa->u.array.items[i]);
+    }
+    av[ac] = NULL;
+
+    int in_fd = linux_fd_open_handle(args[2])->u.fd.fd;
+    int out_fd = linux_fd_open_handle(args[3])->u.fd.fd;
+    int err_fd = linux_fd_open_handle(args[4])->u.fd.fd;
+    int has_group = 0;
+    pid_t requested_group = 0;
+    if (args[5].tag == V_OBJ && args[5].as.obj->kind == O_SOME) {
+        LValue gv = args[5].as.obj->u.some.value;
+        LinuxOpaque *g = linux_as(gv, LX_GROUP, "linux.process.Group");
+        has_group = 1;
+        requested_group = g->u.group.pgid;
+    } else if (args[5].tag != V_NONE) {
+        free(path);
+        linux_free_argv(av, ac);
+        die("invalid optional linux.process.Group");
+    }
+
+    int launch[2];
+    if (linux_pipe_cloexec(launch) < 0) {
+        int e = errno;
+        free(path);
+        linux_free_argv(av, ac);
+        die("linux.process.spawn_exact launch pipe failed: %s", strerror(e));
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        int e = errno;
+        close(launch[0]);
+        close(launch[1]);
+        free(path);
+        linux_free_argv(av, ac);
+        return linux_spawn_error_result(vm, e);
+    }
+    if (pid == 0) {
+        close(launch[0]);
+        if (setpgid(0, has_group ? requested_group : 0) < 0) {
+            linux_child_report_errno(launch[1], errno);
+            _exit(127);
+        }
+        if (foreground_fd >= 0) {
+            pid_t child_group = has_group ? requested_group : getpid();
+            if (linux_tcsetpgrp_no_sigttou(foreground_fd, child_group) < 0) {
+                linux_child_report_errno(launch[1], errno);
+                _exit(127);
+            }
+        }
+        if (dup2(in_fd, 0) < 0 || dup2(out_fd, 1) < 0 || dup2(err_fd, 2) < 0) {
+            linux_child_report_errno(launch[1], errno);
+            _exit(127);
+        }
+        linux_child_close_inherited(vm, launch[1]);
+        signal(SIGINT, SIG_DFL);
+        signal(SIGQUIT, SIG_DFL);
+        signal(SIGTSTP, SIG_DFL);
+        signal(SIGTTIN, SIG_DFL);
+        signal(SIGTTOU, SIG_DFL);
+        signal(SIGPIPE, SIG_DFL);
+        extern char **environ;
+        execve(path, av, environ);
+        linux_child_report_errno(launch[1], errno ? errno : EIO);
+        _exit(127);
+    }
+
+    close(launch[1]);
+    pid_t pgid = has_group ? requested_group : pid;
+    if (setpgid(pid, pgid) < 0 && errno != EACCES && errno != ESRCH) {
+        /* The child is authoritative and reports setup failure through the
+         * launch pipe. Parent-side setpgid is only the usual race closer. */
+    }
+    if (foreground_fd >= 0) {
+        /* As with setpgid, do this in both parent and child. The child's call is
+         * authoritative and reports failure before exec; this call closes the
+         * scheduling window in which the child could perform terminal I/O first. */
+        (void)linux_tcsetpgrp_no_sigttou(foreground_fd, pgid);
+    }
+
+    unsigned char payload[sizeof(int)] = {0};
+    size_t got = 0;
+    while (got < sizeof(payload)) {
+        ssize_t z = read(launch[0], payload + got, sizeof(payload) - got);
+        if (z < 0 && errno == EINTR) continue;
+        if (z <= 0) break;
+        got += (size_t)z;
+    }
+    close(launch[0]);
+    free(path);
+    linux_free_argv(av, ac);
+
+    if (got != 0) {
+        int number = EIO;
+        memcpy(&number, payload, got < sizeof(number) ? got : sizeof(number));
+        int st;
+        while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
+        return linux_spawn_error_result(vm, number);
+    }
+
+    LinuxOpaque *child = linux_new(vm, LX_CHILD);
+    child->u.child.pid = pid;
+    child->u.child.pgid = pgid;
+    child->u.child.pidfd = linux_pidfd_open(pid);
+    if (child->u.child.pidfd < 0 && errno != ENOSYS && errno != EINVAL) {
+        /* pidfd is an implementation aid, not part of the L contract. */
+        child->u.child.pidfd = -1;
+    }
+    LinuxOpaque *result = linux_new(vm, LX_SPAWN_RESULT);
+    result->u.spawn.child = child;
+    return v_opaque(result);
+}
+
 static LValue linux_host_call(LVM *vm, int id, LValue *args, int n) {
     switch (id) {
     case H_LINUX_FD_STDIN:
@@ -414,124 +559,8 @@ static LValue linux_host_call(LVM *vm, int id, LValue *args, int n) {
         errno = e;
         return linux_errno_optional(vm, rc);
     }
-    case H_LINUX_PROCESS_SPAWN_EXACT: {
-        if (n != 6) die("linux.process.spawn_exact arity");
-        if (args[0].tag != V_OBJ || args[0].as.obj->kind != O_ARRAY ||
-            args[0].as.obj->u.array.len == 0 || linux_bytes_has_nul(args[0]))
-            die("linux.process.spawn_exact requires a nonempty NUL-free path");
-        if (args[1].tag != V_OBJ || args[1].as.obj->kind != O_ARRAY ||
-            args[1].as.obj->u.array.len == 0)
-            die("linux.process.spawn_exact requires a nonempty argv");
-
-        char *path = array_cstr(args[0]);
-        LObj *aa = args[1].as.obj;
-        size_t ac = aa->u.array.len;
-        char **av = xmalloc((ac + 1) * sizeof(char *));
-        for (size_t i = 0; i < ac; i++) {
-            if (linux_bytes_has_nul(aa->u.array.items[i])) {
-                free(path);
-                linux_free_argv(av, i);
-                die("linux.process.spawn_exact argv contains NUL");
-            }
-            av[i] = array_cstr(aa->u.array.items[i]);
-        }
-        av[ac] = NULL;
-
-        int in_fd = linux_fd_open_handle(args[2])->u.fd.fd;
-        int out_fd = linux_fd_open_handle(args[3])->u.fd.fd;
-        int err_fd = linux_fd_open_handle(args[4])->u.fd.fd;
-        int has_group = 0;
-        pid_t requested_group = 0;
-        if (args[5].tag == V_OBJ && args[5].as.obj->kind == O_SOME) {
-            LValue gv = args[5].as.obj->u.some.value;
-            LinuxOpaque *g = linux_as(gv, LX_GROUP, "linux.process.Group");
-            has_group = 1;
-            requested_group = g->u.group.pgid;
-        } else if (args[5].tag != V_NONE) {
-            free(path);
-            linux_free_argv(av, ac);
-            die("invalid optional linux.process.Group");
-        }
-
-        int launch[2];
-        if (linux_pipe_cloexec(launch) < 0) {
-            int e = errno;
-            free(path);
-            linux_free_argv(av, ac);
-            die("linux.process.spawn_exact launch pipe failed: %s", strerror(e));
-        }
-
-        pid_t pid = fork();
-        if (pid < 0) {
-            int e = errno;
-            close(launch[0]);
-            close(launch[1]);
-            free(path);
-            linux_free_argv(av, ac);
-            return linux_spawn_error_result(vm, e);
-        }
-        if (pid == 0) {
-            close(launch[0]);
-            if (setpgid(0, has_group ? requested_group : 0) < 0) {
-                linux_child_report_errno(launch[1], errno);
-                _exit(127);
-            }
-            if (dup2(in_fd, 0) < 0 || dup2(out_fd, 1) < 0 || dup2(err_fd, 2) < 0) {
-                linux_child_report_errno(launch[1], errno);
-                _exit(127);
-            }
-            linux_child_close_inherited(vm, launch[1]);
-            signal(SIGINT, SIG_DFL);
-            signal(SIGQUIT, SIG_DFL);
-            signal(SIGTSTP, SIG_DFL);
-            signal(SIGTTIN, SIG_DFL);
-            signal(SIGTTOU, SIG_DFL);
-            signal(SIGPIPE, SIG_DFL);
-            extern char **environ;
-            execve(path, av, environ);
-            linux_child_report_errno(launch[1], errno ? errno : EIO);
-            _exit(127);
-        }
-
-        close(launch[1]);
-        pid_t pgid = has_group ? requested_group : pid;
-        if (setpgid(pid, pgid) < 0 && errno != EACCES && errno != ESRCH) {
-            /* The child is authoritative and reports setup failure through the
-             * launch pipe. Parent-side setpgid is only the usual race closer. */
-        }
-
-        unsigned char payload[sizeof(int)] = {0};
-        size_t got = 0;
-        while (got < sizeof(payload)) {
-            ssize_t z = read(launch[0], payload + got, sizeof(payload) - got);
-            if (z < 0 && errno == EINTR) continue;
-            if (z <= 0) break;
-            got += (size_t)z;
-        }
-        close(launch[0]);
-        free(path);
-        linux_free_argv(av, ac);
-
-        if (got != 0) {
-            int number = EIO;
-            memcpy(&number, payload, got < sizeof(number) ? got : sizeof(number));
-            int st;
-            while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
-            return linux_spawn_error_result(vm, number);
-        }
-
-        LinuxOpaque *child = linux_new(vm, LX_CHILD);
-        child->u.child.pid = pid;
-        child->u.child.pgid = pgid;
-        child->u.child.pidfd = linux_pidfd_open(pid);
-        if (child->u.child.pidfd < 0 && errno != ENOSYS && errno != EINVAL) {
-            /* pidfd is an implementation aid, not part of the L contract. */
-            child->u.child.pidfd = -1;
-        }
-        LinuxOpaque *result = linux_new(vm, LX_SPAWN_RESULT);
-        result->u.spawn.child = child;
-        return v_opaque(result);
-    }
+    case H_LINUX_PROCESS_SPAWN_EXACT:
+        return linux_spawn_exact_impl(vm, args, n, -1);
     case H_LINUX_PROCESS_SPAWN_CHILD: {
         if (n != 1) die("linux.process.spawn_child arity");
         LinuxOpaque *r = linux_as(args[0], LX_SPAWN_RESULT, "linux.process.SpawnResult");
