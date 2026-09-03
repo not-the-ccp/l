@@ -1205,7 +1205,7 @@ static int field_index(LObj *st, int field) {
             pushv(vm, v_int(mask_width(in->u, ty_width(in->a))));
             break;
         case OP_PUSH_FLOAT:
-            pushv(vm, v_float(round_float(in->f, in->a));
+            pushv(vm, v_float(round_float(in->f, in->a)));
             break;
         case OP_MAKE_BYTES: {
             const LBlob *b = in->ptr;
