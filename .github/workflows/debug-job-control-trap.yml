@@ -2,7 +2,8 @@ name: Diagnose job-control PTY trap
 
 on:
   push:
-    branches: [debug/job-control-trap]
+    branches:
+      - debug/job-control-trap
 
 jobs:
   diagnose:
@@ -12,36 +13,4 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Instrument reference probe
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('examples/hosted/linux_tty_job_probe.l')
-          s = p.read_text()
-          old = '''    write_all(output, "READY\\n");
-    require_ok(tty.set_foreground(input, job));
-    require(foreground_is(input, job));
-
-    // The harness sends the terminal's VSUSP byte (Ctrl-Z). The tty driver, not
-'''
-          new = '''    write_all(output, "READY\\n");
-    write_all(output, "BEFORE_SET\\n");
-    var set_result = tty.set_foreground(input, job);
-    match (set_result) {
-        none { write_all(output, "SET_OK\\n"); }
-        some(_) { write_all(output, "SET_ERR\\n"); trap; }
-    }
-    write_all(output, "BEFORE_QUERY\\n");
-    require(foreground_is(input, job));
-    write_all(output, "QUERY_OK\\n");
-    write_all(output, "BEFORE_WAIT\\n");
-
-    // The harness sends the terminal's VSUSP byte (Ctrl-Z). The tty driver, not
-'''
-          if s.count(old) != 1:
-              raise SystemExit('target snippet changed')
-          p.write_text(s.replace(old, new, 1))
-          PY
-      - name: Run reference PTY probe
-        run: python3 tests/linux_job_control_pty.py
+      - run: python3 tests/linux_job_control_pty.py
