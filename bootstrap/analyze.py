@@ -11,7 +11,7 @@ from analysis_model import analyze_project,ast_value,select_functions
 
 def report(project,funcs):
     out=[f"L code analysis: {'.'.join(project.entry_module)}",
-         f"modules={len({f.module for f in funcs})} functions={len(funcs)} statements={sum(f.metrics['statements'] for f in funcs)} calls={sum(len(f.calls) for f in funcs)}",""]
+         f"modules={len({f.module for f in funcs})} functions={len(funcs)} statements={sum(f.metrics['statements'] for f in funcs)} calls={sum(len(f.calls) for f in funcs)} bindings={sum(f.metrics['local_bindings'] for f in funcs)} rebound={sum(f.metrics['rebound_local_bindings'] for f in funcs)}",""]
     by={}
     for f in funcs:by.setdefault(f.module,[]).append(f)
     for mod in sorted(by):
@@ -20,6 +20,7 @@ def report(project,funcs):
             p=", ".join(f"{x['name']}: {x['type']}" for x in f.params);m=f.metrics
             out.append(f"  fn {f.name}({p}) -> {f.return_type}  lines {f.line_start}-{f.line_end}")
             out.append(f"    statements={m['statements']} decisions={m['decisions']} loops={m['loops']} complexity={m['cyclomatic_complexity']} nesting={m['max_nesting']} returns={m['returns']} traps={m['traps']}")
+            out.append(f"    local bindings={m['local_bindings']} rebound={m['rebound_local_bindings']} never-rebound={m['never_rebound_local_bindings']}")
             if f.calls:
                 out.append("    calls: "+", ".join((c.resolved or c.callee)+(" [internal]" if c.internal else "") for c in f.calls))
             if f.unreachable_lines:out.append("    unreachable statements at lines: "+", ".join(map(str,f.unreachable_lines)))

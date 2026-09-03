@@ -32,9 +32,13 @@ The analyzer is intentionally optional tooling. It is not part of L Core and doe
 
 ## Views
 
-The `report` view is the default. Per function it reports source extent, statement/decision/loop counts, a structured cyclomatic-complexity estimate, maximum control nesting, returns/traps, direct calls, and syntactically unreachable statements following non-fallthrough control flow.
+The `report` view is the default. Per function it reports source extent, statement/decision/loop counts, a structured cyclomatic-complexity estimate, maximum control nesting, returns/traps, direct calls, local-binding rebinding, and syntactically unreachable statements following non-fallthrough control flow.
 
-The `model` view serializes the reusable analysis model as JSON: module/import/declaration information, function metrics, call sites and resolution status, unreachable lines, and the complete control-flow graph as nodes and labeled edges.
+Binding analysis deliberately distinguishes rebinding a local name from mutating data reachable through it. `x = value` and `x += 1` count as reassignments of the explicit `var x` binding. `x[i] = value`, `x.field = value`, or mutation through a `ref` does not: the binding still names the same array/value/reference. Anonymous functions are analyzed independently. The current metric covers explicit `var` declarations; it does not pretend that pattern/iteration bindings have the same language-level mutability semantics.
+
+This metric is observational tooling, not a recommendation that L adopt immutable local bindings. It exists so that design questions such as immutable-by-default locals can be evaluated against real L programs before the grammar or checker changes.
+
+The `model` view serializes the reusable analysis model as JSON: module/import/declaration information, function metrics, call sites and resolution status, local bindings with reassignment counts, unreachable lines, and the complete control-flow graph as nodes and labeled edges.
 
 The `ast` view serializes the parser AST, including source spans and types when present on nodes.
 
