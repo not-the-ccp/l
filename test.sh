@@ -33,6 +33,14 @@ if [ "$(uname -s)" = Linux ]; then
   trap - EXIT HUP INT TERM
 fi
 
+# Lace rewrite kernel and v1 editor semantics.
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/kernel_test.l" >/dev/null
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/navigation_test.l" >/dev/null
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/editor_model_test.l" >/dev/null
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/linewise_test.l" >/dev/null
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/render_test.l" >/dev/null
+"$HERE/lc" --check --root "$HERE" "$HERE/tools/lace2/main.l" >/dev/null
+
 # Self-hosting frontend slices run as native executables. Check syntax,
 # top-level identity, full body-AST traversal on small and substantial real
 # programs, and semantic checking of a real Core program.
@@ -64,7 +72,7 @@ rm -f "$bad"
 trap - EXIT HUP INT TERM
 
 "$PYTHON" "$HERE/tests/selfhost_checker_diff.py"
-for t in code_analysis.py incremental_lsp.py editor_safety.py highlight_stability.py editor_usability.py editor_display.py editor_pty.py; do
+for t in code_analysis.py incremental_lsp.py editor_safety.py highlight_stability.py editor_usability.py editor_display.py editor_pty.py lace2_pty.py; do
   "$PYTHON" "$HERE/tests/$t"
 done
 echo 'L repository test suite PASS'
