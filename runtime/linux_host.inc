@@ -1,6 +1,6 @@
 /* Linux-only hosted profile used by native L executables.
  *
- * Native host IDs 25..49 are reserved by bootstrap/native_compile.py. Keeping
+ * Native host IDs 25..55 are reserved by bootstrap/native_compile.py. Keeping
  * their implementation here avoids teaching the portable VM representation
  * about Linux descriptor/process internals. The native runtime already permits
  * only one active LVM per process (g_vm); this profile follows the same model
@@ -44,6 +44,12 @@ enum {
     H_LINUX_PROCESS_SIGTSTP,
     H_LINUX_PROCESS_SIGCONT,
     H_LINUX_PROCESS_SIGHUP,
+    H_LINUX_FS_CWD,
+    H_LINUX_FS_CHDIR,
+    H_LINUX_ENV_GET,
+    H_LINUX_ENV_ENTRIES,
+    H_LINUX_ENV_SET,
+    H_LINUX_ENV_UNSET,
 };
 
 enum {
@@ -150,6 +156,14 @@ static int linux_bytes_has_nul(LValue v) {
     LObj *a = v.as.obj;
     for (size_t i = 0; i < a->u.array.len; i++)
         if ((a->u.array.items[i].as.u & 255) == 0) return 1;
+    return 0;
+}
+
+static int linux_bytes_has_byte(LValue v, unsigned char needle) {
+    if (v.tag != V_OBJ || v.as.obj->kind != O_ARRAY) die("expected []u8");
+    LObj *a = v.as.obj;
+    for (size_t i = 0; i < a->u.array.len; i++)
+        if ((unsigned char)(a->u.array.items[i].as.u & 255) == needle) return 1;
     return 0;
 }
 
@@ -305,6 +319,100 @@ static LValue linux_host_call(LVM *vm, int id, LValue *args, int n) {
         }
         free(buf);
         return v_int((uint64_t)z);
+    }
+    case H_LINUX_FS_CWD: {
+        if (n != 0) die("linux.fs.cwd arity");
+        size_t cap = 256;
+        for (;;) {
+            char *buf = xmalloc(cap);
+            errno = 0;
+            if (getcwd(buf, cap)) {
+                size_t len = strlen(buf);
+                LValue out = linux_some(vm, host_bytes(vm, (const unsigned char *)buf, len));
+                free(buf);
+                return out;
+            }
+            int e = errno;
+            free(buf);
+            if (e == ERANGE && cap <= SIZE_MAX / 2) {
+                cap *= 2;
+                continue;
+            }
+            return v_none();
+        }
+    }
+    case H_LINUX_FS_CHDIR: {
+        if (n != 1) die("linux.fs.chdir arity");
+        if (linux_bytes_has_nul(args[0])) {
+            errno = EINVAL;
+            return linux_errno_optional(vm, -1);
+        }
+        char *path = array_cstr(args[0]);
+        errno = 0;
+        int rc = chdir(path);
+        int e = errno;
+        free(path);
+        errno = e;
+        return linux_errno_optional(vm, rc);
+    }
+    case H_LINUX_ENV_GET: {
+        if (n != 1) die("linux.env.get arity");
+        if (args[0].tag != V_OBJ || args[0].as.obj->kind != O_ARRAY ||
+            args[0].as.obj->u.array.len == 0 || linux_bytes_has_nul(args[0]) ||
+            linux_bytes_has_byte(args[0], '='))
+            return v_none();
+        char *name = array_cstr(args[0]);
+        const char *value = getenv(name);
+        LValue out = v_none();
+        if (value) out = linux_some(vm, host_bytes(vm, (const unsigned char *)value, strlen(value)));
+        free(name);
+        return out;
+    }
+    case H_LINUX_ENV_ENTRIES: {
+        if (n != 0) die("linux.env.entries arity");
+        extern char **environ;
+        size_t count = 0;
+        while (environ[count]) count++;
+        LObj *out = new_array(vm, count);
+        for (size_t i = 0; i < count; i++) {
+            const char *entry = environ[i];
+            out->u.array.items[i] = host_bytes(vm, (const unsigned char *)entry, strlen(entry));
+        }
+        return v_obj(out);
+    }
+    case H_LINUX_ENV_SET: {
+        if (n != 3) die("linux.env.set arity");
+        if (args[0].tag != V_OBJ || args[0].as.obj->kind != O_ARRAY ||
+            args[0].as.obj->u.array.len == 0 || linux_bytes_has_nul(args[0]) ||
+            linux_bytes_has_byte(args[0], '=') || linux_bytes_has_nul(args[1])) {
+            errno = EINVAL;
+            return linux_errno_optional(vm, -1);
+        }
+        char *name = array_cstr(args[0]);
+        char *value = array_cstr(args[1]);
+        errno = 0;
+        int rc = setenv(name, value, args[2].as.u ? 1 : 0);
+        int e = errno;
+        free(name);
+        free(value);
+        errno = e;
+        return linux_errno_optional(vm, rc);
+    }
+    case H_LINUX_ENV_UNSET: {
+        if (n != 1) die("linux.env.unset arity");
+        if (args[0].tag != V_OBJ || args[0].as.obj->kind != O_ARRAY ||
+            args[0].as.obj->u.array.len == 0 || linux_bytes_has_nul(args[0]) ||
+            linux_bytes_has_byte(args[0], '=')) {
+            errno = EINVAL;
+            return linux_errno_optional(vm, -1);
+        }
+        char *name = array_cstr(args[0]);
+        errno = 0;
+        int rc = unsetenv(name);
+        int e = errno;
+        free(name);
+        errno = e;
+        return linux_errno_optional(vm, rc);
     }
     case H_LINUX_PROCESS_SPAWN_EXACT: {
         if (n != 6) die("linux.process.spawn_exact arity");
@@ -576,6 +684,6 @@ static void linux_host_cleanup(LVM *vm) { (void)vm; }
 
 #ifdef __linux__
 static int linux_host_id(int id) {
-    return id >= H_LINUX_FD_STDIN && id <= H_LINUX_PROCESS_SIGHUP;
+    return id >= H_LINUX_FD_STDIN && id <= H_LINUX_ENV_UNSET;
 }
 #endif
