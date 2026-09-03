@@ -1,0 +1,158 @@
+name: Lace stdlib text consolidation
+
+on:
+  push:
+    branches: [work/lace-stdlib-text]
+    paths:
+      - .github/workflows/lace-stdlib-text.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rewrite-test-push:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/lace-stdlib-text
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Consolidate Lace byte and UTF-8 handling
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          utf8 = Path('lib/portable/utf8.l')
+          source = utf8.read_text()
+          start = source.index('pub fn valid_width(src: const []u8, pos: u64) -> u64 {')
+          end = source.index('\npub fn valid(src: const []u8) -> bool {', start)
+          replacement = '''pub fn valid_scalar_width(
+              b0: u8,
+              b1: u8,
+              b2: u8,
+              b3: u8,
+              available: u64
+          ) -> u64 {
+              if (available == 0) { return 0; }
+              if (b0 < 0x80) { return 1; }
+
+              if (b0 >= 0xc2 && b0 <= 0xdf) {
+                  if (available >= 2 && continuation(b1)) { return 2; }
+                  return 1;
+              }
+              if (b0 == 0xe0) {
+                  if (available >= 3 && b1 >= 0xa0 && b1 <= 0xbf && continuation(b2)) { return 3; }
+                  return 1;
+              }
+              if ((b0 >= 0xe1 && b0 <= 0xec) || (b0 >= 0xee && b0 <= 0xef)) {
+                  if (available >= 3 && continuation(b1) && continuation(b2)) { return 3; }
+                  return 1;
+              }
+              if (b0 == 0xed) {
+                  if (available >= 3 && b1 >= 0x80 && b1 <= 0x9f && continuation(b2)) { return 3; }
+                  return 1;
+              }
+              if (b0 == 0xf0) {
+                  if (available >= 4 && b1 >= 0x90 && b1 <= 0xbf && continuation(b2) && continuation(b3)) { return 4; }
+                  return 1;
+              }
+              if (b0 >= 0xf1 && b0 <= 0xf3) {
+                  if (available >= 4 && continuation(b1) && continuation(b2) && continuation(b3)) { return 4; }
+                  return 1;
+              }
+              if (b0 == 0xf4) {
+                  if (available >= 4 && b1 >= 0x80 && b1 <= 0x8f && continuation(b2) && continuation(b3)) { return 4; }
+                  return 1;
+              }
+              return 1;
+          }
+
+          // Validate one scalar from a contiguous byte slice. The scalar-level
+          // primitive above is also usable by ropes, streams and piece tables
+          // that can cheaply fetch a four-byte lookahead without allocating.
+          pub fn valid_width(src: const []u8, pos: u64) -> u64 {
+              if (pos >= len(src)) { return 0; }
+              var available = len(src) - pos;
+              if (available > 4) { available = 4; }
+              var b1: u8 = 0;
+              var b2: u8 = 0;
+              var b3: u8 = 0;
+              if (available > 1) { b1 = src[pos + 1]; }
+              if (available > 2) { b2 = src[pos + 2]; }
+              if (available > 3) { b3 = src[pos + 3]; }
+              return valid_scalar_width(src[pos], b1, b2, b3, available);
+          }
+          '''
+          utf8.write_text(source[:start] + replacement + source[end:])
+
+          nav = Path('tools/lace2/navigation.l')
+          source = nav.read_text()
+          start = source.index('fn continuation(value: u8) -> bool {')
+          end = source.index('pub fn next_atom(doc: ref text.Text, pos: u64) -> u64 {', start)
+          replacement = '''fn valid_utf8_width(doc: ref text.Text, pos: u64) -> u64 {
+              var length = text.byte_len(doc);
+              if (pos >= length) { return 0; }
+              var available = length - pos;
+              if (available > 4) { available = 4; }
+              var b0 = text.byte_at(doc, pos);
+              var b1: u8 = 0;
+              var b2: u8 = 0;
+              var b3: u8 = 0;
+              if (available > 1) { b1 = text.byte_at(doc, pos + 1); }
+              if (available > 2) { b2 = text.byte_at(doc, pos + 2); }
+              if (available > 3) { b3 = text.byte_at(doc, pos + 3); }
+              return utf8.valid_scalar_width(b0, b1, b2, b3, available);
+          }
+
+          '''
+          source = source[:start] + replacement + source[end:]
+          source = source.replace('continuation(text.byte_at(doc, candidate))', 'utf8.continuation(text.byte_at(doc, candidate))')
+          nav.write_text(source)
+
+          for path in Path('tools/lace2').glob('*.l'):
+              source = path.read_text()
+              source = source.replace('import tools.lace2.display_bytes as display;', 'import byte_display as display;')
+              if path.name == 'navigation.l' and 'import utf8;' not in source:
+                  source = source.replace('import term;\n', 'import term;\nimport utf8;\n', 1)
+              path.write_text(source)
+
+          Path('tools/lace2/display_bytes.l').unlink()
+
+          tests = Path('tests/utf8_portable.l')
+          source = tests.read_text()
+          anchor = '    require(utf8.valid_width(four, 0) == 4);\n'
+          addition = '''    require(utf8.valid_scalar_width('a', 0, 0, 0, 1) == 1);
+              require(utf8.valid_scalar_width(0xc3, 0xa9, 0, 0, 2) == 2);
+              require(utf8.valid_scalar_width(0xe2, 0x82, 0xac, 0, 3) == 3);
+              require(utf8.valid_scalar_width(0xf0, 0x9f, 0x98, 0x80, 4) == 4);
+              require(utf8.valid_scalar_width(0xe2, 0x82, 0, 0, 2) == 1);
+              require(utf8.valid_scalar_width(0xed, 0xa0, 0x80, 0, 3) == 1);
+          '''
+          if source.count(anchor) != 1:
+              raise SystemExit('utf8 test insertion anchor changed')
+          tests.write_text(source.replace(anchor, anchor + addition, 1))
+          PY
+
+          if grep -R --exclude='lace-stdlib-text.yml' -n 'tools\.lace2\.display_bytes' tools tests lib; then
+            echo 'stale Lace display_bytes import remains' >&2
+            exit 1
+          fi
+          if grep -R -n 'render_debug' tools/lace2 tests; then
+            echo 'stale display_bytes-only API use remains' >&2
+            exit 1
+          fi
+      - name: Full repository test suite
+        run: ./test.sh
+      - name: Commit stdlib consolidation
+        shell: bash
+        run: |
+          rm .github/workflows/lace-stdlib-text.yml
+          git config user.name 'not-the-ccp'
+          git config user.email '315506978+not-the-ccp@users.noreply.github.com'
+          git add -A
+          git commit -m 'Use portable byte and UTF-8 primitives in Lace'
+          git push origin HEAD:work/lace-stdlib-text
