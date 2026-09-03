@@ -8,6 +8,15 @@ fn require(ok: bool) {
     }
 }
 
+fn require_signal_ok(result: ?i64) {
+    match (result) {
+        none {}
+        some(_) {
+            trap;
+        }
+    }
+}
+
 fn test_fd_io() {
     var ends = fd.pipe();
     var writer = fd.dup(ends[1]);
@@ -81,6 +90,62 @@ fn exited_zero(status: process.ExitStatus) -> bool {
     }
 }
 
+fn require_signaled(status: process.ExitStatus, expected: i64) {
+    match (process.term_signal(status)) {
+        some(number) {
+            require(number == expected);
+        }
+        none {
+            trap;
+        }
+    }
+}
+
+fn test_signals(input: fd.Fd, output: fd.Fd, error: fd.Fd) {
+    var term = process.sigterm();
+    require(term > 0);
+    require(process.sigint() > 0);
+    require(process.sigquit() > 0);
+    require(process.sigkill() > 0);
+    require(process.sigstop() > 0);
+    require(process.sigtstp() > 0);
+    require(process.sigcont() > 0);
+    require(process.sighup() > 0);
+
+    var sleep_argv = ["sleep", "30"];
+    var direct = child_or_trap(process.spawn_exact(
+        "/usr/bin/sleep",
+        sleep_argv,
+        input,
+        output,
+        error,
+        none
+    ));
+    require_signal_ok(process.send(direct, term));
+    require_signaled(process.wait_exit(direct), term);
+
+    var first = child_or_trap(process.spawn_exact(
+        "/usr/bin/sleep",
+        sleep_argv,
+        input,
+        output,
+        error,
+        none
+    ));
+    var group = process.group(first);
+    var second = child_or_trap(process.spawn_exact(
+        "/usr/bin/sleep",
+        sleep_argv,
+        input,
+        output,
+        error,
+        some(group)
+    ));
+    require_signal_ok(process.send_group(group, term));
+    require_signaled(process.wait_exit(first), term);
+    require_signaled(process.wait_exit(second), term);
+}
+
 fn main() -> i64 {
     test_fd_io();
 
@@ -97,6 +162,8 @@ fn main() -> i64 {
         error,
         none
     ));
+
+    test_signals(input, output, error);
 
     var first_pipe = fd.pipe();
     var second_pipe = fd.pipe();
