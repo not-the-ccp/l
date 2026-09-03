@@ -22,6 +22,25 @@ fn main() {
     var guarded = render.draw(unicode_editor, "unicode", "", 0, 1, 0, 6, 40);
     expect(bytes.find(guarded.bytes, "\x1b[48;5;52m", 0) is some(_));
 
+
+    // Horizontal scrolling may begin inside a multi-column atom. The
+    // visible suffix must still occupy its logical cells so following
+    // text and the terminal cursor agree on geometry.
+    var tab_editor = model.create("\tX\n");
+    tab_editor.tab_width = 4;
+    model.set_cursor(tab_editor, 1);
+    var tab_frame = render.draw(tab_editor, "", "", 0, 1, 2, 6, 20);
+    expect(tab_frame.cursor_visible);
+    expect(tab_frame.cursor_col == 9);
+    expect(bytes.find(tab_frame.bytes, "  \x1b[0mX\x1b[0m", 0) is some(_));
+
+    var escaped_editor = model.create([0xff, 'X', '\n']);
+    model.set_cursor(escaped_editor, 1);
+    var escaped_frame = render.draw(escaped_editor, "", "", 0, 1, 2, 6, 20);
+    expect(escaped_frame.cursor_visible);
+    expect(escaped_frame.cursor_col == 9);
+    expect(bytes.find(escaped_frame.bytes, "F>\x1b[0mX\x1b[0m", 0) is some(_));
+
     // Terminal chrome must never emit an unbounded status or message row.
     // Before clipping, either of these strings wrapped into the editing area
     // on a narrow terminal and made the screen look corrupted.

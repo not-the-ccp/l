@@ -100,6 +100,38 @@ fn append_tab(out: []u8, column: u64, tab_width: u64) -> u64 {
     return advance;
 }
 
+// Render the visible suffix of a safe representation when horizontal
+// scrolling begins inside one display atom. ASCII representations can
+// be clipped exactly; if the cut lands inside a wide scalar, reserve
+// its remaining cells with spaces because a terminal cannot draw half
+// a glyph.
+fn append_left_clipped(out: []u8, shown: const []u8, clip_columns: u64) -> u64 {
+    var offset: u64 = 0;
+    var skipped: u64 = 0;
+    var painted: u64 = 0;
+    while (offset < len(shown)) {
+        var unit = display.next_unit(shown, offset);
+        var representation = display.representation(shown, unit);
+        var width = term.text_width(representation);
+        if (skipped + width <= clip_columns) {
+            skipped += width;
+            offset = unit.end;
+            continue;
+        }
+        if (skipped < clip_columns) {
+            var clipped = clip_columns - skipped;
+            append_spaces(out, width - clipped);
+            painted += width - clipped;
+        } else {
+            bytes.append(out, representation);
+            painted += width;
+        }
+        skipped += width;
+        offset = unit.end;
+    }
+    return painted;
+}
+
 fn render_line(
     out: []u8,
     editor: ref model.Editor,
@@ -141,11 +173,21 @@ fn render_line(
             frame.cursor_visible = true;
         }
 
-        if (logical_column + width > hscroll && logical_column >= hscroll) {
-            if (painted + width > content_cols) { break; }
+        if (logical_column + width > hscroll) {
+            var left_clip: u64 = 0;
+            if (logical_column < hscroll) { left_clip = hscroll - logical_column; }
+            var visible_width = width - left_clip;
+            if (painted + visible_width > content_cols) { break; }
             append_unit_style(out, editor, unit, selected(editor, document_pos));
-            if (unit.kind is display.UnitKind.tab) { painted += append_tab(out, logical_column, editor.tab_width); }
-            else { bytes.append(out, shown); painted += width; }
+            if (unit.kind is display.UnitKind.tab) {
+                if (left_clip == 0) { painted += append_tab(out, logical_column, editor.tab_width); }
+                else { append_spaces(out, visible_width); painted += visible_width; }
+            } else if (left_clip == 0) {
+                bytes.append(out, shown);
+                painted += width;
+            } else {
+                painted += append_left_clipped(out, shown, left_clip);
+            }
             bytes.append(out, "\x1b[0m");
         }
         logical_column += width;
