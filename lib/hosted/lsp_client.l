@@ -14,14 +14,14 @@ pub struct Client {
 
 pub struct TextChange {
     pub range: lsp.Range,
-    pub text: []u8,
+    pub text: const []u8,
 }
 
 pub fn start(argv: [][]u8) -> ref Client {
     return new Client { process: proc.spawn(argv), reader: lsp.frame_buffer(), next_id: 1, pending: [], alive: true };
 }
 
-fn send(client: ref Client, data: []u8) -> bool {
+fn send(client: ref Client, data: const []u8) -> bool {
     if (!client.alive) { return false; }
     if (!proc.write_try(client.process, data)) { client.alive = false; return false; }
     return true;
@@ -48,7 +48,7 @@ fn read_one(client: ref Client) -> ?lsp.Message {
     }
 }
 
-fn request_frame(id: i64, method: []u8, params: json.Json) -> []u8 {
+fn request_frame(id: i64, method: const []u8, params: json.Json) -> []u8 {
     var obj = json.object();
     json.put(obj, "jsonrpc", json.Json.string("2.0"));
     json.put(obj, "id", json.i64_value(id));
@@ -57,11 +57,11 @@ fn request_frame(id: i64, method: []u8, params: json.Json) -> []u8 {
     return lsp.frame_encode(json.stringify(obj));
 }
 
-pub fn notify(client: ref Client, method: []u8, params: json.Json) {
+pub fn notify(client: ref Client, method: const []u8, params: json.Json) {
     send(client, lsp.notification(method, params));
 }
 
-pub fn request(client: ref Client, method: []u8, params: json.Json) -> ?json.Json {
+pub fn request(client: ref Client, method: const []u8, params: json.Json) -> ?json.Json {
     if (!is_alive(client)) { return none; }
     var id = client.next_id;
     client.next_id += 1;
@@ -89,7 +89,7 @@ pub fn request(client: ref Client, method: []u8, params: json.Json) -> ?json.Jso
     }
 }
 
-pub fn take_notification(client: ref Client, method: []u8) -> ?json.Json {
+pub fn take_notification(client: ref Client, method: const []u8) -> ?json.Json {
     var i: u64 = 0;
     while (i < len(client.pending)) {
         var message = client.pending[i];
@@ -130,7 +130,7 @@ pub fn poll(client: ref Client, timeout_ms: u64) {
     }
 }
 
-pub fn request_async(client: ref Client, method: []u8, params: json.Json) -> i64 {
+pub fn request_async(client: ref Client, method: const []u8, params: json.Json) -> i64 {
     if (!is_alive(client)) { return 0; }
     var id = client.next_id;
     client.next_id += 1;
@@ -162,11 +162,11 @@ pub fn take_response(client: ref Client, id: i64) -> ?json.Json {
     return none;
 }
 
-pub fn semantic_async(client: ref Client, uri: []u8) -> i64 {
+pub fn semantic_async(client: ref Client, uri: const []u8) -> i64 {
     return request_async(client, "textDocument/semanticTokens/full", text_document_params(uri));
 }
 
-pub fn semantic_range_async(client: ref Client, uri: []u8, start_line: u64, end_line: u64) -> i64 {
+pub fn semantic_range_async(client: ref Client, uri: const []u8, start_line: u64, end_line: u64) -> i64 {
     var params = text_document_params(uri);
     json.put(params, "range", lsp.range_json(lsp.Range {
         start: lsp.Position { line: start_line, character: 0 },
@@ -185,7 +185,7 @@ pub fn initialize(client: ref Client) -> bool {
     match (result) { none { return false; } some(_) { notify(client, "initialized", json.object()); return true; } }
 }
 
-pub fn did_open(client: ref Client, uri: []u8, text: []u8, version: i64, language_id: []u8) {
+pub fn did_open(client: ref Client, uri: const []u8, text: const []u8, version: i64, language_id: const []u8) {
     var td = json.object();
     json.put(td, "uri", json.Json.string(uri));
     json.put(td, "languageId", json.Json.string(language_id));
@@ -195,7 +195,7 @@ pub fn did_open(client: ref Client, uri: []u8, text: []u8, version: i64, languag
     notify(client, "textDocument/didOpen", params);
 }
 
-pub fn did_change(client: ref Client, uri: []u8, edits: []TextChange, version: i64) {
+pub fn did_change(client: ref Client, uri: const []u8, edits: const []TextChange, version: i64) {
     if (len(edits) == 0) { return; }
     var td = json.object(); json.put(td, "uri", json.Json.string(uri)); json.put(td, "version", json.i64_value(version));
     var changes = json.array();
@@ -209,22 +209,22 @@ pub fn did_change(client: ref Client, uri: []u8, edits: []TextChange, version: i
     notify(client, "textDocument/didChange", params);
 }
 
-fn text_document_params(uri: []u8) -> json.Json {
+fn text_document_params(uri: const []u8) -> json.Json {
     var td = json.object(); json.put(td, "uri", json.Json.string(uri));
     var params = json.object(); json.put(params, "textDocument", td); return params;
 }
 
-fn position_params(uri: []u8, pos: lsp.Position) -> json.Json {
+fn position_params(uri: const []u8, pos: lsp.Position) -> json.Json {
     var params = text_document_params(uri); json.put(params, "position", lsp.position_json(pos)); return params;
 }
 
-pub fn semantic(client: ref Client, uri: []u8) -> ?json.Json { return request(client, "textDocument/semanticTokens/full", text_document_params(uri)); }
-pub fn symbols(client: ref Client, uri: []u8) -> ?json.Json { return request(client, "textDocument/documentSymbol", text_document_params(uri)); }
-pub fn completion(client: ref Client, uri: []u8, pos: lsp.Position) -> ?json.Json { return request(client, "textDocument/completion", position_params(uri, pos)); }
-pub fn definition(client: ref Client, uri: []u8, pos: lsp.Position) -> ?json.Json { return request(client, "textDocument/definition", position_params(uri, pos)); }
-pub fn hover(client: ref Client, uri: []u8, pos: lsp.Position) -> ?json.Json { return request(client, "textDocument/hover", position_params(uri, pos)); }
+pub fn semantic(client: ref Client, uri: const []u8) -> ?json.Json { return request(client, "textDocument/semanticTokens/full", text_document_params(uri)); }
+pub fn symbols(client: ref Client, uri: const []u8) -> ?json.Json { return request(client, "textDocument/documentSymbol", text_document_params(uri)); }
+pub fn completion(client: ref Client, uri: const []u8, pos: lsp.Position) -> ?json.Json { return request(client, "textDocument/completion", position_params(uri, pos)); }
+pub fn definition(client: ref Client, uri: const []u8, pos: lsp.Position) -> ?json.Json { return request(client, "textDocument/definition", position_params(uri, pos)); }
+pub fn hover(client: ref Client, uri: const []u8, pos: lsp.Position) -> ?json.Json { return request(client, "textDocument/hover", position_params(uri, pos)); }
 
-pub fn formatting(client: ref Client, uri: []u8) -> ?json.Json {
+pub fn formatting(client: ref Client, uri: const []u8) -> ?json.Json {
     var params = text_document_params(uri);
     var options = json.object(); json.put(options, "tabSize", json.u64_value(4)); json.put(options, "insertSpaces", json.Json.boolean(true));
     json.put(params, "options", options); return request(client, "textDocument/formatting", params);

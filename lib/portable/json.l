@@ -3,21 +3,21 @@ import strconv;
 import utf8;
 
 pub struct Member {
-    pub key: []u8,
+    pub key: const []u8,
     pub value: Json,
 }
 
 pub enum Json {
     null,
     boolean(bool),
-    number([]u8),
-    string([]u8),
+    number(const []u8),
+    string(const []u8),
     array([]Json),
     object([]Member),
 }
 
 pub struct Error {
-    pub message: []u8,
+    pub message: const []u8,
     pub offset: u64,
 }
 
@@ -36,7 +36,7 @@ struct Reader {
     pos: u64,
 }
 
-fn make_error(message: []u8, offset: u64) -> Error {
+fn make_error(message: const []u8, offset: u64) -> Error {
     return Error { message: message, offset: offset };
 }
 
@@ -365,7 +365,7 @@ pub fn get(object_value: Json, key: const []u8) -> ?Json {
     }
 }
 
-pub fn as_string(value: Json) -> ?[]u8 {
+pub fn as_string(value: Json) -> ?const []u8 {
     match (value) {
         Json.string(text) { return some(text); }
         _ { return none; }
@@ -400,7 +400,7 @@ pub fn as_object(value: Json) -> ?[]Member {
     }
 }
 
-pub fn get_string(object_value: Json, key: const []u8) -> ?[]u8 {
+pub fn get_string(object_value: Json, key: const []u8) -> ?const []u8 {
     var value_opt = get(object_value, key);
     match (value_opt) { none { return none; } some(value) { return as_string(value); } }
 }

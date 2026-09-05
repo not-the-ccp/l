@@ -20,7 +20,7 @@ pub struct Range {
 
 pub struct Diagnostic {
     pub range: Range,
-    pub message: []u8,
+    pub message: const []u8,
     pub severity: u64,
 }
 
@@ -32,7 +32,7 @@ pub struct SemanticToken {
 }
 
 pub struct Symbol {
-    pub name: []u8,
+    pub name: const []u8,
     pub kind: u64,
     pub range: Range,
     pub selection: Range,
@@ -50,10 +50,10 @@ pub struct Documents {
 }
 
 pub enum Message {
-    request(json.Json, []u8, json.Json),
-    notification([]u8, json.Json),
+    request(json.Json, const []u8, json.Json),
+    notification(const []u8, json.Json),
     response(json.Json, json.Json),
-    invalid([]u8),
+    invalid(const []u8),
 }
 
 pub fn frame_buffer() -> ref FrameBuffer {
@@ -311,7 +311,7 @@ pub fn parse_message(body: const []u8) -> Message {
         json.Parse.ok(value) { root = value; }
     }
     var method_value = json.get(root, "method");
-    var method: []u8 = [];
+    var method: const []u8 = [];
     match (method_value) {
         none {
             var id_opt = json.get(root, "id");
@@ -357,7 +357,7 @@ pub fn response(id: json.Json, result: json.Json) -> []u8 {
     return frame_encode(json.stringify(obj));
 }
 
-pub fn error_response(id: json.Json, code: i64, message: []u8) -> []u8 {
+pub fn error_response(id: json.Json, code: i64, message: const []u8) -> []u8 {
     var err = json.object();
     json.put(err, "code", json.i64_value(code));
     json.put(err, "message", json.Json.string(message));
@@ -367,14 +367,14 @@ pub fn error_response(id: json.Json, code: i64, message: []u8) -> []u8 {
     return frame_encode(json.stringify(obj));
 }
 
-pub fn notification(method: []u8, params: json.Json) -> []u8 {
+pub fn notification(method: const []u8, params: json.Json) -> []u8 {
     var obj = base_message();
     json.put(obj, "method", json.Json.string(method));
     json.put(obj, "params", params);
     return frame_encode(json.stringify(obj));
 }
 
-pub fn publish_diagnostics(uri: []u8, diagnostics: const []Diagnostic) -> []u8 {
+pub fn publish_diagnostics(uri: const []u8, diagnostics: const []Diagnostic) -> []u8 {
     var params = json.object();
     json.put(params, "uri", json.Json.string(uri));
     var items = json.array();
@@ -383,7 +383,7 @@ pub fn publish_diagnostics(uri: []u8, diagnostics: const []Diagnostic) -> []u8 {
     return notification("textDocument/publishDiagnostics", params);
 }
 
-pub fn get_uri(params: json.Json) -> ?[]u8 {
+pub fn get_uri(params: json.Json) -> ?const []u8 {
     var td_opt = json.get(params, "textDocument");
     match (td_opt) {
         none { return none; }
@@ -444,7 +444,7 @@ pub fn get_range(params: json.Json) -> ?Range {
     }
 }
 
-pub fn initialize_result(server_name: []u8, semantic_types: const [][]u8, formatting: bool, definition: bool, hover: bool, completion: bool, symbols: bool) -> json.Json {
+pub fn initialize_result(server_name: const []u8, semantic_types: const [][]u8, formatting: bool, definition: bool, hover: bool, completion: bool, symbols: bool) -> json.Json {
     var caps = json.object();
     json.put(caps, "positionEncoding", json.Json.string("utf-16"));
     json.put(caps, "textDocumentSync", json.u64_value(2));
