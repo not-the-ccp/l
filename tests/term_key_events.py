@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'bootstrap'))
+sys.path.insert(0, str(ROOT / "bootstrap"))
 from term_keys import KeyReader
 
 
@@ -25,12 +25,12 @@ def with_pipe(payload: bytes, reads: list[bytes | None]) -> None:
 
 
 def main() -> None:
-    with_pipe(b'a', [b'a'])
-    with_pipe('λ'.encode(), ['λ'.encode()])
-    with_pipe('€'.encode(), ['€'.encode()])
-    with_pipe(b'\x1b[D', [b'\x1b[D'])
-    with_pipe(b'\x1bOP', [b'\x1bOP'])
-    with_pipe(b'\x1bx', [b'\x1b', b'x'])
+    with_pipe(b"a", [b"a"])
+    with_pipe("λ".encode(), ["λ".encode()])
+    with_pipe("€".encode(), ["€".encode()])
+    with_pipe(b"\x1b[D", [b"\x1b[D"])
+    with_pipe(b"\x1bOP", [b"\x1bOP"])
+    with_pipe(b"\x1bx", [b"\x1b", b"x"])
 
     rd, wr = os.pipe()
     try:
@@ -42,15 +42,15 @@ def main() -> None:
 
     rd, wr = os.pipe()
     try:
-        os.write(wr, b'\xe2')
+        os.write(wr, b"\xe2")
         reader = KeyReader(rd)
-        assert reader.read() == b'\xe2'
+        assert reader.read() == b"\xe2"
     finally:
         os.close(wr)
         os.close(rd)
 
-    print('terminal key event framing PASS')
+    print("terminal key event framing PASS")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

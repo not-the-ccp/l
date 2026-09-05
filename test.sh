@@ -3,8 +3,9 @@ set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PYTHON=${PYTHON:-python3}
 "$HERE/build.sh" tools
+
+# Atomicity, basic conformance, and portable library checks.
 "$HERE/tests/build_atomicity.sh"
-"$PYTHON" "$HERE/tests/native_embed.py"
 "$PYTHON" "$HERE/conformance/core_conformance.py"
 "$PYTHON" "$HERE/tests/const_arrays.py"
 "$PYTHON" "$HERE/tools/const_policy.py" --self-test
@@ -20,32 +21,17 @@ PYTHON=${PYTHON:-python3}
 "$HERE/lr" "$HERE/examples/portable/bytes_demo.l" >/dev/null
 "$HERE/lr" "$HERE/examples/portable/const_readers_demo.l" >/dev/null
 
-# Shell parsing and human-interface models are ordinary L consumers. Keep them
-# executable through the native toolchain so parsing, source spans, byte-safe
-# editing, prompt semantics, history and terminal layout stay in lockstep with L.
-"$HERE/lr" "$HERE/tools/shell/syntax_test.l" >/dev/null
-"$HERE/lr" "$HERE/tools/shell/presentation_test.l" >/dev/null
-"$HERE/lr" "$HERE/tools/shell/history_test.l" >/dev/null
-"$HERE/lr" "$HERE/tools/shell/prompt_test.l" >/dev/null
-"$HERE/lr" "$HERE/tools/shell/editor_test.l" >/dev/null
-"$HERE/lr" "$HERE/tools/shell/terminal_ui_test.l" >/dev/null
-"$HERE/lc" --check "$HERE/tools/shell/main.l" >/dev/null
+# Lace kernel and editor semantics.
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace/kernel_test.l" >/dev/null
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace/navigation_test.l" >/dev/null
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace/editor_model_test.l" >/dev/null
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace/linewise_test.l" >/dev/null
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace/operator_model_test.l" >/dev/null
+"$HERE/lr" --root "$HERE" "$HERE/tools/lace/render_test.l" >/dev/null
+"$HERE/lc" --check --root "$HERE" "$HERE/tools/lace/main.l" >/dev/null
 
-# Linux hosted-profile parity. Exercise the exact same L programs once through
-# the Python reference host and once through the generated native runtime.
-# The process probe covers owned/duplicated FDs, partial I/O + EOF, synchronous
-# exec failure, explicit stdio wiring, process groups, signals, waits, and a
-# real three-process byte-stream pipeline. The context probe covers cwd changes
-# plus raw byte environment lookup/enumeration/mutation and error paths. The
-# job-control probe adds stopped/continued/terminal wait events. The signal
-# probe keeps process-global disposition changes aligned. The shell executor
-# adds PATH resolution, per-stage status, launch rollback and the job state
-# model tracks per-process stop/continue/termination state.
+# Linux hosted-profile parity.
 if [ "$(uname -s)" = Linux ]; then
-  "$HERE/lr" "$HERE/tools/shell/executor_test.l" >/dev/null
-  "$HERE/lr" "$HERE/tools/shell/job_control_test.l" >/dev/null
-  "$HERE/lr" "$HERE/tools/shell/state_test.l" >/dev/null
-
   linux_ref=$("$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_process_probe.l")
   test "$linux_ref" = '3'
   "$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_context_probe.l"
@@ -80,20 +66,9 @@ if [ "$(uname -s)" = Linux ]; then
   trap - EXIT HUP INT TERM
 fi
 
-# Lace rewrite kernel and v1 editor semantics.
-"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/kernel_test.l" >/dev/null
-"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/navigation_test.l" >/dev/null
-"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/editor_model_test.l" >/dev/null
-"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/linewise_test.l" >/dev/null
-"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/operator_model_test.l" >/dev/null
-"$HERE/lr" --root "$HERE" "$HERE/tools/lace2/render_test.l" >/dev/null
-"$HERE/lc" --check --root "$HERE" "$HERE/tools/lace2/main.l" >/dev/null
-
-# Self-hosting frontend slices run as native executables. Check syntax,
-# top-level identity, full body-AST traversal on small and substantial real
-# programs, and semantic checking of a real Core program.
+# Self-hosting frontend slices run as native executables.
 "$HERE/build/lsyntax" "$HERE/examples/core/linked_list.l" >/dev/null
-"$HERE/build/lsyntax" "$HERE/tools/lace/lace.l" >/dev/null
+"$HERE/build/lsyntax" "$HERE/tools/lace/main.l" >/dev/null
 outline=$("$HERE/build/lsyntax" --outline "$HERE/examples/core/linked_list.l")
 printf '%s\n' "$outline" | grep -q '^struct Node$'
 printf '%s\n' "$outline" | grep -q '^fn prepend$'
@@ -101,7 +76,7 @@ printf '%s\n' "$outline" | grep -q '^fn sum$'
 ast=$("$HERE/build/lsyntax" --ast "$HERE/examples/core/linked_list.l")
 printf '%s\n' "$ast" | grep -q '^fn prepend$'
 printf '%s\n' "$ast" | grep -q '^[[:space:]]*return$'
-"$HERE/build/lsyntax" --ast "$HERE/tools/lace/lace.l" >/dev/null
+"$HERE/build/lsyntax" --ast "$HERE/tools/lace/main.l" >/dev/null
 "$HERE/build/lcheck" "$HERE/examples/core/linked_list.l" >/dev/null
 
 bad=$(mktemp)
@@ -120,7 +95,7 @@ rm -f "$bad"
 trap - EXIT HUP INT TERM
 
 "$PYTHON" "$HERE/tests/selfhost_checker_diff.py"
-for t in term_key_events.py code_analysis.py incremental_lsp.py editor_safety.py highlight_stability.py editor_usability.py editor_display.py editor_pty.py lace2_pty.py lace_operator_pty.py shell_pty.py linux_job_control_pty.py; do
+for t in term_key_events.py code_analysis.py incremental_lsp.py lace_pty.py lace_operator_pty.py linux_job_control_pty.py; do
   "$PYTHON" "$HERE/tests/$t"
 done
 echo 'L repository test suite PASS'

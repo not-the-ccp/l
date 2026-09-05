@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-HARNESS = r'''
+HARNESS = r"""
 #include "native_embed.c"
 
 static const LIns code[] = {
@@ -47,7 +47,7 @@ int main(void) {
     lvm_context_destroy(context);
     return 0;
 }
-'''
+"""
 
 
 def main() -> None:

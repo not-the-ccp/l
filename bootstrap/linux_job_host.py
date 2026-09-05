@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
 import errno
 import os
-import signal
 import termios
+from dataclasses import dataclass
 
 from core import HostModule, OpaqueVal, SomeVal, TrapSig, const_arr, name_ty, opt
 from linux_host import (
@@ -15,7 +14,6 @@ from linux_host import (
     LinuxGroup,
     LinuxHost,
 )
-
 
 EVENT_TYPE = ("linux", "process", "wait", "Event")
 MODE_TYPE = ("linux", "tty", "Mode")
@@ -187,7 +185,12 @@ class LinuxJobHost:
     def _capture_mode(self, descriptor_value):
         descriptor = self.linux._fd(descriptor_value).fd
         try:
-            return SomeVal(OpaqueVal(MODE_TYPE, LinuxTtyMode(copy.deepcopy(termios.tcgetattr(descriptor)))))
+            return SomeVal(
+                OpaqueVal(
+                    MODE_TYPE,
+                    LinuxTtyMode(copy.deepcopy(termios.tcgetattr(descriptor))),
+                )
+            )
         except OSError:
             return None
 
@@ -219,7 +222,9 @@ class LinuxJobHost:
         host = HostModule(("linux", "process", "group"))
         group_ty = name_ty(("__host__", "linux", "process", "Group"))
         host.function("current", [], group_ty, self._current_group)
-        host.function("become_leader", [], opt(name_ty("i64")), self._become_group_leader)
+        host.function(
+            "become_leader", [], opt(name_ty("i64")), self._become_group_leader
+        )
         host.function("same", [group_ty, group_ty], name_ty("bool"), self._same_group)
         return host
 
@@ -239,9 +244,24 @@ class LinuxJobHost:
         host.function("group", [group_ty], event_ty, self._wait_group)
         host.function("poll_group", [group_ty], opt(event_ty), self._poll_group)
         host.function("event_child", [event_ty], child_ty, self._event_child)
-        host.function("exit_code", [event_ty], opt(i64_ty), lambda value: self._event_value(value, "exited"))
-        host.function("term_signal", [event_ty], opt(i64_ty), lambda value: self._event_value(value, "signaled"))
-        host.function("stop_signal", [event_ty], opt(i64_ty), lambda value: self._event_value(value, "stopped"))
+        host.function(
+            "exit_code",
+            [event_ty],
+            opt(i64_ty),
+            lambda value: self._event_value(value, "exited"),
+        )
+        host.function(
+            "term_signal",
+            [event_ty],
+            opt(i64_ty),
+            lambda value: self._event_value(value, "signaled"),
+        )
+        host.function(
+            "stop_signal",
+            [event_ty],
+            opt(i64_ty),
+            lambda value: self._event_value(value, "stopped"),
+        )
         host.function("continued", [event_ty], name_ty("bool"), self._continued)
         return host
 
@@ -252,9 +272,16 @@ class LinuxJobHost:
         mode_ty = host.opaque_type("Mode")
         host.function("is_tty", [fd_ty], name_ty("bool"), self._is_tty)
         host.function("foreground", [fd_ty], opt(group_ty), self._foreground)
-        host.function("set_foreground", [fd_ty, group_ty], opt(name_ty("i64")), self._set_foreground)
+        host.function(
+            "set_foreground",
+            [fd_ty, group_ty],
+            opt(name_ty("i64")),
+            self._set_foreground,
+        )
         host.function("capture", [fd_ty], opt(mode_ty), self._capture_mode)
-        host.function("restore", [fd_ty, mode_ty], opt(name_ty("i64")), self._restore_mode)
+        host.function(
+            "restore", [fd_ty, mode_ty], opt(name_ty("i64")), self._restore_mode
+        )
         return host
 
     def modules(self) -> dict[tuple[str, ...], HostModule]:

@@ -1,56 +1,52 @@
-# Open questions / areas reviewers should attack
+# Design decisions and future directions
 
-The project is deliberately willing to change when real evidence shows a better design.
+This file tracks open questions and their resolutions as the language evolves.
 
-## Floating-point exactness
+## Resolved (v1)
 
-The intended model is IEEE binary32/binary64 with deterministic language-level behavior, but a production-quality normative section should scrutinize:
+### No-shadowing
+**Resolution**: Keep the blanket ban. Zig's approach works without issues in practice. Existing code (~9,000 lines of L) demonstrates no ergonomic pressure to relax this.
 
-- rounding mode assumptions;
-- contraction/FMA;
-- NaN payload/sign preservation (if observable at all);
-- signaling NaNs;
-- exact conversion boundaries;
-- reproducibility across C/LLVM/WASM/native backends.
+### Generic call syntax
+**Resolution**: Added `f[T](args)` syntax as an explicit escape hatch when type inference fails. The parser disambiguates `f[T](args)` from `f[expr]` (indexing) by speculatively parsing the bracket content as types followed by `(`.
 
-## No-shadowing rule
+### Tag-only `is` checks
+**Resolution**: `x is some`, `x is TokenVariant` without `(...)` payload patterns are now valid tag-only checks. If the variant has payloads, the pattern implicitly wildcards them. This makes tag inspection less noisy.
 
-No shadowing makes resolution/refactoring extremely simple and has not hurt the existing corpus much. Review whether the user ergonomics cost becomes unreasonable in larger programs.
+### Const array ergonomics
+**Resolution**: Keep mutable-by-default for arrays. The existing codebase shows mutable use dominates; `const []T` is the read-only restriction that callers opt into. The implicit `[]T → const []T` qualification makes const-accepting APIs ergonomic without flipping the default.
 
-## Generic call syntax
+### Floating-point exactness
+**Resolution**: IEEE binary32/binary64, round-to-nearest-even. No FMA contraction. Trap on NaN/infinity for explicit integer casts. Float overflow wraps to infinity. Division by zero follows IEEE semantics (no trap). A normative section will be written in the spec.
 
-Current generic calls rely entirely on argument/expected-result inference and intentionally provide no `f[T](...)` override. Is this elegantly restrictive, or will real APIs produce unnecessary annotation gymnastics?
+### Error propagation
+**Resolution**: Deferred. `match` and tag-only `is` are sufficient for v1. A `let-else` statement for `?T` may be added post-v1 based on experience.
 
-## Generic recursion restriction
+### Result type
+**Resolution**: `Result[T, E]` is a portable library concern (`enum Result[T, E] { ok(T), err(E) }`), not Core. `?T` serves as the language-level optional primitive. Tag-only `is` sugar (`result is err`) reduces verbosity for library Result types.
 
-Mutual generic recursion is rejected largely to guarantee trivial finite monomorphization. Is that the correct language restriction, or should this be an implementation/profile limitation instead?
+### Core primitive budget
+**Resolution**: Keep `len`, `push`, `pop`, `splice`. The replacement argument of `splice` accepts `const []T` (any array capability). No change.
 
-## Error propagation
+### Module constant scope
+**Resolution**: Keep scalar-only for v1. Aggregate module constants can be added later if justified by real use cases.
 
-Explicit tagged-result matching is verbose. We have intentionally rejected `try`/`?` so far. Review larger real programs and decide whether the cost eventually crosses the line.
+### Module visibility model
+**Resolution**: Fine as-is for v1.
 
-## Frozen/value arrays
+### Generic recursion restriction
+**Resolution**: Keep the restriction for v1. No real code has been blocked by it.
 
-`const []T` provides shallow read-only access through one handle, but mutable aliases may still change the same array object. It therefore does not make an array a stable content-hashed key or immutable value.
+### Frozen/value arrays
+**Resolution**: Deferred to libraries. No language change needed.
 
-Do real map-key, configuration, concurrency, interning, or persistence use cases eventually justify a separate frozen/value-array concept? If so, the design must make its construction cost and aliasing consequences explicit rather than silently turning qualification into copying or runtime freezing.
+## Still open (post-v1)
 
-## Const-array ergonomics
+### Host profile standardization
+Core intentionally specifies no OS environment. A future project may want one canonical portable hosted API, versioned separately from Core.
 
-Mutable arrays implicitly qualify to `const []T`, and string literals infer `const []u8` unless the literal itself is contextually required to be mutable. Review dogfooded APIs for cases where preserving or returning the caller's array capability would require qualifier polymorphism. Avoid adding permission-generic machinery until concrete APIs demonstrate the need.
+### Package manager and module registry
+The RISC-V extension model (formalized in architecture docs) provides the foundation. A package registry and module resolver are post-v1 work.
 
-## Module `const` scope
-
-Module `const` declarations remain scalar-only and are separate from the `const []T` type qualifier. Scalar-only declarations avoid introducing a compile-time language. Is that too restrictive? Could aggregate module constants be added without deep-const semantics and initialization complexity?
-
-## Source/module visibility model
-
-Private-by-default declarations/fields and qualified imports are simple. Re-exports/selective imports/packages are currently omitted. Review how this scales to a larger ecosystem.
-
-## Host profile standardization
-
-Core intentionally specifies no OS environment. A future project may still want one canonical portable hosted API. If so, it should probably be versioned separately from Core.
-
-## Core primitive budget
-
-`len/push/pop/splice` are currently the only generic dynamic-array intrinsics. Review whether `splice` is too high-level for Core or whether another primitive could replace it more cleanly.
+### Error propagation sugar
+The `match` + explicit pattern approach can be verbose for sequential fallible operations. A `let-else` statement or similar sugar may be added after v1 if the pain is demonstrated in real code.

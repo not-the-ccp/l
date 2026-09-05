@@ -1,25 +1,24 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import errno
 import os
 import signal
 import struct
+from dataclasses import dataclass
 
 from core import (
+    UNIT,
+    UNITV,
     ArrayObj,
     HostModule,
     OpaqueVal,
     SomeVal,
     TrapSig,
-    UNIT,
-    UNITV,
     arr,
     const_arr,
     name_ty,
     opt,
 )
-
 
 FD_TYPE = ("linux", "fd", "Fd")
 CHILD_TYPE = ("linux", "process", "Child")
@@ -269,10 +268,9 @@ class LinuxHost:
         return SomeVal(ArrayObj(list(value)))
 
     def _env_entries(self):
-        return ArrayObj([
-            ArrayObj(list(name + b"=" + value))
-            for name, value in os.environb.items()
-        ])
+        return ArrayObj(
+            [ArrayObj(list(name + b"=" + value)) for name, value in os.environb.items()]
+        )
 
     def _env_set(self, name_value, value_value, overwrite_value):
         name = _bytes(name_value)
@@ -309,8 +307,16 @@ class LinuxHost:
             if old_mask is not None:
                 signal.pthread_sigmask(signal.SIG_SETMASK, old_mask)
 
-    def _spawn_exact_impl(self, path_value, argv_value, stdin_value, stdout_value,
-                          stderr_value, group_value, foreground_fd: int | None):
+    def _spawn_exact_impl(
+        self,
+        path_value,
+        argv_value,
+        stdin_value,
+        stdout_value,
+        stderr_value,
+        group_value,
+        foreground_fd: int | None,
+    ):
         path = _bytes(path_value)
         argv = _argv(argv_value)
         if not path or b"\0" in path:
@@ -373,7 +379,9 @@ class LinuxHost:
 
                 os.execve(path, argv, env)
             except BaseException as exc:
-                number = exc.errno if isinstance(exc, OSError) and exc.errno else errno.EIO
+                number = (
+                    exc.errno if isinstance(exc, OSError) and exc.errno else errno.EIO
+                )
                 try:
                     os.write(launch_write, struct.pack("=i", int(number)))
                 except BaseException:
@@ -443,19 +451,44 @@ class LinuxHost:
         self.children.append(child)
         return OpaqueVal(SPAWN_TYPE, LinuxSpawnResult(child, None))
 
-    def _spawn_exact(self, path_value, argv_value, stdin_value, stdout_value,
-                     stderr_value, group_value):
+    def _spawn_exact(
+        self,
+        path_value,
+        argv_value,
+        stdin_value,
+        stdout_value,
+        stderr_value,
+        group_value,
+    ):
         return self._spawn_exact_impl(
-            path_value, argv_value, stdin_value, stdout_value, stderr_value,
-            group_value, None
+            path_value,
+            argv_value,
+            stdin_value,
+            stdout_value,
+            stderr_value,
+            group_value,
+            None,
         )
 
-    def _spawn_foreground_exact(self, path_value, argv_value, stdin_value, stdout_value,
-                                stderr_value, group_value, terminal_value):
+    def _spawn_foreground_exact(
+        self,
+        path_value,
+        argv_value,
+        stdin_value,
+        stdout_value,
+        stderr_value,
+        group_value,
+        terminal_value,
+    ):
         terminal_fd = self._fd(terminal_value).fd
         return self._spawn_exact_impl(
-            path_value, argv_value, stdin_value, stdout_value, stderr_value,
-            group_value, terminal_fd
+            path_value,
+            argv_value,
+            stdin_value,
+            stdout_value,
+            stderr_value,
+            group_value,
+            terminal_fd,
         )
 
     def _spawn_child(self, value):
@@ -548,7 +581,9 @@ class LinuxHost:
         host.function("open_fd", [open_ty], opt(fd_ty), self._open_fd)
         host.function("open_error", [open_ty], opt(name_ty("i64")), self._open_error)
         host.function("close", [fd_ty], UNIT, self._close)
-        host.function("read", [fd_ty, name_ty("u64")], opt(arr(name_ty("u8"))), self._read)
+        host.function(
+            "read", [fd_ty, name_ty("u64")], opt(arr(name_ty("u8"))), self._read
+        )
         host.function("write", [fd_ty, bytes_ro], name_ty("u64"), self._write)
         return host
 
@@ -565,7 +600,9 @@ class LinuxHost:
         i64_ty = name_ty("i64")
         host.function("get", [bytes_ro], opt(arr(name_ty("u8"))), self._env_get)
         host.function("entries", [], arr(arr(name_ty("u8"))), self._env_entries)
-        host.function("set", [bytes_ro, bytes_ro, name_ty("bool")], opt(i64_ty), self._env_set)
+        host.function(
+            "set", [bytes_ro, bytes_ro, name_ty("bool")], opt(i64_ty), self._env_set
+        )
         host.function("unset", [bytes_ro], opt(i64_ty), self._env_unset)
         return host
 
@@ -591,7 +628,9 @@ class LinuxHost:
         host.function("spawn_error", [spawn_ty], opt(i64_ty), self._spawn_error)
         host.function("group", [child_ty], group_ty, self._child_group)
         host.function("send", [child_ty, i64_ty], signal_result_ty, self._send)
-        host.function("send_group", [group_ty, i64_ty], signal_result_ty, self._send_group)
+        host.function(
+            "send_group", [group_ty, i64_ty], signal_result_ty, self._send_group
+        )
         host.function("sigint", [], i64_ty, lambda: int(signal.SIGINT))
         host.function("sigquit", [], i64_ty, lambda: int(signal.SIGQUIT))
         host.function("sigterm", [], i64_ty, lambda: int(signal.SIGTERM))

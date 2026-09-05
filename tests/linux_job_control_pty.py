@@ -38,7 +38,9 @@ def drain(fd: int, timeout: float = 0.05) -> bytes:
     return bytes(out)
 
 
-def wait_for(fd: int, needle: bytes, transcript: bytearray, timeout: float = 4.0) -> None:
+def wait_for(
+    fd: int, needle: bytes, transcript: bytearray, timeout: float = 4.0
+) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         transcript.extend(drain(fd, 0.08))

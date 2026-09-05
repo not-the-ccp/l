@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass
-from typing import Iterable
+from collections.abc import Iterable
+from dataclasses import dataclass
 
 from core import N
 
@@ -34,7 +34,7 @@ class LoopContext:
 
 def compact(text: str, limit: int = 140) -> str:
     text = re.sub(r"\s+", " ", text.strip())
-    return text if len(text) <= limit else text[:limit - 1] + "…"
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 class CFGBuilder:
@@ -48,14 +48,27 @@ class CFGBuilder:
         self.entry = self.node("entry", "entry", synthetic=True)
         self.exit = self.node("exit", "exit", synthetic=True)
 
-    def node(self, kind: str, label: str, ast: N | None = None, synthetic: bool = False) -> str:
+    def node(
+        self, kind: str, label: str, ast: N | None = None, synthetic: bool = False
+    ) -> str:
         ident = f"n{self.serial}"
         self.serial += 1
         sp = getattr(ast, "span", None)
-        self.nodes.append(CFGNode(ident, kind, compact(label), getattr(sp, "line", None), getattr(sp, "col", None), synthetic))
+        self.nodes.append(
+            CFGNode(
+                ident,
+                kind,
+                compact(label),
+                getattr(sp, "line", None),
+                getattr(sp, "col", None),
+                synthetic,
+            )
+        )
         return ident
 
-    def edge(self, src: str, dst: str, label: str | None = None, kind: str = "flow") -> None:
+    def edge(
+        self, src: str, dst: str, label: str | None = None, kind: str = "flow"
+    ) -> None:
         self.edges.append(CFGEdge(src, dst, label, kind))
 
     def connect(self, frontier: list[tuple[str, str | None]], dst: str) -> None:
@@ -67,7 +80,7 @@ class CFGBuilder:
         if sp is None:
             return fallback
         try:
-            return self.source[sp.start:sp.end].strip() or fallback
+            return self.source[sp.start : sp.end].strip() or fallback
         except Exception:
             return fallback
 
@@ -84,13 +97,21 @@ class CFGBuilder:
             return "return" if stmt.a[0] is None else f"return {self.text(stmt.a[0])}"
         return self.text(stmt, stmt.kind)
 
-    def build(self, body: tuple[N, ...]) -> tuple[list[CFGNode], list[CFGEdge], list[int], int]:
+    def build(
+        self, body: tuple[N, ...]
+    ) -> tuple[list[CFGNode], list[CFGEdge], list[int], int]:
         out = self.block(body, [(self.entry, None)], None, 0)
         for src, label in out:
             self.edge(src, self.exit, label)
         return self.nodes, self.edges, sorted(self.unreachable), self.max_nesting
 
-    def block(self, body: Iterable[N], frontier: list[tuple[str, str | None]], loop: LoopContext | None, depth: int):
+    def block(
+        self,
+        body: Iterable[N],
+        frontier: list[tuple[str, str | None]],
+        loop: LoopContext | None,
+        depth: int,
+    ):
         self.max_nesting = max(self.max_nesting, depth)
         cur = list(frontier)
         for stmt in body:
@@ -99,7 +120,13 @@ class CFGBuilder:
             cur = self.stmt(stmt, cur, loop, depth)
         return cur
 
-    def stmt(self, stmt: N, frontier: list[tuple[str, str | None]], loop: LoopContext | None, depth: int):
+    def stmt(
+        self,
+        stmt: N,
+        frontier: list[tuple[str, str | None]],
+        loop: LoopContext | None,
+        depth: int,
+    ):
         k = stmt.kind
         if k == "if":
             cond, yes, no = stmt.a
@@ -143,7 +170,11 @@ class CFGBuilder:
                 n = self.node("stmt", "for init: " + self.stmt_text(init), init)
                 self.connect(cur, n)
                 cur = [(n, None)]
-            d = self.node("decision", "for true" if cond is None else f"for {self.text(cond)}", stmt)
+            d = self.node(
+                "decision",
+                "for true" if cond is None else f"for {self.text(cond)}",
+                stmt,
+            )
             self.connect(cur, d)
             after = self.node("merge", "after for", synthetic=True)
             if cond is not None:
@@ -167,7 +198,9 @@ class CFGBuilder:
             self.connect(frontier, d)
             outs = []
             for pattern, arm in arms:
-                outs += self.block(arm, [(d, self.text(pattern, pattern.kind))], loop, depth + 1)
+                outs += self.block(
+                    arm, [(d, self.text(pattern, pattern.kind))], loop, depth + 1
+                )
             if not outs:
                 return []
             m = self.node("merge", "after match", synthetic=True)
@@ -193,7 +226,12 @@ class CFGBuilder:
 
 
 def mermaid_escape(text: str) -> str:
-    return text.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+    return (
+        text.replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
 
 
 def dot_escape(text: str) -> str:
@@ -207,11 +245,16 @@ def render_cfg_mermaid(funcs) -> str:
         ids = {n.id: f"f{fi}_{n.id}" for n in fn.cfg_nodes}
         for n in fn.cfg_nodes:
             i, label = ids[n.id], mermaid_escape(n.label)
-            if n.kind in {"entry", "exit"}: s = f'{i}(["{label}"])'
-            elif n.kind == "decision": s = f'{i}{{"{label}"}}'
-            elif n.kind == "terminal": s = f'{i}[["{label}"]]'
-            elif n.kind == "merge": s = f'{i}(("{label}"))'
-            else: s = f'{i}["{label}"]'
+            if n.kind in {"entry", "exit"}:
+                s = f'{i}(["{label}"])'
+            elif n.kind == "decision":
+                s = f'{i}{{"{label}"}}'
+            elif n.kind == "terminal":
+                s = f'{i}[["{label}"]]'
+            elif n.kind == "merge":
+                s = f'{i}(("{label}"))'
+            else:
+                s = f'{i}["{label}"]'
             out.append("    " + s)
         for e in fn.cfg_edges:
             label = f"|{mermaid_escape(e.label).replace('|', '/')}|" if e.label else ""
@@ -223,11 +266,22 @@ def render_cfg_mermaid(funcs) -> str:
 def render_cfg_dot(funcs) -> str:
     out = ["digraph l_cfg {", "  rankdir=TB;"]
     for fi, fn in enumerate(funcs):
-        out += [f"  subgraph cluster_{fi} {{", f'    label="{dot_escape(fn.qualified_name)}";']
+        out += [
+            f"  subgraph cluster_{fi} {{",
+            f'    label="{dot_escape(fn.qualified_name)}";',
+        ]
         ids = {n.id: f"f{fi}_{n.id}" for n in fn.cfg_nodes}
         for n in fn.cfg_nodes:
-            shape = {"entry":"oval","exit":"oval","decision":"diamond","terminal":"box","merge":"circle"}.get(n.kind,"box")
-            out.append(f'    {ids[n.id]} [shape={shape}, label="{dot_escape(n.label)}"];')
+            shape = {
+                "entry": "oval",
+                "exit": "oval",
+                "decision": "diamond",
+                "terminal": "box",
+                "merge": "circle",
+            }.get(n.kind, "box")
+            out.append(
+                f'    {ids[n.id]} [shape={shape}, label="{dot_escape(n.label)}"];'
+            )
         for e in fn.cfg_edges:
             extra = f' [label="{dot_escape(e.label)}"]' if e.label else ""
             out.append(f"    {ids[e.source]} -> {ids[e.target]}{extra};")
@@ -243,19 +297,19 @@ def call_edges(funcs):
             target = call.resolved or call.callee
             key = (fn.qualified_name, target, target in selected)
             counts[key] = counts.get(key, 0) + 1
-    return [(a,b,internal,n) for (a,b,internal),n in sorted(counts.items())]
+    return [(a, b, internal, n) for (a, b, internal), n in sorted(counts.items())]
 
 
 def render_calls_mermaid(funcs) -> str:
     edges = call_edges(funcs)
     internal = {f.qualified_name for f in funcs}
-    names = sorted(internal | {b for _,b,_,_ in edges})
-    ids = {n:f"c{i}" for i,n in enumerate(names)}
+    names = sorted(internal | {b for _, b, _, _ in edges})
+    ids = {n: f"c{i}" for i, n in enumerate(names)}
     out = ["flowchart LR"]
     for name in names:
         suffix = "" if name in internal else " (external/indirect)"
         out.append(f'  {ids[name]}["{mermaid_escape(name + suffix)}"]')
-    for a,b,_,n in edges:
+    for a, b, _, n in edges:
         label = f"|{n}|" if n > 1 else ""
         out.append(f"  {ids[a]} -->{label} {ids[b]}")
     return "\n".join(out) + "\n"
@@ -264,12 +318,14 @@ def render_calls_mermaid(funcs) -> str:
 def render_calls_dot(funcs) -> str:
     edges = call_edges(funcs)
     internal = {f.qualified_name for f in funcs}
-    names = sorted(internal | {b for _,b,_,_ in edges})
-    ids = {n:f"c{i}" for i,n in enumerate(names)}
+    names = sorted(internal | {b for _, b, _, _ in edges})
+    ids = {n: f"c{i}" for i, n in enumerate(names)}
     out = ["digraph l_calls {", "  rankdir=LR;"]
     for name in names:
-        out.append(f'  {ids[name]} [shape={"box" if name in internal else "ellipse"}, label="{dot_escape(name)}"];')
-    for a,b,_,n in edges:
+        out.append(
+            f'  {ids[name]} [shape={"box" if name in internal else "ellipse"}, label="{dot_escape(name)}"];'
+        )
+    for a, b, _, n in edges:
         label = f' [label="{n}"]' if n > 1 else ""
         out.append(f"  {ids[a]} -> {ids[b]}{label};")
     return "\n".join(out + ["}"]) + "\n"

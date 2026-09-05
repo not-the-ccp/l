@@ -6,6 +6,7 @@ checker remains the semantic oracle until the L-written frontend reaches full Co
 coverage.  Every case in this corpus must therefore be accepted by both checkers or
 rejected by both; adding a new checker feature should add representative cases here.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -75,7 +76,7 @@ fn sum(head: ?ref Node) -> i64 {
     ),
     (
         "const splice replacement accepted",
-        "fn main() -> i64 { var dst: []u8 = []; var src = \"abc\"; splice(dst, 0, 0, src); return len(dst) as i64; }",
+        'fn main() -> i64 { var dst: []u8 = []; var src = "abc"; splice(dst, 0, 0, src); return len(dst) as i64; }',
     ),
     (
         "inferred string is const",
@@ -91,11 +92,11 @@ fn sum(head: ?ref Node) -> i64 {
     ),
     (
         "generic const parameter accepts string",
-        "fn first[T](xs: const []T) -> T { return xs[0]; } fn main() -> i64 { return first(\"x\") as i64; }",
+        'fn first[T](xs: const []T) -> T { return xs[0]; } fn main() -> i64 { return first("x") as i64; }',
     ),
     (
         "generic mutable parameter rejects inferred string",
-        "fn first_mut[T](xs: []T) -> T { return xs[0]; } fn main() -> i64 { return first_mut(\"x\") as i64; }",
+        'fn first_mut[T](xs: []T) -> T { return xs[0]; } fn main() -> i64 { return first_mut("x") as i64; }',
     ),
     (
         "mutable generic result to const context",
@@ -162,7 +163,10 @@ fn main() -> i64 {
     ("type mismatch", "fn main() -> i64 { var x: bool = 1; return 0; }"),
     ("assign constant", "const X: i64 = 1; fn main() -> i64 { X = 2; return 0; }"),
     ("unknown value", "fn main() -> i64 { return missing; }"),
-    ("unknown field", "struct S { x: i64, } fn main() -> i64 { var s = new S { x: 1 }; return s.y; }"),
+    (
+        "unknown field",
+        "struct S { x: i64, } fn main() -> i64 { var s = new S { x: 1 }; return s.y; }",
+    ),
     (
         "temporary field is not a place",
         "struct S { x: i64, } fn make() -> S { return S { x: 1 }; } fn main() { make().x = 2; }",
@@ -170,8 +174,14 @@ fn main() -> i64 {
     ("bad expression statement", "fn main() -> i64 { 1; return 0; }"),
     ("break outside loop", "fn main() -> i64 { break; return 0; }"),
     ("missing return", "fn main() -> i64 { var x: i64 = 1; }"),
-    ("call arity", "fn f(x: i64) -> i64 { return x; } fn main() -> i64 { return f(); }"),
-    ("anonymous capture", "fn main() -> i64 { var x: i64 = 1; var f: fn() -> i64 = fn() -> i64 { return x; }; return 0; }"),
+    (
+        "call arity",
+        "fn f(x: i64) -> i64 { return x; } fn main() -> i64 { return f(); }",
+    ),
+    (
+        "anonymous capture",
+        "fn main() -> i64 { var x: i64 = 1; var f: fn() -> i64 = fn() -> i64 { return x; }; return 0; }",
+    ),
     (
         "generic identity inference",
         "fn identity[T](x: T) -> T { return x; } fn main() -> i64 { return identity(7); }",

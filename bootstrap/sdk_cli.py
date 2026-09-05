@@ -37,11 +37,9 @@ if _impl.IS_LINUX:
     _impl.make_hosts_full = _make_hosts_full_with_linux_extensions
 
 # Re-export after feature installation so callers keep the historical surface.
-globals().update({
-    name: value
-    for name, value in vars(_impl).items()
-    if not name.startswith("_")
-})
+globals().update(
+    {name: value for name, value in vars(_impl).items() if not name.startswith("_")}
+)
 
 if __name__ == "__main__":
     raise SystemExit(_impl.main())

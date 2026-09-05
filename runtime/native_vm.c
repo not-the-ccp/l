@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
+#define _GNU_SOURCE
 #include "native_vm.h"
 #include <assert.h>
 #include <errno.h>
@@ -21,6 +22,28 @@
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
+
+/* Portable wcwidth fallback for systems that lack it in libc. */
+#if !defined(wcwidth) && !defined(HAVE_WCWIDTH)
+static int l_wcwidth(wchar_t wc) {
+    if ((wint_t)wc == 0) return 0;
+    if ((unsigned int)wc < 0x20 || ((unsigned int)wc >= 0x7f && (unsigned int)wc <= 0x9f))
+        return -1;
+    if ((wc >= 0x1100 && wc <= 0x115f) || (wc >= 0x2329 && wc <= 0x232a) ||
+        (wc >= 0x2e80 && wc <= 0x303e && wc != 0x303f) ||
+        (wc >= 0x3040 && wc <= 0x33bf) || (wc >= 0x3400 && wc <= 0x4db5) ||
+        (wc >= 0x4e00 && wc <= 0xa4cf) || (wc >= 0xa960 && wc <= 0xa97c) ||
+        (wc >= 0xac00 && wc <= 0xd7a3) || (wc >= 0xd7b0 && wc <= 0xe000) ||
+        (wc >= 0xf900 && wc <= 0xfaff) || (wc >= 0xfe10 && wc <= 0xfe19) ||
+        (wc >= 0xfe30 && wc <= 0xfe6b) || (wc >= 0xff01 && wc <= 0xff60) ||
+        (wc >= 0xffe0 && wc <= 0xffe6) || (wc >= 0x1b000 && wc <= 0x1b0ff) ||
+        (wc >= 0x1d000 && wc <= 0x1f1ff) || (wc >= 0x20000 && wc <= 0x2fffd) ||
+        (wc >= 0x30000 && wc <= 0x3fffd))
+        return 2;
+    return 1;
+}
+#define wcwidth l_wcwidth
+#endif
 
 /* Generated-program ABI. Keep this intentionally boring. */
 typedef struct LObj LObj;

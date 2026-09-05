@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import os
 import pickle
 import subprocess
@@ -12,15 +11,16 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from core import Program, Parser, LangError, TrapSig, UnitVal, UNITV, internal_name
-from bytecode import BCCompiler, BCVM
+from bytecode import BCVM, BCCompiler
+from core import UNITV, LangError, Parser, Program, TrapSig, UnitVal, internal_name
 from run_lang import (
-    REPO, PORTABLE_LIB, HOSTED_LIB,
-    stdio_host,
-    fs_host,
-    sys_host,
+    HOSTED_LIB,
+    PORTABLE_LIB,
     ProcessHost,
     TermHost,
+    fs_host,
+    stdio_host,
+    sys_host,
 )
 
 IS_LINUX = sys.platform.startswith("linux")
@@ -59,7 +59,9 @@ def module_name(root: Path, path: Path) -> tuple[str, ...]:
     return tuple(rel.with_suffix("").parts)
 
 
-def project_sources(entry: Path, root: Path) -> tuple[dict[tuple[str, ...], str], tuple[str, ...]]:
+def project_sources(
+    entry: Path, root: Path
+) -> tuple[dict[tuple[str, ...], str], tuple[str, ...]]:
     entry = entry.resolve()
     root = root.resolve()
     if not entry.is_file():
@@ -90,7 +92,9 @@ def project_sources(entry: Path, root: Path) -> tuple[dict[tuple[str, ...], str]
         else:
             path = root.joinpath(*mod).with_suffix(".l")
             if not path.is_file():
-                raise LangError(f"unresolved module {'.'.join(mod)} (looked for {path})")
+                raise LangError(
+                    f"unresolved module {'.'.join(mod)} (looked for {path})"
+                )
             text = path.read_text(encoding="utf-8")
             origin = path
         sources[mod] = text
@@ -259,7 +263,11 @@ def cmd_edit(ns) -> int:
     server = ns.lsp
     if server == "auto":
         ext = path.suffix.lower()
-        server = "json-lsp" if ext == ".json" else "ini-lsp" if ext in {".ini", ".cfg"} else "slang-lsp"
+        server = (
+            "json-lsp"
+            if ext == ".json"
+            else "ini-lsp" if ext in {".ini", ".cfg"} else "slang-lsp"
+        )
     elif server in {"l", "slang"}:
         server = "slang-lsp"
     elif server == "json":
@@ -271,7 +279,12 @@ def cmd_edit(ns) -> int:
 
 
 def cmd_lsp(ns) -> int:
-    name = {"l": "slang-lsp", "slang": "slang-lsp", "json": "json-lsp", "ini": "ini-lsp"}[ns.kind]
+    name = {
+        "l": "slang-lsp",
+        "slang": "slang-lsp",
+        "json": "json-lsp",
+        "ini": "ini-lsp",
+    }[ns.kind]
     os.execv(sys.executable, [sys.executable, str(HERE / "run_lang.py"), name + "-vm"])
     return 127
 
@@ -282,32 +295,48 @@ def parser() -> argparse.ArgumentParser:
 
     q = sub.add_parser("edit", help="open the custom modal editor + LSP")
     q.add_argument("file")
-    q.add_argument("--lsp", default="auto", choices=["auto", "l", "slang", "json", "ini"])
+    q.add_argument(
+        "--lsp", default="auto", choices=["auto", "l", "slang", "json", "ini"]
+    )
     q.set_defaults(func=cmd_edit)
 
     q = sub.add_parser("check", help="parse, link, and type-check an L program")
     q.add_argument("file")
-    q.add_argument("--root", help="project root; defaults to the entry file's directory")
+    q.add_argument(
+        "--root", help="project root; defaults to the entry file's directory"
+    )
     q.set_defaults(func=cmd_check)
 
     q = sub.add_parser("run", help="compile in memory and run an L program")
     q.add_argument("file")
-    q.add_argument("--root", help="project root; defaults to the entry file's directory")
-    q.add_argument("--ast", action="store_true", help="use tree interpreter instead of bytecode VM")
+    q.add_argument(
+        "--root", help="project root; defaults to the entry file's directory"
+    )
+    q.add_argument(
+        "--ast", action="store_true", help="use tree interpreter instead of bytecode VM"
+    )
     q.add_argument("--print-result", action="store_true")
-    q.add_argument("args", nargs=argparse.REMAINDER, help="arguments exposed by sys.args()")
+    q.add_argument(
+        "args", nargs=argparse.REMAINDER, help="arguments exposed by sys.args()"
+    )
     q.set_defaults(func=cmd_run)
 
-    q = sub.add_parser("compile", help="compile an L project to an LBC bytecode artifact")
+    q = sub.add_parser(
+        "compile", help="compile an L project to an LBC bytecode artifact"
+    )
     q.add_argument("file")
     q.add_argument("-o", "--output")
-    q.add_argument("--root", help="project root; defaults to the entry file's directory")
+    q.add_argument(
+        "--root", help="project root; defaults to the entry file's directory"
+    )
     q.set_defaults(func=cmd_compile)
 
     q = sub.add_parser("exec", help="run a compiled .lbc artifact")
     q.add_argument("file")
     q.add_argument("--print-result", action="store_true")
-    q.add_argument("args", nargs=argparse.REMAINDER, help="arguments exposed by sys.args()")
+    q.add_argument(
+        "args", nargs=argparse.REMAINDER, help="arguments exposed by sys.args()"
+    )
     q.set_defaults(func=cmd_exec)
 
     q = sub.add_parser("lsp", help="run one of the L-written LSP servers on stdio")

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import os
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 
 def publish_after_success(output: Path, build: Callable[[Path], None]) -> None:

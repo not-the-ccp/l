@@ -40,7 +40,7 @@ class KeyReader:
             second = self._read_byte(8)
             if second is None:
                 return bytes(out)
-            if second in (ord('['), ord('O')):
+            if second in (ord("["), ord("O")):
                 out.append(second)
                 while len(out) < 16:
                     value = self._read_byte(8)

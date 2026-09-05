@@ -37,15 +37,7 @@ build_one() {
 }
 build_lace() {
     dest=$1
-    CC="$CC" "$HERE/lc" --root "$HERE" "$HERE/tools/lace2/main.l" -o "$dest/lace" >/dev/null
-}
-build_shell() {
-    dest=$1
-    CC="$CC" "$HERE/lc" "$HERE/tools/shell/main.l" -o "$dest/lsh" >/dev/null
-}
-build_lace_legacy() {
-    dest=$1
-    build_one editor lace-legacy "$dest"
+    CC="$CC" "$HERE/lc" --root "$HERE" "$HERE/tools/lace/main.l" -o "$dest/lace" >/dev/null
 }
 build_l_lsp() {
     dest=$1
@@ -61,7 +53,7 @@ build_ini_lsp() {
 }
 build_syntax() {
     dest=$1
-    CC="$CC" "$HERE/lc" "$HERE/tools/syntax/lsyntax.l" -o "$dest/lsyntax" >/dev/null
+    CC="$CC" "$HERE/lc" "$HERE/tools/check/lsyntax.l" -o "$dest/lsyntax" >/dev/null
 }
 build_check() {
     dest=$1
@@ -78,27 +70,22 @@ build_single() {
 build_tools() {
     begin_stage
     build_lace "$STAGE"
-    build_shell "$STAGE"
-    # One transition escape hatch while the rewrite becomes the sole editor.
-    build_lace_legacy "$STAGE"
     build_l_lsp "$STAGE"
     build_json_lsp "$STAGE"
     build_ini_lsp "$STAGE"
     build_syntax "$STAGE"
     build_check "$STAGE"
-    publish_stage lace lsh lace-legacy l-lsp json-lsp ini-lsp lsyntax lcheck
+    publish_stage lace l-lsp json-lsp ini-lsp lsyntax lcheck
 }
 
 case "${1:-all}" in
   all|tools) build_tools ;;
-  lace|lace-next) build_single lace build_lace ;;
-  lsh|shell) build_single lsh build_shell ;;
-  lace-legacy) build_single lace-legacy build_lace_legacy ;;
+  lace) build_single lace build_lace ;;
   l-lsp) build_single l-lsp build_l_lsp ;;
   json-lsp) build_single json-lsp build_json_lsp ;;
   ini-lsp) build_single ini-lsp build_ini_lsp ;;
   lsyntax) build_single lsyntax build_syntax ;;
   lcheck) build_single lcheck build_check ;;
   clean) cleanup_stage; rm -rf "$BUILD_DIR" ;;
-  *) echo "usage: ./build.sh [all|tools|lace|lace-next|lsh|shell|lace-legacy|l-lsp|json-lsp|ini-lsp|lsyntax|lcheck|clean]" >&2; exit 2 ;;
+  *) echo "usage: ./build.sh [all|tools|lace|l-lsp|json-lsp|ini-lsp|lsyntax|lcheck|clean]" >&2; exit 2 ;;
 esac

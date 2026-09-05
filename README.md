@@ -134,15 +134,13 @@ bootstrap/       reference lexer/parser/checker/interpreter/bytecode compiler
 runtime/         native C VM and tracing runtime
 lib/portable/    optional portable libraries written in L
 lib/hosted/      optional libraries that depend on host modules
-tools/lace/      Lace editor source, written in L
+tools/lace/      Lace modal terminal editor, written in L
 tools/lsp/       L, JSON, and INI LSP servers, written in L
-tools/syntax/    standalone L-written syntax frontend tool
+tools/check/     L-written syntax and semantic checker tools
 conformance/     Core-only implementation tests
 tests/           toolchain/editor/LSP integration tests
 docs/            language specification, guides, roadmap, tooling docs
-review/          material for independent human/AI review
 examples/        Core and hosted examples
-notes/           historical implementation/user-study evidence
 ```
 
 Generated native tools live in `build/` and are intentionally ignored by Git.

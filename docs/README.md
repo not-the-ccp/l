@@ -64,7 +64,7 @@ Read:
 - [`13-ROADMAP.md`](13-ROADMAP.md)
 - [`14-SELF-HOSTING.md`](14-SELF-HOSTING.md)
 
-The current bootstrap frontend is Python. Native executables use the C VM/runtime with tracing GC. Lace and the bundled L/JSON/INI language servers are written in L. The standalone `lsyntax` checker is the first L-written compiler-frontend component promoted into a native command-line tool.
+The current bootstrap frontend is Python. Native executables use the C VM/runtime with tracing GC. Lace and the bundled L/JSON/INI language servers are written in L. The standalone `lsyntax` and `lcheck` tools are the first L-written compiler-frontend components promoted into native command-line tools.
 
 ## I want to review the design
 
@@ -72,8 +72,6 @@ Read the specification first, then the rationale and open questions:
 
 - [`09-DESIGN-RATIONALE.md`](09-DESIGN-RATIONALE.md)
 - [`10-OPEN-QUESTIONS.md`](10-OPEN-QUESTIONS.md)
-- [`../review/AGENT-PROMPT.md`](../review/AGENT-PROMPT.md)
-- [`../review/REVIEW-GUIDE.md`](../review/REVIEW-GUIDE.md)
 
 The implementation is not automatically normative. A mismatch between the implementation, grammar, prose specification, tests, and examples is a useful bug report.
 
@@ -88,4 +86,4 @@ The rough authority order is:
 3. clarified design decisions recorded in the repository;
 4. current implementation behavior as evidence only.
 
-Historical material under `notes/` is non-normative and may describe superseded versions of the language.
+Historical material that may describe superseded versions is not included in the v1 repository.
