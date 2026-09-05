@@ -39,6 +39,10 @@ build_lace() {
     dest=$1
     CC="$CC" "$HERE/lc" --root "$HERE" "$HERE/tools/lace/main.l" -o "$dest/lace" >/dev/null
 }
+build_shell() {
+    dest=$1
+    CC="$CC" "$HERE/lc" "$HERE/tools/shell/main.l" -o "$dest/lsh" >/dev/null
+}
 build_l_lsp() {
     dest=$1
     build_one lsp-l l-lsp "$dest"
@@ -70,22 +74,24 @@ build_single() {
 build_tools() {
     begin_stage
     build_lace "$STAGE"
+    build_shell "$STAGE"
     build_l_lsp "$STAGE"
     build_json_lsp "$STAGE"
     build_ini_lsp "$STAGE"
     build_syntax "$STAGE"
     build_check "$STAGE"
-    publish_stage lace l-lsp json-lsp ini-lsp lsyntax lcheck
+    publish_stage lace lsh l-lsp json-lsp ini-lsp lsyntax lcheck
 }
 
 case "${1:-all}" in
   all|tools) build_tools ;;
   lace) build_single lace build_lace ;;
+  lsh|shell) build_single lsh build_shell ;;
   l-lsp) build_single l-lsp build_l_lsp ;;
   json-lsp) build_single json-lsp build_json_lsp ;;
   ini-lsp) build_single ini-lsp build_ini_lsp ;;
   lsyntax) build_single lsyntax build_syntax ;;
   lcheck) build_single lcheck build_check ;;
   clean) cleanup_stage; rm -rf "$BUILD_DIR" ;;
-  *) echo "usage: ./build.sh [all|tools|lace|l-lsp|json-lsp|ini-lsp|lsyntax|lcheck|clean]" >&2; exit 2 ;;
+  *) echo "usage: ./build.sh [all|tools|lace|lsh|shell|l-lsp|json-lsp|ini-lsp|lsyntax|lcheck|clean]" >&2; exit 2 ;;
 esac

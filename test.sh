@@ -6,6 +6,7 @@ PYTHON=${PYTHON:-python3}
 
 # Atomicity, basic conformance, and portable library checks.
 "$HERE/tests/build_atomicity.sh"
+"$PYTHON" "$HERE/tests/native_embed.py"
 "$PYTHON" "$HERE/conformance/core_conformance.py"
 "$PYTHON" "$HERE/tests/const_arrays.py"
 "$PYTHON" "$HERE/tools/const_policy.py" --self-test
@@ -30,8 +31,23 @@ PYTHON=${PYTHON:-python3}
 "$HERE/lr" --root "$HERE" "$HERE/tools/lace/render_test.l" >/dev/null
 "$HERE/lc" --check --root "$HERE" "$HERE/tools/lace/main.l" >/dev/null
 
+# Shell parsing and human-interface models are ordinary L consumers. Keep them
+# executable through the native toolchain so parsing, source spans, byte-safe
+# editing, prompt semantics, history and terminal layout stay in lockstep with L.
+"$HERE/lr" "$HERE/tools/shell/syntax_test.l" >/dev/null
+"$HERE/lr" "$HERE/tools/shell/presentation_test.l" >/dev/null
+"$HERE/lr" "$HERE/tools/shell/history_test.l" >/dev/null
+"$HERE/lr" "$HERE/tools/shell/prompt_test.l" >/dev/null
+"$HERE/lr" "$HERE/tools/shell/editor_test.l" >/dev/null
+"$HERE/lr" "$HERE/tools/shell/terminal_ui_test.l" >/dev/null
+"$HERE/lc" --check "$HERE/tools/shell/main.l" >/dev/null
+
 # Linux hosted-profile parity.
 if [ "$(uname -s)" = Linux ]; then
+  "$HERE/lr" "$HERE/tools/shell/executor_test.l" >/dev/null
+  "$HERE/lr" "$HERE/tools/shell/job_control_test.l" >/dev/null
+  "$HERE/lr" "$HERE/tools/shell/state_test.l" >/dev/null
+
   linux_ref=$("$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_process_probe.l")
   test "$linux_ref" = '3'
   "$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_context_probe.l"
@@ -95,7 +111,7 @@ rm -f "$bad"
 trap - EXIT HUP INT TERM
 
 "$PYTHON" "$HERE/tests/selfhost_checker_diff.py"
-for t in term_key_events.py code_analysis.py incremental_lsp.py lace_pty.py lace_operator_pty.py linux_job_control_pty.py; do
+for t in term_key_events.py code_analysis.py incremental_lsp.py shell_pty.py lace_pty.py lace_operator_pty.py linux_job_control_pty.py; do
   "$PYTHON" "$HERE/tests/$t"
 done
 echo 'L repository test suite PASS'
