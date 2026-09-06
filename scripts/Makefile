@@ -1,7 +1,7 @@
 .PHONY: all tools test clean
 all tools:
-	./build.sh tools
+	./scripts/build.sh tools
 test:
-	./test.sh
+	./scripts/test.sh
 clean:
-	./build.sh clean
+	./scripts/build.sh clean

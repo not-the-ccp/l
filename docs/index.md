@@ -30,7 +30,7 @@ Recommended reading order:
 Then run:
 
 ```sh
-python3 conformance/core_conformance.py
+python3 tests/core_conformance.py
 ```
 
 The conformance suite is still growing. Passing the current seed is evidence, not a claim that every unspecified corner has been standardized.
