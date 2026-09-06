@@ -19,13 +19,13 @@ struct JToken {
     semantic: u64,
 }
 
-fn skip_ws(text: []u8, pos: u64) -> u64 {
+fn skip_ws(text: const []u8, pos: u64) -> u64 {
     var p = pos;
     while (p < len(text) && (text[p] == ' ' || text[p] == '\t' || text[p] == '\r' || text[p] == '\n')) { p += 1; }
     return p;
 }
 
-fn scan(text: []u8) -> []JToken {
+fn scan(text: const []u8) -> []JToken {
     var out: []JToken = [];
     var i: u64 = 0;
     var line: u64 = 0;
@@ -65,7 +65,7 @@ fn scan(text: []u8) -> []JToken {
     return out;
 }
 
-pub fn diagnostics(text: []u8) -> []lsp.Diagnostic {
+pub fn diagnostics(text: const []u8) -> []lsp.Diagnostic {
     var out: []lsp.Diagnostic = [];
     var parsed = json.parse(text);
     match (parsed) {
@@ -81,7 +81,7 @@ pub fn diagnostics(text: []u8) -> []lsp.Diagnostic {
     return out;
 }
 
-pub fn semantic(text: []u8) -> []lsp.SemanticToken {
+pub fn semantic(text: const []u8) -> []lsp.SemanticToken {
     var out: []lsp.SemanticToken = [];
     for (token in scan(text)) {
         push(out, lsp.SemanticToken { line: token.line, start: token.start16, length: token.length16, token_type: token.semantic });
@@ -89,12 +89,12 @@ pub fn semantic(text: []u8) -> []lsp.SemanticToken {
     return out;
 }
 
-fn unquote(raw: []u8) -> []u8 {
+fn unquote(raw: const []u8) -> []u8 {
     if (len(raw) >= 2) { return bytes.slice(raw, 1, len(raw) - 1); }
-    return raw;
+    return bytes.clone(raw);
 }
 
-pub fn symbols(text: []u8) -> []lsp.Symbol {
+pub fn symbols(text: const []u8) -> []lsp.Symbol {
     var out: []lsp.Symbol = [];
     for (token in scan(text)) {
         if (token.semantic == SEM_PROPERTY) {
@@ -105,13 +105,13 @@ pub fn symbols(text: []u8) -> []lsp.Symbol {
     return out;
 }
 
-pub fn completion(text: []u8, pos: lsp.Position) -> [][]u8 {
+pub fn completion(text: const []u8, pos: lsp.Position) -> [][]u8 {
     return ["null", "true", "false", "{}", "[]", "\"\""];
 }
 
-pub fn definition(text: []u8, pos: lsp.Position) -> ?lsp.Range { return none; }
+pub fn definition(text: const []u8, pos: lsp.Position) -> ?lsp.Range { return none; }
 
-pub fn hover(text: []u8, pos: lsp.Position) -> ?[]u8 {
+pub fn hover(text: const []u8, pos: lsp.Position) -> ?[]u8 {
     var off = lsp.offset_from_position(text, pos);
     for (token in scan(text)) {
         if (off >= token.start && off <= token.end) {
@@ -158,7 +158,7 @@ fn pretty(out: []u8, value: json.Json, level: u64) {
     }
 }
 
-pub fn format(text: []u8) -> ?[]u8 {
+pub fn format(text: const []u8) -> ?[]u8 {
     var parsed = json.parse(text);
     match (parsed) {
         json.Parse.error(_) { return none; }

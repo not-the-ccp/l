@@ -25,13 +25,13 @@ struct Parsed {
     symbols: []lsp.Symbol,
 }
 
-fn first_nonspace(line: []u8) -> u64 {
+fn first_nonspace(line: const []u8) -> u64 {
     var i: u64 = 0;
     while (i < len(line) && (line[i] == ' ' || line[i] == '\t' || line[i] == '\r')) { i += 1; }
     return i;
 }
 
-fn last_nonspace(line: []u8) -> u64 {
+fn last_nonspace(line: const []u8) -> u64 {
     var i = len(line);
     while (i > 0 && (line[i - 1] == ' ' || line[i - 1] == '\t' || line[i - 1] == '\r')) { i -= 1; }
     return i;
@@ -45,17 +45,17 @@ fn add_diag(out: []lsp.Diagnostic, line_no: u64, start: u64, end: u64, message: 
     push(out, lsp.Diagnostic { range: lsp.range(line_no, start, line_no, end), message: bytes.clone(message), severity: 1 });
 }
 
-fn composite(section: []u8, key: []u8) -> []u8 {
+fn composite(section: const []u8, key: const []u8) -> []u8 {
     var out: []u8 = [];
     bytes.append(out, section); push(out, 0); bytes.append(out, key); return out;
 }
 
-fn seen_contains(seen: [][]u8, value: []u8) -> bool {
+fn seen_contains(seen: [][]u8, value: const []u8) -> bool {
     for (item in seen) { if (bytes.equal(item, value)) { return true; } }
     return false;
 }
 
-fn numeric(value: []u8) -> bool {
+fn numeric(value: const []u8) -> bool {
     if (len(value) == 0) { return false; }
     var i: u64 = 0;
     if (value[0] == '-' || value[0] == '+') { i = 1; }
@@ -68,7 +68,7 @@ fn numeric(value: []u8) -> bool {
     return true;
 }
 
-fn parse(text: []u8) -> Parsed {
+fn parse(text: const []u8) -> Parsed {
     var tokens: []IToken = [];
     var diags: []lsp.Diagnostic = [];
     var syms: []lsp.Symbol = [];
@@ -132,9 +132,9 @@ fn parse(text: []u8) -> Parsed {
     return Parsed { tokens: tokens, diagnostics: diags, symbols: syms };
 }
 
-pub fn diagnostics(text: []u8) -> []lsp.Diagnostic { return parse(text).diagnostics; }
+pub fn diagnostics(text: const []u8) -> []lsp.Diagnostic { return parse(text).diagnostics; }
 
-pub fn semantic(text: []u8) -> []lsp.SemanticToken {
+pub fn semantic(text: const []u8) -> []lsp.SemanticToken {
     var out: []lsp.SemanticToken = [];
     for (token in parse(text).tokens) {
         push(out, lsp.SemanticToken { line: token.line, start: token.start16, length: token.length16, token_type: token.semantic });
@@ -142,21 +142,21 @@ pub fn semantic(text: []u8) -> []lsp.SemanticToken {
     return out;
 }
 
-pub fn symbols(text: []u8) -> []lsp.Symbol { return parse(text).symbols; }
+pub fn symbols(text: const []u8) -> []lsp.Symbol { return parse(text).symbols; }
 
-pub fn completion(text: []u8, pos: lsp.Position) -> [][]u8 {
+pub fn completion(text: const []u8, pos: lsp.Position) -> [][]u8 {
     var out: [][]u8 = ["[section]", "key = value"];
     for (symbol in parse(text).symbols) { push(out, bytes.clone(symbol.name)); }
     return out;
 }
 
-fn token_at(text: []u8, pos: lsp.Position) -> ?IToken {
+fn token_at(text: const []u8, pos: lsp.Position) -> ?IToken {
     var offset = lsp.offset_from_position(text, pos);
     for (token in parse(text).tokens) { if (offset >= token.start && offset <= token.end) { return some(token); } }
     return none;
 }
 
-pub fn definition(text: []u8, pos: lsp.Position) -> ?lsp.Range {
+pub fn definition(text: const []u8, pos: lsp.Position) -> ?lsp.Range {
     var here = token_at(text, pos);
     match (here) {
         none { return none; }
@@ -169,7 +169,7 @@ pub fn definition(text: []u8, pos: lsp.Position) -> ?lsp.Range {
     }
 }
 
-pub fn hover(text: []u8, pos: lsp.Position) -> ?[]u8 {
+pub fn hover(text: const []u8, pos: lsp.Position) -> ?[]u8 {
     var here = token_at(text, pos);
     match (here) {
         none { return none; }
@@ -183,7 +183,7 @@ pub fn hover(text: []u8, pos: lsp.Position) -> ?[]u8 {
     }
 }
 
-pub fn format(text: []u8) -> ?[]u8 {
+pub fn format(text: const []u8) -> ?[]u8 {
     var out: []u8 = [];
     var pos: u64 = 0;
     while (pos <= len(text)) {
