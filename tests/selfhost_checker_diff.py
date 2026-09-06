@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "bootstrap"))
 
-from core import LangError, Program
+from lang import LangError, Program
 
 LCHECK = ROOT / "build" / "lcheck"
 

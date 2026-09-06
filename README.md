@@ -61,7 +61,7 @@ Run the complete repository test suite:
 Run only the freestanding Core conformance seed:
 
 ```sh
-python3 conformance/core_conformance.py
+python3 tests/core_conformance.py
 ```
 
 ## Learn the language
@@ -130,14 +130,14 @@ It can emit CFGs, call graphs, metrics, parser ASTs, Mermaid, Graphviz DOT/SVG, 
 ## Repository layout
 
 ```text
-bootstrap/       reference lexer/parser/checker/interpreter/bytecode compiler
-runtime/         native C VM and tracing runtime
-lib/portable/    optional portable libraries written in L
-lib/hosted/      optional libraries that depend on host modules
+src/lang/       reference lexer/parser/checker/interpreter/bytecode compiler
+src/vm/         native C VM and tracing runtime
+lib/core/    optional portable libraries written in L
+lib/host/      optional libraries that depend on host modules
 tools/lace/      Lace editor source, written in L
 tools/lsp/       L, JSON, and INI LSP servers, written in L
-tools/syntax/    standalone L-written syntax frontend tool
-conformance/     Core-only implementation tests
+tools/check/    standalone L-written syntax frontend tool
+tests/     Core-only implementation tests
 tests/           toolchain/editor/LSP integration tests
 docs/            language specification, guides, roadmap, tooling docs
 review/          material for independent human/AI review

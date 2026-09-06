@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'bootstrap'))
-from term_keys import KeyReader
+from lang.term_keys import KeyReader
 
 
 def with_pipe(payload: bytes, reads: list[bytes | None]) -> None:

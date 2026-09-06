@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "bootstrap"))
 
-from analyze import analyze_project, report, render_calls_mermaid, render_cfg_dot, render_cfg_mermaid
+from lang.analyze import analyze_project, report, render_calls_mermaid, render_cfg_dot, render_cfg_mermaid
 
 SOURCE = r'''
 fn helper(x: i32) -> i32 {

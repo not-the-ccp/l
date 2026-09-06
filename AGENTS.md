@@ -15,15 +15,15 @@ Read:
 Then run:
 
 ```sh
-python3 conformance/core_conformance.py
+python3 tests/core_conformance.py
 ./test.sh
 ```
 
 ## Boundaries
 
 - `docs/` defines the intended language; the Python implementation is not automatically normative.
-- `lib/portable/` is optional library code, not Core.
-- `lib/hosted/` and typed host modules are environment-specific, not Core.
+- `lib/core/` is optional library code, not Core.
+- `lib/host/` and typed host modules are environment-specific, not Core.
 - `tools/` must not be used as evidence that every L implementation must provide those capabilities.
 - `notes/` is historical/non-normative evidence and may describe superseded designs.
 
@@ -35,6 +35,6 @@ Do not assume current design rationales are correct. Prefer reproducible example
 
 ## Implementation notes
 
-The current compiler frontend is Python-bootstrapped. Native outputs use `runtime/native_vm.c` and tracing GC. Lace and the LSP servers are written in L.
+The current compiler frontend is Python-bootstrapped. Native outputs use `src/vm/native_vm.c` and tracing GC. Lace and the LSP servers are written in L.
 
 Generated files belong under `build/`; do not commit them.

@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+"""Public native compiler entrypoint with hosted-profile extensions."""
+
+import tools._native_compile as _impl
+
+_impl.HOST.update({
+    (("linux", "process", "group"), "current"): 56,
+    (("linux", "process", "group"), "become_leader"): 57,
+    (("linux", "process", "group"), "same"): 58,
+    (("linux", "process", "wait"), "child"): 59,
+    (("linux", "process", "wait"), "group"): 60,
+    (("linux", "process", "wait"), "poll_group"): 61,
+    (("linux", "process", "wait"), "event_child"): 62,
+    (("linux", "process", "wait"), "exit_code"): 63,
+    (("linux", "process", "wait"), "term_signal"): 64,
+    (("linux", "process", "wait"), "stop_signal"): 65,
+    (("linux", "process", "wait"), "continued"): 66,
+    (("linux", "tty"), "is_tty"): 67,
+    (("linux", "tty"), "foreground"): 68,
+    (("linux", "tty"), "set_foreground"): 69,
+    (("linux", "process", "child"), "same"): 70,
+    (("linux", "tty"), "capture"): 71,
+    (("linux", "tty"), "restore"): 72,
+    (("linux", "process", "launch"), "foreground_exact"): 73,
+    (("linux", "process", "signal"), "ignore"): 74,
+    (("linux", "process", "signal"), "default"): 75,
+    (("linux", "fd"), "open_read"): 76,
+    (("linux", "fd"), "create_truncate"): 77,
+    (("linux", "fd"), "create_append"): 78,
+    (("linux", "fd"), "open_fd"): 79,
+    (("linux", "fd"), "open_error"): 80,
+})
+
+globals().update({
+    name: value
+    for name, value in vars(_impl).items()
+    if not name.startswith("_")
+})
+
+if __name__ == "__main__":
+    raise SystemExit(_impl.main())
