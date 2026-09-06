@@ -10,9 +10,9 @@ import tty
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from bytecode import BCVM, BCCompiler
-from core import *
-from term_keys import KeyReader
+from lang.bytecode import BCVM, BCCompiler
+from lang import *
+from lang.term_keys import KeyReader
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent

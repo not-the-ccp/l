@@ -11,9 +11,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from bytecode import BCCompiler
-from core import *
-from run_lang import (
+from lang.bytecode import BCCompiler
+from lang import *
+from hosts.run import (
     REPO,
     SERVER_FILES,
     TOOLS,
@@ -24,7 +24,7 @@ from run_lang import (
     stdio_host,
     sys_host,
 )
-from sdk_cli import cleanup, make_hosts, project_sources
+from tools.sdk_cli import cleanup, make_hosts, project_sources
 
 OP = {
     name: i

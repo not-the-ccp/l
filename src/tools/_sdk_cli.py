@@ -11,9 +11,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from bytecode import BCVM, BCCompiler
-from core import UNITV, LangError, Parser, Program, TrapSig, UnitVal, internal_name
-from run_lang import (
+from lang.bytecode import BCVM, BCCompiler
+from lang import UNITV, LangError, Parser, Program, TrapSig, UnitVal, internal_name
+from hosts.run import (
     HOSTED_LIB,
     PORTABLE_LIB,
     ProcessHost,
@@ -25,7 +25,7 @@ from run_lang import (
 
 IS_LINUX = sys.platform.startswith("linux")
 if IS_LINUX:
-    from linux_host import LinuxHost
+    from hosts.linux_host import LinuxHost
 
 ARTIFACT_MAGIC = "LBC1"
 

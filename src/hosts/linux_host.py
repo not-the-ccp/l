@@ -6,7 +6,7 @@ import signal
 import struct
 from dataclasses import dataclass
 
-from core import (
+from lang import (
     UNIT,
     UNITV,
     ArrayObj,

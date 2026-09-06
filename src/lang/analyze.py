@@ -8,15 +8,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-from analysis_cfg import (
+from lang.analysis_cfg import (
     call_edges,
     render_calls_dot,
     render_calls_mermaid,
     render_cfg_dot,
     render_cfg_mermaid,
 )
-from analysis_model import analyze_project, ast_value, select_functions
-from core import LangError, Program
+from lang.analysis_model import analyze_project, ast_value, select_functions
+from lang import LangError, Program
 
 
 def report(project, funcs):
@@ -78,7 +78,7 @@ def svg(dot):
 
 
 def load_project(source, root, check, include_stdlib):
-    from sdk_cli import cleanup, make_hosts, project_sources, stdlib_sources
+    from tools.sdk_cli import cleanup, make_hosts, project_sources, stdlib_sources
 
     root = root or source.resolve().parent
     sources, entry = project_sources(source.resolve(), root.resolve())
@@ -147,7 +147,7 @@ def parser():
         description="L source analyzer: metrics, AST, call graphs, CFGs, and flowcharts",
     )
     try:
-        from cli_common import VERSION
+        from lang.cli_common import VERSION
     except Exception:
         VERSION = "unknown"
     p.add_argument("--version", action="version", version=f"la {VERSION}")
@@ -253,7 +253,7 @@ def main(argv=None):
         return 0
     except LangError as e:
         try:
-            from cli_common import emit_lang_error
+            from lang.cli_common import emit_lang_error
 
             emit_lang_error(e, source.resolve())
         except Exception:

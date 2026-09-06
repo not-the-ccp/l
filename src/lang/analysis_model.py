@@ -4,8 +4,8 @@ from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from analysis_cfg import CFGBuilder
-from core import N, Parser
+from lang.analysis_cfg import CFGBuilder
+from lang import N, Parser
 
 STMT_KINDS = {
     "var",
@@ -376,7 +376,7 @@ def ast_value(value):
 
 
 def select_functions(project, module=None, function=None):
-    from core import LangError
+    from lang import LangError
 
     fs = project.functions
     if module:

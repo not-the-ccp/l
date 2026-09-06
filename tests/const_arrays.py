@@ -12,9 +12,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "bootstrap"))
 
-from bytecode import BCVM, BCCompiler
-from core import LangError, Program, internal_name
-from native_compile import compile_native
+from lang.bytecode import BCVM, BCCompiler
+from lang import LangError, Program, internal_name
+from tools.native_compile import compile_native
 
 MODULE = ("const_arrays",)
 
