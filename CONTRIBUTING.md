@@ -11,8 +11,6 @@ Before proposing a language feature, show a real problem in L code and consider 
 
 Changes to Core should normally include conformance tests and updates to the relevant specification documents.
 
-For substantial design proposals, `review/CHANGE-PROPOSAL-TEMPLATE.md` is a useful format.
-
 Run before submitting changes:
 
 ```sh

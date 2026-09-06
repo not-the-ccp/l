@@ -114,8 +114,12 @@ def run() -> None:
 
         # Linewise change uses the resolved absolute span, so upward cgg is not
         # approximated as a downward counted cc.
-        case(root, "cG.txt", b"  one\n    two\nthree\n", b"2GcGX\x1b", b"  one\n    X\n")
-        case(root, "cgg.txt", b"  one\n    two\nthree\n", b"2GcggX\x1b", b"  X\nthree\n")
+        case(
+            root, "cG.txt", b"  one\n    two\nthree\n", b"2GcGX\x1b", b"  one\n    X\n"
+        )
+        case(
+            root, "cgg.txt", b"  one\n    two\nthree\n", b"2GcggX\x1b", b"  X\nthree\n"
+        )
 
         # Existing characterwise Visual mode stays characterwise: the absolute
         # motion only moves the head to first-nonblank on the target line.

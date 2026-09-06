@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Focused conformance checks for shallow const arrays."""
+
 from __future__ import annotations
 
 import os
@@ -11,9 +12,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "bootstrap"))
 
-from bytecode import BCCompiler, BCVM
-from core import LangError, Program, internal_name
-from native_compile import compile_native
+from lang.bytecode import BCVM, BCCompiler
+from lang import LangError, Program, internal_name
+from tools.native_compile import compile_native
 
 MODULE = ("const_arrays",)
 
@@ -61,7 +62,7 @@ def run_all(source: str, expected: int) -> None:
 
 
 run_all(
-    r'''
+    r"""
 struct Node {
     value: i64,
 }
@@ -107,104 +108,104 @@ fn main() -> i64 {
 
     return 42;
 }
-''',
+""",
     42,
 )
 
 expect_compile_error(
     "inferred string literal mutation",
-    r'''
+    r"""
 fn main() {
     var text = "abc";
     text[0] = 'x';
 }
-''',
+""",
     "const []T",
 )
 
 expect_compile_error(
     "const-to-mutable conversion",
-    r'''
+    r"""
 fn main() {
     var text: const []u8 = "abc";
     var buffer: []u8 = text;
 }
-''',
+""",
     "type mismatch",
 )
 
 expect_compile_error(
     "const view cannot regain mutability",
-    r'''
+    r"""
 fn main() {
     var source: []i64 = [1];
     var view: const []i64 = source;
     var writable: []i64 = view;
 }
-''',
+""",
     "type mismatch",
 )
 
 expect_compile_error(
     "push through const handle",
-    r'''
+    r"""
 fn main() {
     var values: const []i64 = [1];
     push(values, 2);
 }
-''',
+""",
     "mutable []T",
 )
 
 expect_compile_error(
     "pop through const handle",
-    r'''
+    r"""
 fn main() {
     var values: const []i64 = [1];
     pop(values);
 }
-''',
+""",
     "mutable []T",
 )
 
 expect_compile_error(
     "splice const target",
-    r'''
+    r"""
 fn main() {
     var values: const []u8 = "abc";
     splice(values, 0, 1, "x");
 }
-''',
+""",
     "mutable []T",
 )
 
 expect_compile_error(
     "outer slot mutation",
-    r'''
+    r"""
 fn main() {
     var inner: []i64 = [1];
     var outer: const [][]i64 = [inner];
     outer[0] = inner;
 }
-''',
+""",
     "const []T",
 )
 
 expect_compile_error(
     "const inner array mutation",
-    r'''
+    r"""
 fn main() {
     var inner: const []i64 = [1];
     var outer: []const []i64 = [inner];
     outer[0][0] = 2;
 }
-''',
+""",
     "const []T",
 )
 
 expect_compile_error(
     "value element field mutation",
-    r'''
+    r"""
 struct Item {
     value: i64,
 }
@@ -214,12 +215,12 @@ fn change(items: const []Item) {
 }
 
 fn main() {}
-''',
+""",
 )
 
 expect_compile_error(
     "const only qualifies arrays",
-    r'''
+    r"""
 fn bad(value: const i64) -> i64 {
     return value;
 }
@@ -227,13 +228,13 @@ fn bad(value: const i64) -> i64 {
 fn main() -> i64 {
     return bad(1);
 }
-''',
+""",
     "expected []",
 )
 
 expect_compile_error(
     "inferred const string cannot satisfy mutable generic parameter",
-    r'''
+    r"""
 fn mutate[T](items: []T, value: T) {
     items[0] = value;
 }
@@ -242,7 +243,7 @@ fn main() {
     var text = "abc";
     mutate(text, 'x');
 }
-''',
+""",
 )
 
 print("const array conformance PASS")

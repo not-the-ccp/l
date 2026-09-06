@@ -7,8 +7,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-HARNESS = r'''
-#include "native_embed.c"
+HARNESS = r"""
+#include "embed.c"
 
 static const LIns code[] = {
     {.op=OP_PUSH_INT, .a=TY_I64, .u=UINT64_C(1)},
@@ -47,7 +47,7 @@ int main(void) {
     lvm_context_destroy(context);
     return 0;
 }
-'''
+"""
 
 
 def main() -> None:
@@ -62,7 +62,7 @@ def main() -> None:
                 "-std=gnu11",
                 "-O2",
                 "-I",
-                str(ROOT / "runtime"),
+                str(ROOT / "src/vm"),
                 str(source),
                 "-lm",
                 "-o",

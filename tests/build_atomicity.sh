@@ -9,7 +9,7 @@ mkdir -p "$BUILD"
 # A failed rebuild must not replace the last known-good tool or leave staging
 # debris that can be mistaken for a published binary.
 printf 'known-good\n' >"$BUILD/lace"
-if BUILD_DIR="$BUILD" CC=false "$HERE/build.sh" lace >/dev/null 2>&1; then
+if BUILD_DIR="$BUILD" CC=false "$HERE/scripts/build.sh" lace >/dev/null 2>&1; then
     echo 'build.sh unexpectedly succeeded with a failing C compiler' >&2
     exit 1
 fi
@@ -46,7 +46,7 @@ exit 23
 EOF
 chmod +x "$FAIL_CC"
 
-if "$HERE/lc" "$SOURCE" -o "$OUTPUT" --cc "$FAIL_CC" >/dev/null 2>&1; then
+if "$HERE/scripts/lc" "$SOURCE" -o "$OUTPUT" --cc "$FAIL_CC" >/dev/null 2>&1; then
     echo 'lc unexpectedly succeeded with a failing C compiler' >&2
     exit 1
 fi
@@ -56,7 +56,7 @@ if find "$TMP" -mindepth 1 -maxdepth 1 -type d -name '.program.stage-*' | grep -
     exit 1
 fi
 
-"$HERE/lc" "$SOURCE" -o "$OUTPUT" >/dev/null
+"$HERE/scripts/lc" "$SOURCE" -o "$OUTPUT" >/dev/null
 "$OUTPUT"
 if find "$TMP" -mindepth 1 -maxdepth 1 -type d -name '.program.stage-*' | grep -q .; then
     echo 'lc left an output staging directory after success' >&2

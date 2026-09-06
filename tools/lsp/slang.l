@@ -1,7 +1,7 @@
 import arrays;
 import bytes;
 import lsp;
-import slang_syntax;
+import slang_syntax;  // resolved via lib/slang/syntax.l
 import utf8;
 
 const SEM_NAMESPACE: u64 = 0;
@@ -58,7 +58,7 @@ fn is_alpha(ch: u8) -> bool {
 fn is_digit(ch: u8) -> bool { return ch >= '0' && ch <= '9'; }
 fn is_name_char(ch: u8) -> bool { return is_alpha(ch) || is_digit(ch); }
 
-fn is_keyword(text: []u8) -> bool {
+fn is_keyword(text: const []u8) -> bool {
     return bytes.equal(text, "import") || bytes.equal(text, "as") || bytes.equal(text, "pub") || bytes.equal(text, "const") ||
         bytes.equal(text, "struct") || bytes.equal(text, "enum") || bytes.equal(text, "fn") || bytes.equal(text, "var") ||
         bytes.equal(text, "if") || bytes.equal(text, "else") || bytes.equal(text, "while") || bytes.equal(text, "for") ||
@@ -71,13 +71,13 @@ fn token_range(token: Token) -> lsp.Range {
     return lsp.range(token.line, token.start16, token.line, token.start16 + token.length16);
 }
 
-fn push_diag(out: []lsp.Diagnostic, text: []u8, start: u64, end: u64, message: []u8) {
+fn push_diag(out: []lsp.Diagnostic, text: const []u8, start: u64, end: u64, message: []u8) {
     var a = lsp.position_from_offset(text, start);
     var b = lsp.position_from_offset(text, end);
     push(out, lsp.Diagnostic { range: lsp.Range { start: a, end: b }, message: bytes.clone(message), severity: 1 });
 }
 
-fn scan(text: []u8) -> Analysis {
+fn scan(text: const []u8) -> Analysis {
     var tokens: []Token = [];
     var diags: []lsp.Diagnostic = [];
     var opens: []u8 = [];
@@ -177,7 +177,7 @@ fn scan(text: []u8) -> Analysis {
     return Analysis { tokens: tokens, diagnostics: diags, symbols: [], definitions: [] };
 }
 
-fn add_definition(analysis: ref Analysis, token_index: u64, kind: u64, detail: []u8, top_level: bool) {
+fn add_definition(analysis: ref Analysis, token_index: u64, kind: u64, detail: const []u8, top_level: bool) {
     var token = analysis.tokens[token_index];
     var value_range = token_range(token);
     push(analysis.definitions, Definition { name: bytes.clone(token.text), range: value_range, offset: token.start, detail: bytes.clone(detail) });
@@ -228,13 +228,13 @@ fn classify(analysis: ref Analysis) {
     }
 }
 
-fn analyze(text: []u8) -> ref Analysis {
+fn analyze(text: const []u8) -> ref Analysis {
     var result = new scan(text);
     classify(result);
     return result;
 }
 
-pub fn diagnostics(text: []u8) -> []lsp.Diagnostic {
+pub fn diagnostics(text: const []u8) -> []lsp.Diagnostic {
     var analysis = analyze(text);
     for (error in slang_syntax.errors(text)) {
         push_diag(analysis.diagnostics, text, error.start, error.end, error.message);
@@ -242,7 +242,7 @@ pub fn diagnostics(text: []u8) -> []lsp.Diagnostic {
     return analysis.diagnostics;
 }
 
-pub fn semantic(text: []u8) -> []lsp.SemanticToken {
+pub fn semantic(text: const []u8) -> []lsp.SemanticToken {
     var analysis = analyze(text);
     var out: []lsp.SemanticToken = [];
     for (token in analysis.tokens) {
@@ -251,7 +251,7 @@ pub fn semantic(text: []u8) -> []lsp.SemanticToken {
     return out;
 }
 
-pub fn symbols(text: []u8) -> []lsp.Symbol { return analyze(text).symbols; }
+pub fn symbols(text: const []u8) -> []lsp.Symbol { return analyze(text).symbols; }
 
 fn token_at(analysis: ref Analysis, offset: u64) -> ?Token {
     for (token in analysis.tokens) {
@@ -260,14 +260,14 @@ fn token_at(analysis: ref Analysis, offset: u64) -> ?Token {
     return none;
 }
 
-pub fn completion(text: []u8, pos: lsp.Position) -> [][]u8 {
+pub fn completion(text: const []u8, pos: lsp.Position) -> [][]u8 {
     var out: [][]u8 = ["fn", "struct", "enum", "var", "if", "else", "while", "for", "match", "return", "ref", "new", "none", "some"];
     var analysis = analyze(text);
     for (def in analysis.definitions) { push(out, bytes.clone(def.name)); }
     return out;
 }
 
-pub fn definition(text: []u8, pos: lsp.Position) -> ?lsp.Range {
+pub fn definition(text: const []u8, pos: lsp.Position) -> ?lsp.Range {
     var analysis = analyze(text);
     var offset = lsp.offset_from_position(text, pos);
     var token_opt = token_at(analysis, offset);
@@ -290,7 +290,7 @@ pub fn definition(text: []u8, pos: lsp.Position) -> ?lsp.Range {
     }
 }
 
-pub fn hover(text: []u8, pos: lsp.Position) -> ?[]u8 {
+pub fn hover(text: const []u8, pos: lsp.Position) -> ?[]u8 {
     var analysis = analyze(text);
     var offset = lsp.offset_from_position(text, pos);
     var token_opt = token_at(analysis, offset);
@@ -313,7 +313,7 @@ fn append_indent(out: []u8, count: u64) {
     for (var i: u64 = 0; i < count * 4; i += 1) { push(out, ' '); }
 }
 
-pub fn format(text: []u8) -> ?[]u8 {
+pub fn format(text: const []u8) -> ?[]u8 {
     var out: []u8 = [];
     var pos: u64 = 0;
     var indent: u64 = 0;

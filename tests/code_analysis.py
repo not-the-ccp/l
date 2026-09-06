@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
 from __future__ import annotations
+
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "bootstrap"))
 
-from analyze import analyze_project, report, render_calls_mermaid, render_cfg_dot, render_cfg_mermaid
+from lang.analyze import (
+    analyze_project,
+    render_calls_mermaid,
+    render_cfg_dot,
+    render_cfg_mermaid,
+    report,
+)
 
-SOURCE = r'''
+SOURCE = r"""
 fn helper(x: i32) -> i32 {
     if (x > 0) {
         return x;
@@ -32,7 +39,7 @@ fn main() -> i32 {
     return helper(i);
     i += 100;
 }
-'''
+"""
 
 p = analyze_project({("main",): SOURCE}, ("main",))
 assert len(p.modules) == 1
@@ -63,7 +70,10 @@ assert model["summary"]["local_bindings"] == 3, model["summary"]
 assert model["summary"]["rebound_local_bindings"] == 1, model["summary"]
 main_json = next(f for f in model["modules"][0]["functions"] if f["name"] == "main")
 assert next(b for b in main_json["bindings"] if b["name"] == "i")["reassigned"] is True
-assert next(b for b in main_json["bindings"] if b["name"] == "cells")["reassigned"] is False
+assert (
+    next(b for b in main_json["bindings"] if b["name"] == "cells")["reassigned"]
+    is False
+)
 text = report(p, p.functions)
 assert "bindings=3 rebound=1" in text, text
 assert "local bindings=3 rebound=1 never-rebound=2" in text, text

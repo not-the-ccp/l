@@ -1,0 +1,115 @@
+#!/bin/sh
+set -eu
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+PYTHON=${PYTHON:-python3}
+"$HERE/scripts/build.sh" tools
+
+# Atomicity, basic conformance, and portable library checks.
+"$HERE/tests/build_atomicity.sh"
+"$PYTHON" "$HERE/tests/native_embed.py"
+"$PYTHON" "$HERE/tests/core_conformance.py"
+"$PYTHON" "$HERE/tests/const_arrays.py"
+"$PYTHON" "$HERE/src/tools/const_policy.py" --self-test
+"$PYTHON" "$HERE/src/tools/const_policy.py"
+"$HERE/scripts/lr" "$HERE/tests/utf8_portable.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/tests/byte_display_portable.l" >/dev/null
+"$HERE/scripts/lc" --check "$HERE/examples/hosted/project/main.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/examples/hosted/hello.l" -- smoke >/dev/null
+
+# Portable-library stress: run representative library workloads through the
+# native compiler without relying on host capabilities.
+"$HERE/scripts/lr" "$HERE/examples/portable/collections_demo.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/examples/portable/bytes_demo.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/examples/portable/const_readers_demo.l" >/dev/null
+
+# Lace kernel and editor semantics.
+"$HERE/scripts/lr" --root "$HERE" "$HERE/tools/lace/kernel_test.l" >/dev/null
+"$HERE/scripts/lr" --root "$HERE" "$HERE/tools/lace/navigation_test.l" >/dev/null
+"$HERE/scripts/lr" --root "$HERE" "$HERE/tools/lace/editor_model_test.l" >/dev/null
+"$HERE/scripts/lr" --root "$HERE" "$HERE/tools/lace/linewise_test.l" >/dev/null
+"$HERE/scripts/lr" --root "$HERE" "$HERE/tools/lace/operator_model_test.l" >/dev/null
+"$HERE/scripts/lr" --root "$HERE" "$HERE/tools/lace/render_test.l" >/dev/null
+"$HERE/scripts/lc" --check --root "$HERE" "$HERE/tools/lace/main.l" >/dev/null
+
+# Shell parsing and human-interface models are ordinary L consumers.
+"$HERE/scripts/lr" "$HERE/tools/shell/syntax_test.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/tools/shell/presentation_test.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/tools/shell/history_test.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/tools/shell/prompt_test.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/tools/shell/editor_test.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/tools/shell/terminal_ui_test.l" >/dev/null
+"$HERE/scripts/lc" --check "$HERE/tools/shell/main.l" >/dev/null
+
+# Linux hosted-profile parity.
+if [ "$(uname -s)" = Linux ]; then
+  "$HERE/scripts/lr" "$HERE/tools/shell/executor_test.l" >/dev/null
+  "$HERE/scripts/lr" "$HERE/tools/shell/job_control_test.l" >/dev/null
+  "$HERE/scripts/lr" "$HERE/tools/shell/state_test.l" >/dev/null
+
+  linux_ref=$("$PYTHON" "$HERE/src/tools/sdk_cli.py" run "$HERE/examples/hosted/linux_process_probe.l")
+  test "$linux_ref" = '3'
+  "$PYTHON" "$HERE/src/tools/sdk_cli.py" run "$HERE/examples/hosted/linux_context_probe.l"
+  "$PYTHON" "$HERE/src/tools/sdk_cli.py" run "$HERE/examples/hosted/linux_job_control_probe.l"
+  "$PYTHON" "$HERE/src/tools/sdk_cli.py" run "$HERE/examples/hosted/linux_signal_disposition_probe.l"
+
+  fd_path=$(mktemp)
+  rm -f "$fd_path"
+  "$PYTHON" "$HERE/src/tools/sdk_cli.py" run "$HERE/examples/hosted/linux_fd_file_probe.l" "$fd_path"
+  rm -f "$fd_path"
+
+  linux_bin=$(mktemp)
+  context_bin=$(mktemp)
+  job_bin=$(mktemp)
+  signal_bin=$(mktemp)
+  fd_bin=$(mktemp)
+  rm -f "$linux_bin" "$context_bin" "$job_bin" "$signal_bin" "$fd_bin"
+  trap 'rm -f "$linux_bin" "$context_bin" "$job_bin" "$signal_bin" "$fd_bin" "${fd_path:-}"' EXIT HUP INT TERM
+  "$HERE/scripts/lc" "$HERE/examples/hosted/linux_process_probe.l" -o "$linux_bin" >/dev/null
+  linux_native=$("$linux_bin")
+  test "$linux_native" = '3'
+  "$HERE/scripts/lc" "$HERE/examples/hosted/linux_context_probe.l" -o "$context_bin" >/dev/null
+  "$context_bin"
+  "$HERE/scripts/lc" "$HERE/examples/hosted/linux_job_control_probe.l" -o "$job_bin" >/dev/null
+  "$job_bin"
+  "$HERE/scripts/lc" "$HERE/examples/hosted/linux_signal_disposition_probe.l" -o "$signal_bin" >/dev/null
+  "$signal_bin"
+  "$HERE/scripts/lc" "$HERE/examples/hosted/linux_fd_file_probe.l" -o "$fd_bin" >/dev/null
+  "$fd_bin" "$fd_path"
+  rm -f "$fd_path"
+  rm -f "$linux_bin" "$context_bin" "$job_bin" "$signal_bin" "$fd_bin"
+  trap - EXIT HUP INT TERM
+fi
+
+# Self-hosting frontend slices run as native executables.
+"$HERE/build/lsyntax" "$HERE/examples/core/linked_list.l" >/dev/null
+"$HERE/build/lsyntax" "$HERE/tools/lace/main.l" >/dev/null
+outline=$("$HERE/build/lsyntax" --outline "$HERE/examples/core/linked_list.l")
+printf '%s\n' "$outline" | grep -q '^struct Node$'
+printf '%s\n' "$outline" | grep -q '^fn prepend$'
+printf '%s\n' "$outline" | grep -q '^fn sum$'
+ast=$("$HERE/build/lsyntax" --ast "$HERE/examples/core/linked_list.l")
+printf '%s\n' "$ast" | grep -q '^fn prepend$'
+printf '%s\n' "$ast" | grep -q '^[[:space:]]*return$'
+"$HERE/build/lsyntax" --ast "$HERE/tools/lace/main.l" >/dev/null
+"$HERE/build/lcheck" "$HERE/examples/core/linked_list.l" >/dev/null
+
+bad=$(mktemp)
+trap 'rm -f "$bad"' EXIT HUP INT TERM
+printf 'fn broken( {\n' >"$bad"
+if "$HERE/build/lsyntax" "$bad" >/dev/null 2>&1; then
+  echo 'lsyntax accepted malformed source' >&2
+  exit 1
+fi
+printf 'fn main() -> i64 { var x: bool = 1; return 0; }\n' >"$bad"
+if "$HERE/build/lcheck" "$bad" >/dev/null 2>&1; then
+  echo 'lcheck accepted an invalid typed program' >&2
+  exit 1
+fi
+rm -f "$bad"
+trap - EXIT HUP INT TERM
+
+"$PYTHON" "$HERE/tests/selfhost_checker_diff.py"
+for t in term_key_events.py code_analysis.py incremental_lsp.py shell_pty.py lace_pty.py lace_operator_pty.py linux_job_control_pty.py; do
+  "$PYTHON" "$HERE/tests/$t"
+done
+echo 'L repository test suite PASS'

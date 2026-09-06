@@ -6,22 +6,22 @@ import stdio;
 pub struct Ops {
     pub name: []u8,
     pub token_types: [][]u8,
-    pub diagnostics: fn([]u8) -> []lsp.Diagnostic,
-    pub semantic: fn([]u8) -> []lsp.SemanticToken,
-    pub symbols: fn([]u8) -> []lsp.Symbol,
-    pub completion: fn([]u8, lsp.Position) -> [][]u8,
-    pub definition: fn([]u8, lsp.Position) -> ?lsp.Range,
-    pub hover: fn([]u8, lsp.Position) -> ?[]u8,
-    pub format: fn([]u8) -> ?[]u8,
+    pub diagnostics: fn(const []u8) -> []lsp.Diagnostic,
+    pub semantic: fn(const []u8) -> []lsp.SemanticToken,
+    pub symbols: fn(const []u8) -> []lsp.Symbol,
+    pub completion: fn(const []u8, lsp.Position) -> [][]u8,
+    pub definition: fn(const []u8, lsp.Position) -> ?lsp.Range,
+    pub hover: fn(const []u8, lsp.Position) -> ?[]u8,
+    pub format: fn(const []u8) -> ?[]u8,
 }
 
-fn write_frame(data: []u8) {
+fn write_frame(data: const []u8) {
     stdio.write(data);
 }
 
 const AUTO_ANALYZE_LIMIT: u64 = 131072;
 
-fn publish(ops: Ops, uri: []u8, text: []u8) {
+fn publish(ops: Ops, uri: const []u8, text: const []u8) {
     if (len(text) <= AUTO_ANALYZE_LIMIT) {
         write_frame(lsp.publish_diagnostics(uri, ops.diagnostics(text)));
     }
@@ -133,14 +133,14 @@ fn symbols_result(symbols: []lsp.Symbol) -> json.Json {
     return out;
 }
 
-fn location_result(uri: []u8, value: lsp.Range) -> json.Json {
+fn location_result(uri: const []u8, value: lsp.Range) -> json.Json {
     var out = json.object();
     json.put(out, "uri", json.Json.string(uri));
     json.put(out, "range", lsp.range_json(value));
     return out;
 }
 
-fn hover_result(text: []u8) -> json.Json {
+fn hover_result(text: const []u8) -> json.Json {
     var contents = json.object();
     json.put(contents, "kind", json.Json.string("plaintext"));
     json.put(contents, "value", json.Json.string(text));
@@ -149,7 +149,7 @@ fn hover_result(text: []u8) -> json.Json {
     return out;
 }
 
-fn formatting_result(old_text: []u8, new_text: []u8) -> json.Json {
+fn formatting_result(old_text: const []u8, new_text: const []u8) -> json.Json {
     var edit = json.object();
     var end = lsp.position_from_offset(old_text, len(old_text));
     json.put(edit, "range", lsp.range_json(lsp.Range { start: lsp.position(0, 0), end: end }));
@@ -173,7 +173,7 @@ fn semantic_range(ops: Ops, doc: ref lsp.Document, value: lsp.Range) -> []lsp.Se
     return tokens;
 }
 
-fn handle_request(store: ref lsp.Documents, ops: Ops, id: json.Json, method: []u8, params: json.Json) -> bool {
+fn handle_request(store: ref lsp.Documents, ops: Ops, id: json.Json, method: const []u8, params: json.Json) -> bool {
     if (bytes.equal(method, "initialize")) {
         write_frame(lsp.response(id, lsp.initialize_result(ops.name, ops.token_types, true, true, true, true, true)));
         return true;
@@ -255,7 +255,7 @@ fn handle_request(store: ref lsp.Documents, ops: Ops, id: json.Json, method: []u
     return true;
 }
 
-fn handle_notification(store: ref lsp.Documents, ops: Ops, method: []u8, params: json.Json) -> bool {
+fn handle_notification(store: ref lsp.Documents, ops: Ops, method: const []u8, params: json.Json) -> bool {
     if (bytes.equal(method, "initialized")) { return true; }
     if (bytes.equal(method, "textDocument/didOpen")) { open_document(store, params, ops); return true; }
     if (bytes.equal(method, "textDocument/didChange")) { change_document(store, params, ops); return true; }
