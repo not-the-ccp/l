@@ -1,62 +1,60 @@
 #!/bin/sh
 set -eu
-HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PYTHON=${PYTHON:-python3}
-"$HERE/build.sh" tools
+"$HERE/scripts/build.sh" tools
 
 # Atomicity, basic conformance, and portable library checks.
 "$HERE/tests/build_atomicity.sh"
 "$PYTHON" "$HERE/tests/native_embed.py"
-"$PYTHON" "$HERE/conformance/core_conformance.py"
+"$PYTHON" "$HERE/tests/core_conformance.py"
 "$PYTHON" "$HERE/tests/const_arrays.py"
-"$PYTHON" "$HERE/tools/const_policy.py" --self-test
-"$PYTHON" "$HERE/tools/const_policy.py"
-"$HERE/lr" "$HERE/tests/utf8_portable.l" >/dev/null
-"$HERE/lr" "$HERE/tests/byte_display_portable.l" >/dev/null
-"$HERE/lc" --check "$HERE/examples/hosted/project/main.l" >/dev/null
-"$HERE/lr" "$HERE/examples/hosted/hello.l" -- smoke >/dev/null
+"$PYTHON" "$HERE/src/tools/const_policy.py" --self-test
+"$PYTHON" "$HERE/src/tools/const_policy.py"
+"$HERE/scripts/lr" "$HERE/tests/utf8_portable.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/tests/byte_display_portable.l" >/dev/null
+"$HERE/scripts/lc" --check "$HERE/examples/hosted/project/main.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/examples/hosted/hello.l" -- smoke >/dev/null
 
 # Portable-library stress: run representative library workloads through the
 # native compiler without relying on host capabilities.
-"$HERE/lr" "$HERE/examples/portable/collections_demo.l" >/dev/null
-"$HERE/lr" "$HERE/examples/portable/bytes_demo.l" >/dev/null
-"$HERE/lr" "$HERE/examples/portable/const_readers_demo.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/examples/portable/collections_demo.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/examples/portable/bytes_demo.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/examples/portable/const_readers_demo.l" >/dev/null
 
 # Lace kernel and editor semantics.
-"$HERE/lr" --root "$HERE" "$HERE/tools/lace/kernel_test.l" >/dev/null
-"$HERE/lr" --root "$HERE" "$HERE/tools/lace/navigation_test.l" >/dev/null
-"$HERE/lr" --root "$HERE" "$HERE/tools/lace/editor_model_test.l" >/dev/null
-"$HERE/lr" --root "$HERE" "$HERE/tools/lace/linewise_test.l" >/dev/null
-"$HERE/lr" --root "$HERE" "$HERE/tools/lace/operator_model_test.l" >/dev/null
-"$HERE/lr" --root "$HERE" "$HERE/tools/lace/render_test.l" >/dev/null
-"$HERE/lc" --check --root "$HERE" "$HERE/tools/lace/main.l" >/dev/null
+"$HERE/scripts/lr" --root "$HERE" "$HERE/tools/lace/kernel_test.l" >/dev/null
+"$HERE/scripts/lr" --root "$HERE" "$HERE/tools/lace/navigation_test.l" >/dev/null
+"$HERE/scripts/lr" --root "$HERE" "$HERE/tools/lace/editor_model_test.l" >/dev/null
+"$HERE/scripts/lr" --root "$HERE" "$HERE/tools/lace/linewise_test.l" >/dev/null
+"$HERE/scripts/lr" --root "$HERE" "$HERE/tools/lace/operator_model_test.l" >/dev/null
+"$HERE/scripts/lr" --root "$HERE" "$HERE/tools/lace/render_test.l" >/dev/null
+"$HERE/scripts/lc" --check --root "$HERE" "$HERE/tools/lace/main.l" >/dev/null
 
-# Shell parsing and human-interface models are ordinary L consumers. Keep them
-# executable through the native toolchain so parsing, source spans, byte-safe
-# editing, prompt semantics, history and terminal layout stay in lockstep with L.
-"$HERE/lr" "$HERE/tools/shell/syntax_test.l" >/dev/null
-"$HERE/lr" "$HERE/tools/shell/presentation_test.l" >/dev/null
-"$HERE/lr" "$HERE/tools/shell/history_test.l" >/dev/null
-"$HERE/lr" "$HERE/tools/shell/prompt_test.l" >/dev/null
-"$HERE/lr" "$HERE/tools/shell/editor_test.l" >/dev/null
-"$HERE/lr" "$HERE/tools/shell/terminal_ui_test.l" >/dev/null
-"$HERE/lc" --check "$HERE/tools/shell/main.l" >/dev/null
+# Shell parsing and human-interface models are ordinary L consumers.
+"$HERE/scripts/lr" "$HERE/tools/shell/syntax_test.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/tools/shell/presentation_test.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/tools/shell/history_test.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/tools/shell/prompt_test.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/tools/shell/editor_test.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/tools/shell/terminal_ui_test.l" >/dev/null
+"$HERE/scripts/lc" --check "$HERE/tools/shell/main.l" >/dev/null
 
 # Linux hosted-profile parity.
 if [ "$(uname -s)" = Linux ]; then
-  "$HERE/lr" "$HERE/tools/shell/executor_test.l" >/dev/null
-  "$HERE/lr" "$HERE/tools/shell/job_control_test.l" >/dev/null
-  "$HERE/lr" "$HERE/tools/shell/state_test.l" >/dev/null
+  "$HERE/scripts/lr" "$HERE/tools/shell/executor_test.l" >/dev/null
+  "$HERE/scripts/lr" "$HERE/tools/shell/job_control_test.l" >/dev/null
+  "$HERE/scripts/lr" "$HERE/tools/shell/state_test.l" >/dev/null
 
-  linux_ref=$("$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_process_probe.l")
+  linux_ref=$("$PYTHON" "$HERE/src/tools/sdk_cli.py" run "$HERE/examples/hosted/linux_process_probe.l")
   test "$linux_ref" = '3'
-  "$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_context_probe.l"
-  "$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_job_control_probe.l"
-  "$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_signal_disposition_probe.l"
+  "$PYTHON" "$HERE/src/tools/sdk_cli.py" run "$HERE/examples/hosted/linux_context_probe.l"
+  "$PYTHON" "$HERE/src/tools/sdk_cli.py" run "$HERE/examples/hosted/linux_job_control_probe.l"
+  "$PYTHON" "$HERE/src/tools/sdk_cli.py" run "$HERE/examples/hosted/linux_signal_disposition_probe.l"
 
   fd_path=$(mktemp)
   rm -f "$fd_path"
-  "$PYTHON" "$HERE/bootstrap/sdk_cli.py" run "$HERE/examples/hosted/linux_fd_file_probe.l" "$fd_path"
+  "$PYTHON" "$HERE/src/tools/sdk_cli.py" run "$HERE/examples/hosted/linux_fd_file_probe.l" "$fd_path"
   rm -f "$fd_path"
 
   linux_bin=$(mktemp)
@@ -66,16 +64,16 @@ if [ "$(uname -s)" = Linux ]; then
   fd_bin=$(mktemp)
   rm -f "$linux_bin" "$context_bin" "$job_bin" "$signal_bin" "$fd_bin"
   trap 'rm -f "$linux_bin" "$context_bin" "$job_bin" "$signal_bin" "$fd_bin" "${fd_path:-}"' EXIT HUP INT TERM
-  "$HERE/lc" "$HERE/examples/hosted/linux_process_probe.l" -o "$linux_bin" >/dev/null
+  "$HERE/scripts/lc" "$HERE/examples/hosted/linux_process_probe.l" -o "$linux_bin" >/dev/null
   linux_native=$("$linux_bin")
   test "$linux_native" = '3'
-  "$HERE/lc" "$HERE/examples/hosted/linux_context_probe.l" -o "$context_bin" >/dev/null
+  "$HERE/scripts/lc" "$HERE/examples/hosted/linux_context_probe.l" -o "$context_bin" >/dev/null
   "$context_bin"
-  "$HERE/lc" "$HERE/examples/hosted/linux_job_control_probe.l" -o "$job_bin" >/dev/null
+  "$HERE/scripts/lc" "$HERE/examples/hosted/linux_job_control_probe.l" -o "$job_bin" >/dev/null
   "$job_bin"
-  "$HERE/lc" "$HERE/examples/hosted/linux_signal_disposition_probe.l" -o "$signal_bin" >/dev/null
+  "$HERE/scripts/lc" "$HERE/examples/hosted/linux_signal_disposition_probe.l" -o "$signal_bin" >/dev/null
   "$signal_bin"
-  "$HERE/lc" "$HERE/examples/hosted/linux_fd_file_probe.l" -o "$fd_bin" >/dev/null
+  "$HERE/scripts/lc" "$HERE/examples/hosted/linux_fd_file_probe.l" -o "$fd_bin" >/dev/null
   "$fd_bin" "$fd_path"
   rm -f "$fd_path"
   rm -f "$linux_bin" "$context_bin" "$job_bin" "$signal_bin" "$fd_bin"

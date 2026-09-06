@@ -1,7 +1,7 @@
 import arrays;
 import bytes;
 import lsp;
-import slang_syntax;
+import slang_syntax;  // resolved via lib/slang/syntax.l
 import utf8;
 
 const SEM_NAMESPACE: u64 = 0;

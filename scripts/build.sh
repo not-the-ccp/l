@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PYTHON=${PYTHON:-python3}
 CC=${CC:-cc}
 BUILD_DIR=${BUILD_DIR:-"$HERE/build"}
@@ -33,15 +33,15 @@ publish_stage() {
 
 build_one() {
     kind=$1 out=$2 dest=$3
-    "$PYTHON" "$HERE/bootstrap/native_compile.py" --tool "$kind" --cc "$CC" -o "$dest/$out"
+    "$PYTHON" "$HERE/src/tools/native_compile.py" --tool "$kind" --cc "$CC" -o "$dest/$out"
 }
 build_lace() {
     dest=$1
-    CC="$CC" "$HERE/lc" --root "$HERE" "$HERE/tools/lace/main.l" -o "$dest/lace" >/dev/null
+    CC="$CC" "$HERE/scripts/lc" --root "$HERE" "$HERE/tools/lace/main.l" -o "$dest/lace" >/dev/null
 }
 build_shell() {
     dest=$1
-    CC="$CC" "$HERE/lc" "$HERE/tools/shell/main.l" -o "$dest/lsh" >/dev/null
+    CC="$CC" "$HERE/scripts/lc" "$HERE/tools/shell/main.l" -o "$dest/lsh" >/dev/null
 }
 build_l_lsp() {
     dest=$1
@@ -57,11 +57,11 @@ build_ini_lsp() {
 }
 build_syntax() {
     dest=$1
-    CC="$CC" "$HERE/lc" "$HERE/tools/check/lsyntax.l" -o "$dest/lsyntax" >/dev/null
+    CC="$CC" "$HERE/scripts/lc" "$HERE/tools/check/lsyntax.l" -o "$dest/lsyntax" >/dev/null
 }
 build_check() {
     dest=$1
-    CC="$CC" "$HERE/lc" "$HERE/tools/check/lcheck.l" -o "$dest/lcheck" >/dev/null
+    CC="$CC" "$HERE/scripts/lc" "$HERE/tools/check/lcheck.l" -o "$dest/lcheck" >/dev/null
 }
 
 build_single() {

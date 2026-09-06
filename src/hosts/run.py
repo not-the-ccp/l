@@ -16,17 +16,24 @@ from lang.term_keys import KeyReader
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
-PORTABLE_LIB = REPO / "lib" / "portable"
-HOSTED_LIB = REPO / "lib" / "hosted"
+CORE_LIB = REPO / "lib" / "core"
+SLANG_LIB = REPO / "lib" / "slang"
+HOST_LIB = REPO / "lib" / "host"
 TOOLS = REPO / "tools"
 COMMON = {
-    ("arrays",): PORTABLE_LIB / "arrays.l",
-    ("bytes",): PORTABLE_LIB / "bytes.l",
-    ("strconv",): PORTABLE_LIB / "strconv.l",
-    ("utf8",): PORTABLE_LIB / "utf8.l",
-    ("json",): PORTABLE_LIB / "json.l",
-    ("lsp",): PORTABLE_LIB / "lsp.l",
-    ("slang_syntax",): PORTABLE_LIB / "slang_syntax.l",
+    ("arrays",): CORE_LIB / "arrays.l",
+    ("bytes",): CORE_LIB / "bytes.l",
+    ("strconv",): CORE_LIB / "strconv.l",
+    ("utf8",): CORE_LIB / "utf8.l",
+    ("json",): CORE_LIB / "json.l",
+    ("lsp",): CORE_LIB / "lsp.l",
+    ("slang_syntax",): SLANG_LIB / "syntax.l",
+    ("slang_decls",): SLANG_LIB / "decls.l",
+    ("slang_types",): SLANG_LIB / "types.l",
+    ("slang_check",): SLANG_LIB / "check.l",
+    ("slang_names",): SLANG_LIB / "names.l",
+    ("slang_index",): SLANG_LIB / "index.l",
+    ("slang_project",): SLANG_LIB / "project.l",
     ("server",): TOOLS / "lsp/server.l",
     ("slang",): TOOLS / "lsp/slang.l",
     ("json_server_impl",): TOOLS / "lsp/json_server_impl.l",
@@ -339,7 +346,7 @@ def build_sources(main_path: Path, editor=False):
     if editor:
         keep = {("arrays",), ("bytes",), ("strconv",), ("utf8",), ("json",), ("lsp",)}
         d = {k: p.read_text() for k, p in COMMON.items() if k in keep}
-        d[("lsp_client",)] = (HOSTED_LIB / "lsp_client.l").read_text()
+        d[("lsp_client",)] = (HOST_LIB / "lsp_client.l").read_text()
     else:
         d = {k: p.read_text() for k, p in COMMON.items()}
     d[("main",)] = main_path.read_text()
@@ -363,7 +370,7 @@ def run_server(name, use_vm=False):
 def run_editor(path, server_kind, use_vm=False):
     ph = ProcessHost()
     th = TermHost()
-    server_argv = [sys.executable, str(HERE / "run_lang.py"), server_kind]
+    server_argv = [sys.executable, str(HERE / "run.py"), server_kind]
     hosts = {
         ("proc",): ph.module(),
         ("term",): th.module(),
@@ -400,7 +407,7 @@ def main():
         run_editor(sys.argv[2], kind, use_vm)
         return 0
     print(
-        "usage: run_lang.py {slang-lsp|json-lsp|ini-lsp} | editor FILE [SERVER]",
+        "usage: hosts/run.py {slang-lsp|json-lsp|ini-lsp} | editor FILE [SERVER]",
         file=sys.stderr,
     )
     return 2

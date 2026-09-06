@@ -4,10 +4,9 @@ import argparse, os, subprocess, sys, tempfile
 from pathlib import Path
 HERE=Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(HERE / 'src'))
-sys.path.insert(0,str(HERE/'bootstrap'))
-from core import LangError
-from cli_common import VERSION, emit_lang_error
-from native_compile import build_user, compile_native
+from lang import LangError
+from lang.cli_common import VERSION, emit_lang_error
+from tools.native_compile import build_user, compile_native
 
 p=argparse.ArgumentParser(prog='./lr',description='L compile-and-run driver')
 p.add_argument('--version',action='version',version=f'lr {VERSION}')

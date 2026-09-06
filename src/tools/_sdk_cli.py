@@ -14,8 +14,9 @@ sys.path.insert(0, str(HERE))
 from lang.bytecode import BCVM, BCCompiler
 from lang import UNITV, LangError, Parser, Program, TrapSig, UnitVal, internal_name
 from hosts.run import (
-    HOSTED_LIB,
-    PORTABLE_LIB,
+    CORE_LIB,
+    HOST_LIB,
+    SLANG_LIB,
     ProcessHost,
     TermHost,
     fs_host,
@@ -32,7 +33,7 @@ ARTIFACT_MAGIC = "LBC1"
 
 def stdlib_sources() -> dict[tuple[str, ...], str]:
     out: dict[tuple[str, ...], str] = {}
-    for base in (PORTABLE_LIB, HOSTED_LIB):
+    for base in (CORE_LIB, SLANG_LIB, HOST_LIB):
         for p in sorted(base.glob("*.l")):
             out[(p.stem,)] = p.read_text(encoding="utf-8")
     return out
