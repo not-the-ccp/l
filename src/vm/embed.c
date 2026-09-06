@@ -1,9 +1,9 @@
-#include "native_embed.h"
+#include "embed.h"
 
 /* Keep the standalone VM implementation authoritative for now. Including it in
  * this translation unit lets the embedding layer reuse the exact same VM state,
  * GC, host modules and cleanup paths without exposing those internals as ABI. */
-#include "native_vm.c"
+#include "vm.c"
 
 struct LVMContext {
     LVM vm;

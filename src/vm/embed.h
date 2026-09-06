@@ -1,7 +1,7 @@
 #ifndef L_NATIVE_EMBED_H
 #define L_NATIVE_EMBED_H
 
-#include "native_vm.h"
+#include "vm.h"
 
 /* Persistent native-VM context for embedding. This is intentionally separate
  * from language-level exception semantics: callers explicitly choose the

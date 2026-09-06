@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
 #define _GNU_SOURCE
-#include "native_vm.h"
+#include "vm.h"
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>

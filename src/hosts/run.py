@@ -15,7 +15,7 @@ from lang import *
 from lang.term_keys import KeyReader
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parent
+REPO = HERE.parent.parent
 CORE_LIB = REPO / "lib" / "core"
 SLANG_LIB = REPO / "lib" / "slang"
 HOST_LIB = REPO / "lib" / "host"
