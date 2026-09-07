@@ -84,7 +84,7 @@ jobs:
           test -s /tmp/linked-list.dot
       - name: Analyze dogfooded binding mutation
         run: |
-          PYTHONPATH=src ./scripts/lc analyze tools/lace/main.l --include-stdlib --view model -o /tmp/lace-analysis.json
+          PYTHONPATH=src ./scripts/lc analyze tools/lace/main.l --root . --include-stdlib --view model -o /tmp/lace-analysis.json
           PYTHONPATH=src ./scripts/lc analyze tools/shell/main.l --include-stdlib --view model -o /tmp/shell-analysis.json
           PYTHONPATH=src ./scripts/lc analyze tools/check/lcheck.l --include-stdlib --view model -o /tmp/check-analysis.json
           python - <<'PY'
