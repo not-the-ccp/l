@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-if [ ! -x "$HERE/build/lsyntax" ] || [ "$HERE/tools/syntax/lsyntax.l" -nt "$HERE/build/lsyntax" ] || [ "$HERE/lib/core/slang_syntax.l" -nt "$HERE/build/lsyntax" ] || [ "$HERE/lib/core/slang_index.l" -nt "$HERE/build/lsyntax" ] || [ "$HERE/src/vm/native_vm.c" -nt "$HERE/build/lsyntax" ]; then
+if [ ! -x "$HERE/build/lsyntax" ] || [ "$HERE/tools/check/lsyntax.l" -nt "$HERE/build/lsyntax" ] || [ "$HERE/lib/slang/syntax.l" -nt "$HERE/build/lsyntax" ] || [ "$HERE/lib/slang/index.l" -nt "$HERE/build/lsyntax" ] || [ "$HERE/src/vm/vm.c" -nt "$HERE/build/lsyntax" ]; then
   "$HERE/scripts/build.sh" lsyntax >/dev/null
 fi
 exec "$HERE/build/lsyntax" "$@"
