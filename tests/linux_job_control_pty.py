@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = ROOT / "examples" / "hosted" / "linux_tty_job_probe.l"
-SDK = ROOT / "bootstrap" / "sdk_cli.py"
+SDK = ROOT / "src" / "tools" / "sdk_cli.py"
 
 
 def drain(fd: int, timeout: float = 0.05) -> bytes:
@@ -119,7 +119,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="l-job-control-") as td:
         native = Path(td) / "probe"
         subprocess.run(
-            [str(ROOT / "lc"), str(PROBE), "-o", str(native)],
+            [str(ROOT / "scripts" / "lc"), str(PROBE), "-o", str(native)],
             cwd=ROOT,
             check=True,
             stdout=subprocess.DEVNULL,
