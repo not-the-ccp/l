@@ -31,11 +31,25 @@ if IS_LINUX:
 ARTIFACT_MAGIC = "LBC1"
 
 
+# lib/slang files are named by pipeline stage; they are imported under the
+# historical slang_* module names (see hosts/run.py:COMMON).
+SLANG_MODULE_NAMES = {
+    "check": "slang_check",
+    "decls": "slang_decls",
+    "index": "slang_index",
+    "names": "slang_names",
+    "project": "slang_project",
+    "syntax": "slang_syntax",
+    "types": "slang_types",
+}
+
+
 def stdlib_sources() -> dict[tuple[str, ...], str]:
     out: dict[tuple[str, ...], str] = {}
     for base in (CORE_LIB, SLANG_LIB, HOST_LIB):
         for p in sorted(base.glob("*.l")):
-            out[(p.stem,)] = p.read_text(encoding="utf-8")
+            stem = SLANG_MODULE_NAMES.get(p.stem, p.stem)
+            out[(stem,)] = p.read_text(encoding="utf-8")
     return out
 
 

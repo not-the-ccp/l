@@ -66,7 +66,7 @@ class Client:
 
 
 def main():
-    c = Client(ROOT / "json-lsp")
+    c = Client(ROOT / "build" / "json-lsp")
     c.send(
         {
             "jsonrpc": "2.0",
