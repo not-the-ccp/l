@@ -45,7 +45,7 @@ jobs:
       - name: Install optional graph tooling
         run: sudo apt-get update && sudo apt-get install -y graphviz
       - name: Full test suite
-        run: PYTHONPATH=src ./scripts/test.sh
+        run: ./scripts/test.sh
       - name: L-written project resolver stress
         run: |
           PYTHONPATH=src ./scripts/lr examples/portable/resolver_demo.l

@@ -2,6 +2,7 @@
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PYTHON=${PYTHON:-python3}
+export PYTHONPATH="$HERE/src${PYTHONPATH:+:$PYTHONPATH}"
 "$HERE/scripts/build.sh" tools
 
 # Atomicity, basic conformance, and portable library checks.
