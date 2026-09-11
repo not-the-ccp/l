@@ -31,6 +31,15 @@ scripts/test.sh
 The current compiler frontend is Python-bootstrapped. Native outputs use `src/vm/vm.c` and tracing GC. Lace, the LSP servers, `lsyntax`, and `lcheck` are written in L.
 
 Generated files belong under `build/`; do not commit them.
+`build/` and `__pycache__/` are generated and never committed;
+`./scripts/build.sh clean` clears `build/`. Test and build runs set
+`PYTHONDONTWRITEBYTECODE=1` (plus `sys.dont_write_bytecode` in the
+`scripts/lc`/`scripts/lr` launchers) so no `__pycache__` is left in the tree.
+
+The `VERSION` file at the repository root is the single source of truth for
+the toolchain version. `src/lang/cli_common.py` reads it at import time for
+`scripts/lc --version` / `scripts/lr --version`; do not duplicate the
+version string anywhere else.
 
 ## Test conventions
 

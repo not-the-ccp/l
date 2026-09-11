@@ -146,7 +146,10 @@ docs/            language specification, guides, roadmap, tooling docs
 examples/        Core and hosted examples
 ```
 
-Generated native tools live in `build/` and are intentionally ignored by Git.
+Generated native tools live in `build/` and are intentionally ignored by Git,
+along with `__pycache__/` and verification screenshots (see `.gitignore`).
+The toolchain version is single-sourced from the `VERSION` file at the
+repository root (`scripts/lc --version` and `scripts/lr --version` read it).
 
 ## L Core versus libraries
 

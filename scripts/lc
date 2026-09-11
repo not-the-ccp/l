@@ -14,6 +14,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Never write __pycache__ into the source tree; keep bytecode in memory.
+sys.dont_write_bytecode = True
+
 HERE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(HERE / "src"))
 

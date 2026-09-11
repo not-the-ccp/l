@@ -2,6 +2,8 @@
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PYTHON=${PYTHON:-python3}
+# Never emit __pycache__ into the source tree; keep bytecode in memory.
+export PYTHONDONTWRITEBYTECODE=1
 CC=${CC:-cc}
 BUILD_DIR=${BUILD_DIR:-"$HERE/build"}
 mkdir -p "$BUILD_DIR"

@@ -1,6 +1,8 @@
 """Shared command-line interface helpers for the Python bootstrap drivers.
 
-Version string, color-aware diagnostic labels, and LangError rendering.
+The toolchain version is single-sourced from the ``VERSION`` file at the
+repository root and read at import time; do not duplicate the version
+string anywhere else. Color-aware diagnostic labels and LangError rendering.
 """
 from __future__ import annotations
 
@@ -8,7 +10,20 @@ import os
 import sys
 from pathlib import Path
 
-VERSION = "0.8"
+
+def _read_version():
+    """Read the toolchain version from the repository-root VERSION file."""
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "VERSION"
+        if candidate.is_file():
+            try:
+                return candidate.read_text(encoding="utf-8").strip()
+            except OSError:
+                break
+    return "unknown"
+
+
+VERSION = _read_version()
 
 
 def _use_color(stream=sys.stderr):

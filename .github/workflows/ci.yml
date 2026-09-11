@@ -46,6 +46,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y graphviz
       - name: Full test suite
         run: ./scripts/test.sh
+      - name: Toolchain version single-source smoke
+        run: |
+          test "$(cat VERSION)" = "$(./scripts/lc --version | awk '{print $2}')"
+          ./scripts/lr --version | grep -q "$(cat VERSION)"
       - name: L-written project resolver stress
         run: |
           PYTHONPATH=src ./scripts/lr examples/portable/resolver_demo.l
