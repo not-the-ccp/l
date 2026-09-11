@@ -8,7 +8,7 @@ assignees: ''
 
 ## Layer
 
-Core language / bootstrap implementation / native runtime / library / Lace / LSP / other
+L Core / src/lang / src/hosts / src/tools / src/vm / lib/core / lib/slang / lib/host / tools/lace / tools/lsp / tools/shell / tools/check / other
 
 ## Reproducer
 

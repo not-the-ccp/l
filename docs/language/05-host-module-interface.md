@@ -46,4 +46,4 @@ term   raw/fullscreen terminal, timed input, display width
 
 These names/signatures are **reference profile APIs, not Core language requirements**.
 
-The exact current implementation lives in `src/lang/run_lang.py` and `src/vm/native_vm.c`.
+The exact current implementation lives in `src/hosts/run.py` and `src/vm/vm.c`.

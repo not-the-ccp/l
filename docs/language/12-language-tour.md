@@ -407,17 +407,17 @@ These omissions are not claims that the features are universally bad. The projec
 From the repository root:
 
 ```sh
-./lc --check examples/core/linked_list.l
-./lc --check examples/core/generic_queue.l
+scripts/lc --check examples/core/linked_list.l
+scripts/lc --check examples/core/generic_queue.l
 
-./lc analyze examples/core/linked_list.l
-./lc analyze examples/core/linked_list.l --flowchart -o linked-list.mmd
+scripts/lc analyze examples/core/linked_list.l
+scripts/lc analyze examples/core/linked_list.l --flowchart -o linked-list.mmd
 ```
 
 Hosted examples can be compiled and run using the bundled command-line host profile:
 
 ```sh
-./lr examples/hosted/hello.l -- hello world
+scripts/lr examples/hosted/hello.l -- hello world
 ```
 
-For exact rules, continue with [`language/01-core-language.md`](language/01-core-language.md) and [`language/03-core-semantics.md`](language/03-core-semantics.md).
+For exact rules, continue with [`01-core-language.md`](01-core-language.md) and [`03-core-semantics.md`](03-core-semantics.md).

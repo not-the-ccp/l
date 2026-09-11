@@ -2,7 +2,7 @@
 
 ## Bootstrap/reference frontend
 
-`src/lang/core.py` contains the current lexer/parser/checker/tree interpreter/module linker/host-module model.
+`src/lang/_core.py` contains the current lexer/parser/checker/tree interpreter/module linker/host-module model.
 
 `src/lang/bytecode.py` contains the bytecode compiler/VM.
 
@@ -14,7 +14,7 @@ The current repository toolchain compiles checked L bytecode into a generated C 
 
 This means shipped L tools run without Python, but the compiler frontend itself is not yet self-hosted.
 
-`src/vm/native_vm.c` includes the native runtime and tracing GC used by that path.
+`src/vm/vm.c` includes the native runtime and tracing GC used by that path.
 
 ## Tools written in L
 
@@ -30,9 +30,9 @@ These programs were used as language stress tests. They are optional application
 
 ## Repository launchers and generated binaries
 
-Top-level `./lace`, `./l-lsp`, `./json-lsp`, and `./ini-lsp` are small source-repository launchers. They build native tools into the ignored `build/` directory on demand using `./build.sh`, then execute them. Native binaries are intentionally not committed.
+`scripts/lace`, `scripts/l-lsp`, `scripts/json-lsp`, and `scripts/ini-lsp` are small source-repository launchers. They build native tools into the ignored `build/` directory on demand using `scripts/build.sh`, then execute them. Native binaries are intentionally not committed.
 
-`./lc` and `./lr` are Python-bootstrap compiler/runner drivers. See the historical build notes under `notes/` for earlier snapshot measurements.
+`scripts/lc` and `scripts/lr` are Python-bootstrap compiler/runner drivers.
 
 ## Known implementation maturity caveats
 

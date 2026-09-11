@@ -1,6 +1,6 @@
 # Self-hosting progress
 
-The production `./lc` frontend is still Python, but the replacement frontend is being built incrementally in L rather than as a flag-day rewrite.
+The production `scripts/lc` frontend is still Python, but the replacement frontend is being built incrementally in L rather than as a flag-day rewrite.
 
 The rule for this work is:
 
@@ -42,12 +42,12 @@ All of these frontend layers are ordinary L modules. They are currently compiled
 
 `lib/core/slang_syntax.l` contains the L-written lexer and syntax validator/recovery parser. `lib/core/slang_index.l` builds the stable top-level import/declaration view used by later tooling.
 
-`./lsyntax` exposes these layers as a native-running tool:
+`scripts/lsyntax` exposes these layers as a native-running tool:
 
 ```sh
-./lsyntax source.l
-./lsyntax --outline source.l
-./lsyntax --ast source.l
+scripts/lsyntax source.l
+scripts/lsyntax --outline source.l
+scripts/lsyntax --ast source.l
 ```
 
 The repository tests require the compiled tool to parse substantial real source including Lace, not only synthetic parser examples.
@@ -70,11 +70,11 @@ Generic parameters remain abstract semantic types. This is important: generic de
 
 ## Semantic checker and `lcheck`
 
-`lib/core/slang_check.l` is now a real value/place/body checker rather than a syntax demo. `./lcheck FILE` exposes it as a native-running command:
+`lib/core/slang_check.l` is now a real value/place/body checker rather than a syntax demo. `scripts/lcheck FILE` exposes it as a native-running command:
 
 ```sh
-./lcheck examples/core/linked_list.l
-./lcheck examples/core/generic_queue.l
+scripts/lcheck examples/core/linked_list.l
+scripts/lcheck examples/core/generic_queue.l
 ```
 
 The checker currently covers the core value/place machinery needed by substantial programs: contextual numeric literals, arrays, optionals, refs, struct fields, builtins, function values, noncapturing anonymous functions, assignments and compound assignments, loops, returns, pattern bindings and nominal enum values.

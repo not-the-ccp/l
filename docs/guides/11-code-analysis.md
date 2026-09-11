@@ -1,6 +1,6 @@
 # Code analysis and flowcharts
 
-`./lc analyze` is the source-analysis frontend for L. It uses the same bootstrap lexer/parser as the compiler and, by default, runs the normal project linker/type-checker before producing analysis output. The graph model is therefore derived from L syntax and control-flow constructs, not from text matching.
+`scripts/lc analyze` is the source-analysis frontend for L. It uses the same bootstrap lexer/parser as the compiler and, by default, runs the normal project linker/type-checker before producing analysis output. The graph model is therefore derived from L syntax and control-flow constructs, not from text matching.
 
 The analyzer is intentionally optional tooling. It is not part of L Core and does not affect language semantics.
 
@@ -8,24 +8,24 @@ The analyzer is intentionally optional tooling. It is not part of L Core and doe
 
 ```sh
 # Human-readable metrics and findings.
-./lc analyze examples/hosted/hello.l
+scripts/lc analyze examples/hosted/hello.l
 
 # Compile every function in the project into a Mermaid control-flow chart.
-./lc analyze examples/hosted/hello.l --flowchart -o hello.mmd
+scripts/lc analyze examples/hosted/hello.l --flowchart -o hello.mmd
 
 # One function only. A simple name is accepted when unambiguous.
-./lc analyze examples/hosted/project/main.l --flowchart --function main -o main.mmd
+scripts/lc analyze examples/hosted/project/main.l --flowchart --function main -o main.mmd
 
 # Graphviz DOT, or an SVG if Graphviz `dot` is installed.
-./lc analyze examples/hosted/project/main.l --view cfg --format dot -o main.dot
-./lc analyze examples/hosted/project/main.l --view cfg --format svg -o main.svg
+scripts/lc analyze examples/hosted/project/main.l --view cfg --format dot -o main.dot
+scripts/lc analyze examples/hosted/project/main.l --view cfg --format svg -o main.svg
 
 # Inter-function call graph.
-./lc analyze examples/hosted/project/main.l --call-graph -o calls.mmd
+scripts/lc analyze examples/hosted/project/main.l --call-graph -o calls.mmd
 
 # Machine-readable analysis model and raw parser AST.
-./lc analyze examples/hosted/project/main.l --view model > analysis.json
-./lc analyze examples/hosted/project/main.l --ast > ast.json
+scripts/lc analyze examples/hosted/project/main.l --view model > analysis.json
+scripts/lc analyze examples/hosted/project/main.l --ast > ast.json
 ```
 
 `--root` has the same project-root meaning as the other bootstrap drivers. Imported bundled standard-library modules are type-checked but omitted from analysis output by default; pass `--include-stdlib` to include them. `--no-check` is available for parser/CFG work on incomplete programs.

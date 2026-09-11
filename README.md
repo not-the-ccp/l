@@ -31,66 +31,66 @@ No PATH setup is required.
 
 ```sh
 # Run a hosted program.
-./lr examples/hosted/hello.l -- hello world
+scripts/lr examples/hosted/hello.l -- hello world
 
 # Compile to a native executable using the bytecode + C runtime path.
-./lc examples/hosted/hello.l -o hello
+scripts/lc examples/hosted/hello.l -o hello
 ./hello hello world
 
 # Run the first standalone frontend component written in L itself.
-./lsyntax examples/core/linked_list.l
+scripts/lsyntax examples/core/linked_list.l
 
 # Open files in Lace. The matching L/JSON/INI LSP is selected automatically.
-./lace examples/hosted/hello.l
-./lace examples/hosted/config.json
-./lace examples/hosted/config.ini
+scripts/lace examples/hosted/hello.l
+scripts/lace examples/hosted/config.json
+scripts/lace examples/hosted/config.ini
 ```
 
-`./lace` and `./lsyntax` build their native `-O3` executables into `build/` on first use. To build the bundled native tools explicitly:
+`scripts/lace` and `scripts/lsyntax` build their native `-O3` executables into `build/` on first use. To build the bundled native tools explicitly:
 
 ```sh
-./build.sh
+scripts/build.sh
 ```
 
 Run the complete repository test suite:
 
 ```sh
-./test.sh
+scripts/test.sh
 ```
 
 Run only the freestanding Core conformance seed:
 
 ```sh
-python3 conformance/core_conformance.py
+python3 tests/core_conformance.py
 ```
 
 ## Learn the language
 
-If you want to **write L**, start with the [language tour](docs/12-LANGUAGE-TOUR.md).
+If you want to **write L**, start with the [language tour](docs/language/12-language-tour.md).
 
-If you want to **implement L**, start with the [documentation index](docs/README.md), then read the architecture, Core specification, grammar, semantics, and conformance documents.
+If you want to **implement L**, start with the [documentation index](docs/index.md), then read the architecture, Core specification, grammar, semantics, and conformance documents.
 
 Useful entry points:
 
-- [Documentation index](docs/README.md)
-- [Language tour](docs/12-LANGUAGE-TOUR.md)
-- [Architecture / Core boundary](docs/00-ARCHITECTURE.md)
-- [Core language specification](docs/01-CORE-LANGUAGE.md)
-- [Draft EBNF grammar](docs/02-GRAMMAR.ebnf)
-- [Detailed Core semantics](docs/03-CORE-SEMANTICS.md)
-- [Conformance](docs/04-CONFORMANCE.md)
-- [Implementation guide](docs/07-IMPLEMENTATION-GUIDE.md)
-- [Design rationale](docs/09-DESIGN-RATIONALE.md)
-- [Open design questions](docs/10-OPEN-QUESTIONS.md)
-- [Code analysis and flowcharts](docs/11-CODE-ANALYSIS.md)
-- [Roadmap](docs/13-ROADMAP.md)
-- [Self-hosting progress](docs/14-SELF-HOSTING.md)
+- [Documentation index](docs/index.md)
+- [Language tour](docs/language/12-language-tour.md)
+- [Architecture / Core boundary](docs/architecture/00-architecture.md)
+- [Core language specification](docs/language/01-core-language.md)
+- [Draft EBNF grammar](docs/language/02-grammar.ebnf)
+- [Detailed Core semantics](docs/language/03-core-semantics.md)
+- [Conformance](docs/language/04-conformance.md)
+- [Implementation guide](docs/guides/07-implementation-guide.md)
+- [Design rationale](docs/design/09-design-rationale.md)
+- [Open design questions](docs/design/10-open-questions.md)
+- [Code analysis and flowcharts](docs/guides/11-code-analysis.md)
+- [Roadmap](docs/guides/13-roadmap.md)
+- [Self-hosting progress](docs/guides/14-self-hosting.md)
 
 The specification is still a draft. The implementation is evidence, not automatically normative; disagreements between implementation and specification are bugs worth reporting.
 
 ## Current implementation
 
-The frontend used by `./lc` is still **bootstrapped in Python**. It parses, links, type-checks, compiles L to bytecode, embeds that bytecode into a native C VM/runtime, and invokes `cc -O3` to produce a native executable:
+The frontend used by `scripts/lc` is still **bootstrapped in Python**. It parses, links, type-checks, compiles L to bytecode, embeds that bytecode into a native C VM/runtime, and invokes `cc -O3` to produce a native executable:
 
 ```text
 L source
@@ -113,32 +113,35 @@ The compiler frontend also exposes a reusable source-analysis pipeline:
 
 ```sh
 # Human-readable metrics/findings.
-./lc analyze examples/core/linked_list.l
+scripts/lc analyze examples/core/linked_list.l
 
 # Mermaid CFG.
-./lc analyze examples/core/linked_list.l --flowchart -o linked-list.mmd
+scripts/lc analyze examples/core/linked_list.l --flowchart -o linked-list.mmd
 
 # Graphviz CFG.
-./lc analyze examples/core/linked_list.l --view cfg --format dot -o linked-list.dot
+scripts/lc analyze examples/core/linked_list.l --view cfg --format dot -o linked-list.dot
 
 # Machine-readable project/function/CFG model.
-./lc analyze examples/core/linked_list.l --view model > analysis.json
+scripts/lc analyze examples/core/linked_list.l --view model > analysis.json
 ```
 
-It can emit CFGs, call graphs, metrics, parser ASTs, Mermaid, Graphviz DOT/SVG, and JSON. This is optional tooling, not part of L Core. See [the analysis documentation](docs/11-CODE-ANALYSIS.md).
+It can emit CFGs, call graphs, metrics, parser ASTs, Mermaid, Graphviz DOT/SVG, and JSON. This is optional tooling, not part of L Core. See [the analysis documentation](docs/guides/11-code-analysis.md).
 
 ## Repository layout
 
 ```text
-bootstrap/       reference lexer/parser/checker/interpreter/bytecode compiler
-runtime/         native C VM and tracing runtime
-lib/portable/    optional portable libraries written in L
-lib/hosted/      optional libraries that depend on host modules
+src/             reference lexer/parser/checker/interpreter/bytecode compiler (src/lang),
+                 hosted command-line profiles (src/hosts), Python tooling (src/tools)
+src/vm/          native C VM and tracing runtime (src/vm/vm.c)
+lib/core/        optional portable libraries written in L
+lib/host/        optional libraries that depend on host modules
+lib/slang/       L-written self-hosting frontend slices (syntax through checking)
 tools/lace/      Lace modal terminal editor, written in L
 tools/lsp/       L, JSON, and INI LSP servers, written in L
 tools/check/     L-written syntax and semantic checker tools
-conformance/     Core-only implementation tests
-tests/           toolchain/editor/LSP integration tests
+tools/shell/     L-written shell, written in L
+scripts/         repository launchers (lr, lc, lsyntax, lcheck, lace, LSPs) and test/build scripts
+tests/           Core conformance seed plus toolchain/editor/LSP integration tests
 docs/            language specification, guides, roadmap, tooling docs
 examples/        Core and hosted examples
 ```
@@ -175,19 +178,6 @@ Some characteristic choices are:
 - host capabilities enter through typed logical modules rather than a standardized C FFI.
 
 The default policy is **not** to grow Core just because another language has a convenient feature. New mechanisms should be justified by recurring problems demonstrated in real L code and weighed against their cost to interpreters, compilers, formatters, LSPs, and independent implementations.
-
-## Independent review
-
-This repository is intended to be reviewable by people or coding agents without the original design conversation.
-
-For an independent review, start with:
-
-- [`AGENTS.md`](AGENTS.md)
-- [`review/AGENT-PROMPT.md`](review/AGENT-PROMPT.md)
-- [`review/REVIEW-GUIDE.md`](review/REVIEW-GUIDE.md)
-- [`review/FEEDBACK-TEMPLATE.md`](review/FEEDBACK-TEMPLATE.md)
-
-Feedback is not expected to preserve current decisions. Concrete counterexamples, implementation experiments, spec/implementation mismatches, and user-code experience are especially useful.
 
 ## Contributing
 

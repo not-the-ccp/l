@@ -12,6 +12,7 @@ export PYTHONPATH="$HERE/src${PYTHONPATH:+:$PYTHONPATH}"
 "$PYTHON" "$HERE/tests/const_arrays.py"
 "$PYTHON" "$HERE/src/tools/const_policy.py" --self-test
 "$PYTHON" "$HERE/src/tools/const_policy.py"
+"$PYTHON" "$HERE/tests/check_docs.py"
 "$HERE/scripts/lr" "$HERE/tests/utf8_portable.l" >/dev/null
 "$HERE/scripts/lr" "$HERE/tests/byte_display_portable.l" >/dev/null
 "$HERE/scripts/lc" --check "$HERE/examples/hosted/project/main.l" >/dev/null

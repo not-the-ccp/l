@@ -22,7 +22,7 @@ A new implementation should be able to run the Core suite without implementing a
 
 ## 2. Self-host the compiler frontend
 
-The current `./lc` frontend is Python-bootstrapped. L already contains substantial compiler-like code and is capable of writing its own lexer/parser infrastructure.
+The current `scripts/lc` frontend is Python-bootstrapped. L already contains substantial compiler-like code and is capable of writing its own lexer/parser infrastructure.
 
 The next compiler milestone is an L-written frontend with approximately this pipeline:
 

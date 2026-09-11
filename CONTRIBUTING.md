@@ -14,5 +14,5 @@ Changes to Core should normally include conformance tests and updates to the rel
 Run before submitting changes:
 
 ```sh
-./test.sh
+scripts/test.sh
 ```

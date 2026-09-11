@@ -8,11 +8,11 @@ The project deliberately separates **L Core** from optional libraries, host capa
 
 Start here:
 
-1. [`12-LANGUAGE-TOUR.md`](12-LANGUAGE-TOUR.md) — a compact user-oriented tour.
-2. [`../examples/core/linked_list.l`](../examples/core/linked_list.l), [`../examples/core/generic_queue.l`](../examples/core/generic_queue.l), and [`../examples/core/collections.l`](../examples/core/collections.l) — freestanding examples from linked data structures through reusable generics.
-3. [`../README.md`](../README.md) — commands for `./lc`, `./lr`, Lace, and the bundled tools.
+1. [`language/12-language-tour.md`](language/12-language-tour.md) — a compact user-oriented tour.
+2. [`../examples/core/linked_list.l`](../examples/core/linked_list.l) and [`../examples/core/generic_queue.l`](../examples/core/generic_queue.l) — freestanding examples from linked data structures through reusable generics.
+3. [`../README.md`](../README.md) — commands for `scripts/lc`, `scripts/lr`, Lace, and the bundled tools.
 
-For the exact language rules, continue with [`01-CORE-LANGUAGE.md`](01-CORE-LANGUAGE.md) and [`03-CORE-SEMANTICS.md`](03-CORE-SEMANTICS.md).
+For the exact language rules, continue with [`language/01-core-language.md`](language/01-core-language.md) and [`language/03-core-semantics.md`](language/03-core-semantics.md).
 
 ## I want to implement L
 
@@ -20,12 +20,12 @@ A conforming implementation only needs **L Core**. It does not need the portable
 
 Recommended reading order:
 
-1. [`00-ARCHITECTURE.md`](00-ARCHITECTURE.md) — what is Core and what is not.
-2. [`01-CORE-LANGUAGE.md`](01-CORE-LANGUAGE.md) — compact language definition.
-3. [`02-GRAMMAR.ebnf`](02-GRAMMAR.ebnf) — draft grammar.
-4. [`03-CORE-SEMANTICS.md`](03-CORE-SEMANTICS.md) — operational details and edge cases.
-5. [`04-CONFORMANCE.md`](04-CONFORMANCE.md) — what conformance means.
-6. [`07-IMPLEMENTATION-GUIDE.md`](07-IMPLEMENTATION-GUIDE.md) — non-normative implementation advice and traps found by the reference implementations.
+1. [`architecture/00-architecture.md`](architecture/00-architecture.md) — what is Core and what is not.
+2. [`language/01-core-language.md`](language/01-core-language.md) — compact language definition.
+3. [`language/02-grammar.ebnf`](language/02-grammar.ebnf) — draft grammar.
+4. [`language/03-core-semantics.md`](language/03-core-semantics.md) — operational details and edge cases.
+5. [`language/04-conformance.md`](language/04-conformance.md) — what conformance means.
+6. [`guides/07-implementation-guide.md`](guides/07-implementation-guide.md) — non-normative implementation advice and traps found by the reference implementations.
 
 Then run:
 
@@ -39,8 +39,8 @@ The conformance suite is still growing. Passing the current seed is evidence, no
 
 Read:
 
-- [`06-LIBRARIES.md`](06-LIBRARIES.md) — layering/policy;
-- [`15-PORTABLE-LIBRARY.md`](15-PORTABLE-LIBRARY.md) — current source-level modules, collections, algorithms, semantics, and tests.
+- [`architecture/06-libraries.md`](architecture/06-libraries.md) — layering/policy;
+- [`architecture/15-portable-library.md`](architecture/15-portable-library.md) — current source-level modules, collections, algorithms, semantics, and tests.
 
 The portable library is ordinary L and remains optional for Core implementations.
 
@@ -48,9 +48,9 @@ The portable library is ordinary L and remains optional for Core implementations
 
 Read:
 
-- [`00-ARCHITECTURE.md`](00-ARCHITECTURE.md)
-- [`05-HOST-MODULE-INTERFACE.md`](05-HOST-MODULE-INTERFACE.md)
-- [`06-LIBRARIES.md`](06-LIBRARIES.md)
+- [`architecture/00-architecture.md`](architecture/00-architecture.md)
+- [`language/05-host-module-interface.md`](language/05-host-module-interface.md)
+- [`architecture/06-libraries.md`](architecture/06-libraries.md)
 
 Core module names are logical names. Files, paths, package repositories, `main`, command-line arguments, processes, terminals, and networking are environment choices rather than Core semantics.
 
@@ -58,11 +58,11 @@ Core module names are logical names. Files, paths, package repositories, `main`,
 
 Read:
 
-- [`07-IMPLEMENTATION-GUIDE.md`](07-IMPLEMENTATION-GUIDE.md)
-- [`08-TOOLCHAIN-AND-STATUS.md`](08-TOOLCHAIN-AND-STATUS.md)
-- [`11-CODE-ANALYSIS.md`](11-CODE-ANALYSIS.md)
-- [`13-ROADMAP.md`](13-ROADMAP.md)
-- [`14-SELF-HOSTING.md`](14-SELF-HOSTING.md)
+- [`guides/07-implementation-guide.md`](guides/07-implementation-guide.md)
+- [`guides/08-toolchain-and-status.md`](guides/08-toolchain-and-status.md)
+- [`guides/11-code-analysis.md`](guides/11-code-analysis.md)
+- [`guides/13-roadmap.md`](guides/13-roadmap.md)
+- [`guides/14-self-hosting.md`](guides/14-self-hosting.md)
 
 The current bootstrap frontend is Python. Native executables use the C VM/runtime with tracing GC. Lace and the bundled L/JSON/INI language servers are written in L. The standalone `lsyntax` and `lcheck` tools are the first L-written compiler-frontend components promoted into native command-line tools.
 
@@ -70,8 +70,8 @@ The current bootstrap frontend is Python. Native executables use the C VM/runtim
 
 Read the specification first, then the rationale and open questions:
 
-- [`09-DESIGN-RATIONALE.md`](09-DESIGN-RATIONALE.md)
-- [`10-OPEN-QUESTIONS.md`](10-OPEN-QUESTIONS.md)
+- [`design/09-design-rationale.md`](design/09-design-rationale.md)
+- [`design/10-open-questions.md`](design/10-open-questions.md)
 
 The implementation is not automatically normative. A mismatch between the implementation, grammar, prose specification, tests, and examples is a useful bug report.
 
