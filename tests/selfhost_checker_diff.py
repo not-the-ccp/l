@@ -60,7 +60,8 @@ fn sum(head: ?ref Node) -> i64 {
     ),
     (
         "const array read and iteration",
-        "fn sum(xs: const []i64) -> i64 { var out: i64 = 0; for (x in xs) { out += x; } return out; } fn main() -> i64 { var xs: []i64 = [1, 2]; return sum(xs); }",
+        "fn sum(xs: const []i64) -> i64 { var out: i64 = 0; for (x in xs) { out += x; } return "
+        "out; } fn main() -> i64 { var xs: []i64 = [1, 2]; return sum(xs); }",
     ),
     (
         "const push rejected",
@@ -76,7 +77,8 @@ fn sum(head: ?ref Node) -> i64 {
     ),
     (
         "const splice replacement accepted",
-        'fn main() -> i64 { var dst: []u8 = []; var src = "abc"; splice(dst, 0, 0, src); return len(dst) as i64; }',
+        'fn main() -> i64 { var dst: []u8 = []; var src = "abc"; splice(dst, 0, 0, src); return '
+        'len(dst) as i64; }',
     ),
     (
         "inferred string is const",
@@ -88,35 +90,43 @@ fn sum(head: ?ref Node) -> i64 {
     ),
     (
         "generic const parameter accepts mutable",
-        "fn first[T](xs: const []T) -> T { return xs[0]; } fn main() -> i64 { var xs: []i64 = [7]; return first(xs); }",
+        "fn first[T](xs: const []T) -> T { return xs[0]; } fn main() -> i64 { var xs: []i64 = "
+        "[7]; return first(xs); }",
     ),
     (
         "generic const parameter accepts string",
-        'fn first[T](xs: const []T) -> T { return xs[0]; } fn main() -> i64 { return first("x") as i64; }',
+        'fn first[T](xs: const []T) -> T { return xs[0]; } fn main() -> i64 { return first("x") '
+        'as i64; }',
     ),
     (
         "generic mutable parameter rejects inferred string",
-        'fn first_mut[T](xs: []T) -> T { return xs[0]; } fn main() -> i64 { return first_mut("x") as i64; }',
+        'fn first_mut[T](xs: []T) -> T { return xs[0]; } fn main() -> i64 { return first_mut("x") '
+        'as i64; }',
     ),
     (
         "mutable generic result to const context",
-        "fn one[T](x: T) -> []T { return [x]; } fn main() -> i64 { var xs: const []i64 = one(4); return xs[0]; }",
+        "fn one[T](x: T) -> []T { return [x]; } fn main() -> i64 { var xs: const []i64 = one(4); "
+        "return xs[0]; }",
     ),
     (
         "const generic result to mutable context rejected",
-        "fn readonly[T](xs: const []T) -> const []T { return xs; } fn main() -> i64 { var xs: []i64 = readonly([4]); return xs[0]; }",
+        "fn readonly[T](xs: const []T) -> const []T { return xs; } fn main() -> i64 { var xs: "
+        "[]i64 = readonly([4]); return xs[0]; }",
     ),
     (
         "shallow const outer conversion",
-        "fn main() -> i64 { var inner: []i64 = [1]; var nested: [][]i64 = [inner]; var view: const [][]i64 = nested; view[0][0] = 2; return inner[0]; }",
+        "fn main() -> i64 { var inner: []i64 = [1]; var nested: [][]i64 = [inner]; var view: "
+        "const [][]i64 = nested; view[0][0] = 2; return inner[0]; }",
     ),
     (
         "nested qualifier does not lift",
-        "fn main() -> i64 { var nested: [][]i64 = [[1]]; var view: const []const []i64 = nested; return view[0][0]; }",
+        "fn main() -> i64 { var nested: [][]i64 = [[1]]; var view: const []const []i64 = nested; "
+        "return view[0][0]; }",
     ),
     (
         "const ref slots still permit referent mutation",
-        "struct Box { value: i64, } fn main() -> i64 { var items: []ref Box = [new Box { value: 1 }]; var view: const []ref Box = items; view[0].value = 3; return view[0].value; }",
+        "struct Box { value: i64, } fn main() -> i64 { var items: []ref Box = [new Box { value: 1 "
+        "}]; var view: const []ref Box = items; view[0].value = 3; return view[0].value; }",
     ),
     (
         "nested array struct place",
@@ -132,7 +142,8 @@ fn main() -> i64 {
     ),
     (
         "ref field place",
-        "struct Box { value: i64, } fn main() -> i64 { var b = new Box { value: 1 }; b.value += 2; return b.value; }",
+        "struct Box { value: i64, } fn main() -> i64 { var b = new Box { value: 1 }; b.value += "
+        "2; return b.value; }",
     ),
     (
         "enum payload match",
@@ -148,7 +159,8 @@ fn get(x: Result) -> i64 {
     ),
     (
         "ordinary function value",
-        "fn add(a: i64, b: i64) -> i64 { return a + b; } fn main() -> i64 { var f: fn(i64, i64) -> i64 = add; return f(2, 3); }",
+        "fn add(a: i64, b: i64) -> i64 { return a + b; } fn main() -> i64 { var f: fn(i64, i64) "
+        "-> i64 = add; return f(2, 3); }",
     ),
     (
         "noncapturing anonymous function",
@@ -180,7 +192,8 @@ fn main() -> i64 {
     ),
     (
         "anonymous capture",
-        "fn main() -> i64 { var x: i64 = 1; var f: fn() -> i64 = fn() -> i64 { return x; }; return 0; }",
+        "fn main() -> i64 { var x: i64 = 1; var f: fn() -> i64 = fn() -> i64 { return x; }; "
+        "return 0; }",
     ),
     (
         "generic identity inference",
@@ -192,11 +205,14 @@ fn main() -> i64 {
     ),
     (
         "generic struct inference",
-        "struct Box[T] { value: T, } fn main() -> i64 { var b: Box[i64] = Box { value: 4 }; return b.value; }",
+        "struct Box[T] { value: T, } fn main() -> i64 { var b: Box[i64] = Box { value: 4 }; "
+        "return b.value; }",
     ),
     (
         "generic enum inference and pattern",
-        "enum Maybe[T] { just(T), nothing, } fn get(x: Maybe[i64]) -> i64 { match (x) { Maybe.just(v) { return v; } Maybe.nothing { return 0; } } } fn main() -> i64 { var x: Maybe[i64] = Maybe.just(9); return get(x); }",
+        "enum Maybe[T] { just(T), nothing, } fn get(x: Maybe[i64]) -> i64 { match (x) { "
+        "Maybe.just(v) { return v; } Maybe.nothing { return 0; } } } fn main() -> i64 { var x: "
+        "Maybe[i64] = Maybe.just(9); return get(x); }",
     ),
     (
         "generic queue core example",
@@ -247,7 +263,8 @@ fn main() -> i64 {
     ),
     (
         "non-exhaustive enum match",
-        "enum Color { red, green, blue, } fn f(x: Color) -> i64 { match (x) { red { return 1; } green { return 2; } } }",
+        "enum Color { red, green, blue, } fn f(x: Color) -> i64 { match (x) { red { return 1; } "
+        "green { return 2; } } }",
     ),
     (
         "integer match requires catchall",
@@ -259,7 +276,8 @@ fn main() -> i64 {
     ),
     (
         "duplicate bool arm",
-        "fn f(x: bool) -> i64 { match (x) { true { return 1; } true { return 2; } false { return 0; } } }",
+        "fn f(x: bool) -> i64 { match (x) { true { return 1; } true { return 2; } false { return "
+        "0; } } }",
     ),
     (
         "unit match exhaustive",

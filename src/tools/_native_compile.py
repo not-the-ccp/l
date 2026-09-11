@@ -512,13 +512,17 @@ class NativeEmitter:
         for fi, n in enumerate(self.func_names):
             f = self.bc.funcs[n]
             slots = self.func_slots[n]
+            params_sym = f"fn_params_{fi}" if f.params else "NULL"
             A(
-                f'  {{{self.sid(n)},{len(f.params)},{(f"fn_params_{fi}" if f.params else "NULL")},{len(slots)},{len(f.code)},fn_code_{fi}}},'
+                f"  {{{self.sid(n)},{len(f.params)},{params_sym},"
+                f"{len(slots)},{len(f.code)},fn_code_{fi}}},"
             )
         A("};")
         entryid = self.fid[self.entry_name]
         A(
-            f"static const LProgram gen_program = {{{len(self.func_names)},gen_funcs,{entryid},{len(self.strings)},gen_strings,{len(self.patterns)},gen_patterns}};"
+            "static const LProgram gen_program = "
+            f"{{{len(self.func_names)},gen_funcs,{entryid},{len(self.strings)},"
+            f"gen_strings,{len(self.patterns)},gen_patterns}};"
         )
         A("int main(int argc,char **argv){return lvm_run(&gen_program,argc,argv);}")
         return "\n".join(out) + "\n"

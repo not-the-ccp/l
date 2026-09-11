@@ -59,7 +59,8 @@ STALE_PATTERNS = [
     r"_core_impl",
     r"_sdk_cli_impl",
     # Old top-level launchers (they live under scripts/ now).
-    r"(?<![\w/])\./(?:lc|lr|lsyntax|lcheck|lace|l-lsp|json-lsp|ini-lsp|build\.sh|test\.sh)(?![\w-])",
+    r"(?<![\w/])\./(?:lc|lr|lsyntax|lcheck|lace|l-lsp|json-lsp|ini-lsp|build\.sh|"
+    r"test\.sh)(?![\w-])",
 ]
 STALE_RE = re.compile("|".join(STALE_PATTERNS))
 

@@ -20,7 +20,13 @@ fn has_use(uses: const []slang_names.Use, status: slang_names.UseStatus, root: c
 }
 
 fn main() -> i64 {
-    var source: []u8 = "import alpha.beta as ext;\nconst LIMIT: i64 = 3;\nfn helper(x: i64) -> i64 { return x; }\nfn good[T](xs: []T, n: i64) -> i64 { var y: i64 = n; if (true) { var sibling: i64 = y; } else { var sibling: i64 = y; } for (item in xs) { var copy = item; } var local_call = helper(y); var remote = ext.value; match (y) { other { return other; } } }\nfn bad_capture(x: i64) -> i64 { var f: fn(i64) -> i64 = fn(y: i64) -> i64 { return x + y; }; return 0; }\nfn bad_shadow(x: i64) -> i64 { var helper: i64 = x; return helper; }\nfn bad_unresolved() -> i64 { return missing; }\n";
+    var source: []u8 = "import alpha.beta as ext;\nconst LIMIT: i64 = 3;\nfn helper(x: i64) -> i64 { return ";
+    bytes.append(source, "x; }\nfn good[T](xs: []T, n: i64) -> i64 { var y: i64 = n; if (true) { var sibling: ");
+    bytes.append(source, "i64 = y; } else { var sibling: i64 = y; } for (item in xs) { var copy = item; } var ");
+    bytes.append(source, "local_call = helper(y); var remote = ext.value; match (y) { other { return other; } ");
+    bytes.append(source, "} }\nfn bad_capture(x: i64) -> i64 { var f: fn(i64) -> i64 = fn(y: i64) -> i64 { ");
+    bytes.append(source, "return x + y; }; return 0; }\nfn bad_shadow(x: i64) -> i64 { var helper: i64 = x; ");
+    bytes.append(source, "return helper; }\nfn bad_unresolved() -> i64 { return missing; }\n");
 
     var result = slang_names.resolve(source);
 

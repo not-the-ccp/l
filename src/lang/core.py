@@ -1,4 +1,5 @@
-"""Core L bootstrap frontend: lexer, parser, static checker, tree-walking interpreter, module linker, and host-module model.
+"""Core L bootstrap frontend: lexer, parser, static checker, tree-walking
+interpreter, module linker, and host-module model.
 
 This is the portable reference implementation of L Core. Host interaction
 happens only through the HostModule boundary; the native code generator
@@ -98,7 +99,8 @@ ESC = {"n": 10, "r": 13, "t": 9, "0": 0, "'": 39, '"': 34, "\\": 92}
 
 
 class Lexer:
-    """Byte-oriented syntax over valid Python str (our study assumes UTF-8 source before this stage)."""
+    """Byte-oriented syntax over valid Python str (our study assumes UTF-8
+    source before this stage)."""
 
     def __init__(self, src: str, keep_comments: bool = False):
         """Init (Lexer helper for the L Core frontend)."""
@@ -1549,7 +1551,8 @@ class Checker:
                     walk(resolved_decl_type(item, info.gps), env, [name])
 
     def check_generic_recursion(self):
-        # Approximation on source call graph, sufficient for explicit self/mutual references. Calls through fn values aren't generic polymorphic calls.
+        # Approximation on source call graph, sufficient for explicit self/mutual
+        # references. Calls through fn values aren't generic polymorphic calls.
         """Check generic recursion (Checker helper for the L Core frontend)."""
         generic = {n for n, f in self.funcs.items() if f.gps}
         edges = {n: set() for n in generic}
@@ -1620,7 +1623,8 @@ class Checker:
         for v in generic:
             if v not in ind:
                 strong(v)
-        # Exact self recursion is naturally guaranteed later by inference: we additionally reject obvious source calls where args structurally change params.
+        # Exact self recursion is naturally guaranteed later by inference: we additionally
+        # reject obvious source calls where args structurally change params.
         # Full rule is checked at call sites while body is typechecked.
 
     def push(self):
@@ -1656,8 +1660,9 @@ class Checker:
         """Check fn (Checker helper for the L Core frontend)."""
         self.source_reserved = set(getattr(f.node, "reserved", ()))
         if set(f.gps) & self.source_reserved:
+            shadowed = sorted(set(f.gps) & self.source_reserved)
             self.err(
-                f"generic parameter shadows a module name: {sorted(set(f.gps)&self.source_reserved)}",
+                f"generic parameter shadows a module name: {shadowed}",
                 f.node,
             )
         self.gparams = set(f.gps)
@@ -2028,7 +2033,8 @@ class Checker:
                 t = expected
             else:
                 t = name_ty("i64")
-                # Even without an expected type, the default i64 must be                # large enough to hold the literal.
+                # Even without an expected type, the default i64 must be
+                # large enough to hold the literal.
                 if not (-(1 << 63) <= v <= (1 << 63) - 1):
                     self.err(f"integer literal {v} does not fit {t}", e)
         elif k == "float":
@@ -2732,7 +2738,8 @@ class Checker:
             self.check_cast(t, to, e)
             return self.cast_value(v, t, to), to
         self.err(
-            "constant expression may only use scalar literals, constants, scalar operators, and casts",
+            "constant expression may only use scalar literals, constants, "
+            "scalar operators, and casts",
             e,
         )
 
@@ -3355,7 +3362,8 @@ class Interpreter:
 
 
 def copy_value(v):
-    # Language value-copy semantics: aggregates inline-copy; arrays/refs/functions are handle values.
+    # Language value-copy semantics: aggregates inline-copy; arrays/refs/functions
+    # are handle values.
     """Deep-copy an L value across the interpreter boundary.
 
     Args:
@@ -3400,7 +3408,8 @@ def internal_name(mod: tuple[str, ...], n: str) -> str:
 
 
 class Program:
-    """Links logical source modules without filesystem assumptions, then uses the ordinary checker/runtime."""
+    """Links logical source modules without filesystem assumptions, then uses the
+    ordinary checker/runtime."""
 
     def __init__(
         self, sources: dict[tuple[str, ...], str], host_modules: dict | None = None
@@ -3572,7 +3581,8 @@ class Program:
         """Pattern (Program helper for the L Core frontend)."""
         if p.kind == "p_name":
             q, subs = p.a
-            # plain binding must not be rewritten merely because its spelling matches some top-level thing; no-shadowing checker will reject such spelling anyway.
+            # plain binding must not be rewritten merely because its spelling matches
+            # some top-level thing; no-shadowing checker will reject such spelling anyway.
             rq = (
                 self._resolve_source_name(m, q, p)
                 if len(q) > 1 or (len(q) == 1 and q[0] in self.tops[m])

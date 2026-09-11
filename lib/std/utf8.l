@@ -118,7 +118,10 @@ pub fn decode_at(src: const []u8, pos: u64) -> u32 {
     if (width == 3) {
         return ((x0 & 0x0f) << 12) | (((src[pos + 1] as u32) & 0x3f) << 6) | ((src[pos + 2] as u32) & 0x3f);
     }
-    return ((x0 & 0x07) << 18) | (((src[pos + 1] as u32) & 0x3f) << 12) | (((src[pos + 2] as u32) & 0x3f) << 6) | ((src[pos + 3] as u32) & 0x3f);
+    return ((x0 & 0x07) << 18) |
+        (((src[pos + 1] as u32) & 0x3f) << 12) |
+        (((src[pos + 2] as u32) & 0x3f) << 6) |
+        ((src[pos + 3] as u32) & 0x3f);
 }
 
 pub fn next_boundary(src: const []u8, pos: u64) -> u64 {

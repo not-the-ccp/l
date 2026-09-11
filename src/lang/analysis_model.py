@@ -421,6 +421,7 @@ def select_functions(project, module=None, function=None):
         if not simple:
             raise LangError(f"analysis function not found: {function}")
         raise LangError(
-            f"analysis function name is ambiguous: {function} ({', '.join(f.qualified_name for f in simple)})"
+            f"analysis function name is ambiguous: {function} "
+            f"({', '.join(f.qualified_name for f in simple)})"
         )
     return fs

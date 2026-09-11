@@ -349,7 +349,8 @@ def render_calls_dot(funcs) -> str:
     out = ["digraph l_calls {", "  rankdir=LR;"]
     for name in names:
         out.append(
-            f'  {ids[name]} [shape={"box" if name in internal else "ellipse"}, label="{dot_escape(name)}"];'
+            f'  {ids[name]} [shape={"box" if name in internal else "ellipse"}, '
+            f'label="{dot_escape(name)}"];'
         )
     for a, b, _, n in edges:
         label = f' [label="{n}"]' if n > 1 else ""

@@ -708,7 +708,14 @@ fn name_type(checker: ref Checker, expr: ref slang_decls.Expr,
                                         none { }
                                         some(pos) {
                                             var variant = bytes.slice(expr.text, pos, len(expr.text));
-                                            return enum_value_type(checker, decl, variant, expected, [], expr.start, expr.end);
+                                            return enum_value_type(
+                                                checker,
+                                                decl,
+                                                variant,
+                                                expected,
+                                                [],
+                                                expr.start,
+                                                expr.end);
                                         }
                                     }
                                 }
@@ -827,8 +834,18 @@ fn builtin_call(checker: ref Checker, name: []u8, args: []ref slang_decls.Expr,
             push_error(checker, ErrorKind.array_required, name, start, end);
             return unit_type();
         }
-        require_same(checker, primitive_type("u64"), expr_type(checker, args[1], some(primitive_type("u64"))), args[1].start, args[1].end);
-        require_same(checker, primitive_type("u64"), expr_type(checker, args[2], some(primitive_type("u64"))), args[2].start, args[2].end);
+        require_same(
+            checker,
+            primitive_type("u64"),
+            expr_type(checker, args[1], some(primitive_type("u64"))),
+            args[1].start,
+            args[1].end);
+        require_same(
+            checker,
+            primitive_type("u64"),
+            expr_type(checker, args[2], some(primitive_type("u64"))),
+            args[2].start,
+            args[2].end);
         var replacement = const_array_type(array.children[0]);
         require_compatible(checker, replacement, expr_type(checker, args[3], some(replacement)),
             args[3].start, args[3].end);
@@ -910,12 +927,25 @@ fn call_type(checker: ref Checker, expr: ref slang_decls.Expr,
                                             none { }
                                             some(pos) {
                                                 var variant = bytes.slice(callee.text, pos, len(callee.text));
-                                                return enum_value_type(checker, decl, variant, expected, args, expr.start, expr.end);
+                                                return enum_value_type(
+                                                    checker,
+                                                    decl,
+                                                    variant,
+                                                    expected,
+                                                    args,
+                                                    expr.start,
+                                                    expr.end);
                                             }
                                         }
                                     }
                                     if (decl.kind is slang_decls.DeclKind.function && len(decl.generics) > 0) {
-                                        return instantiate_generic_call(checker, decl, args, expected, expr.start, expr.end);
+                                        return instantiate_generic_call(
+                                            checker,
+                                            decl,
+                                            args,
+                                            expected,
+                                            expr.start,
+                                            expr.end);
                                     }
                                 }
                             }
@@ -1064,12 +1094,19 @@ fn expr_type(checker: ref Checker, expr: ref slang_decls.Expr,
         if (len(expr.children) == 0 && element is none) {
             push_error(checker, ErrorKind.ambiguous_value, "[]", expr.start, expr.end);
         } else {
-            if (element is none && len(expr.children) > 0) { element = some(expr_type(checker, expr.children[0], none)); }
+            if (element is none && len(expr.children) > 0) {
+                element = some(expr_type(checker, expr.children[0], none));
+            }
             match (element) {
                 none { }
                 some(elem) {
                     for (child in expr.children) {
-                        require_compatible(checker, elem, expr_type(checker, child, some(elem)), child.start, child.end);
+                        require_compatible(
+                            checker,
+                            elem,
+                            expr_type(checker, child, some(elem)),
+                            child.start,
+                            child.end);
                     }
                     type = array_type(elem);
                 }
@@ -1082,7 +1119,12 @@ fn expr_type(checker: ref Checker, expr: ref slang_decls.Expr,
             none { }
         }
         var elem = expr_type(checker, expr.children[0], elem_expected);
-        require_same(checker, primitive_type("u64"), expr_type(checker, expr.children[1], some(primitive_type("u64"))), expr.children[1].start, expr.children[1].end);
+        require_same(
+            checker,
+            primitive_type("u64"),
+            expr_type(checker, expr.children[1], some(primitive_type("u64"))),
+            expr.children[1].start,
+            expr.children[1].end);
         type = array_type(elem);
     } else if (expr.kind is slang_decls.ExprKind.unary) {
         var child_expected = expected;
@@ -1105,7 +1147,9 @@ fn expr_type(checker: ref Checker, expr: ref slang_decls.Expr,
         }
         if (!handled_signed_min) { child = expr_type(checker, expr.children[0], child_expected); }
         if (bytes.equal(expr.op, "!")) {
-            if (!is_primitive(child, "bool")) { push_error(checker, ErrorKind.boolean_required, expr.op, expr.start, expr.end); }
+            if (!is_primitive(child, "bool")) {
+                push_error(checker, ErrorKind.boolean_required, expr.op, expr.start, expr.end);
+            }
         } else if (bytes.equal(expr.op, "~")) {
             if (!integer(child)) { push_error(checker, ErrorKind.integer_required, expr.op, expr.start, expr.end); }
         } else if (bytes.equal(expr.op, "-")) {
@@ -1141,17 +1185,27 @@ fn expr_type(checker: ref Checker, expr: ref slang_decls.Expr,
             none { }
             some(target_syntax) {
                 var to = resolve_syntax_type(checker, checker.current_generics, target_syntax, checker.current_decl);
-                if (!numeric(from) || !numeric(to)) { push_error(checker, ErrorKind.bad_cast, [], expr.start, expr.end); }
+                if (!numeric(from) || !numeric(to)) {
+                    push_error(checker, ErrorKind.bad_cast, [], expr.start, expr.end);
+                }
                 type = to;
             }
         }
     } else if (expr.kind is slang_decls.ExprKind.allocate) {
         var inner_expected: ?ref slang_types.ResolvedType = none;
-        match (expected) { some(want) { if (want.kind is slang_types.ResolvedKind.reference && len(want.children) == 1) { inner_expected = some(want.children[0]); } } none { } }
+        match (expected) {
+            some(want) { if (want.kind is slang_types.ResolvedKind.reference &&
+                len(want.children) == 1) { inner_expected = some(want.children[0]); } } none { }
+        }
         type = reference_type(expr_type(checker, expr.children[0], inner_expected));
     } else if (expr.kind is slang_decls.ExprKind.index) {
         var array = expr_type(checker, expr.children[0], none);
-        require_same(checker, primitive_type("u64"), expr_type(checker, expr.children[1], some(primitive_type("u64"))), expr.children[1].start, expr.children[1].end);
+        require_same(
+            checker,
+            primitive_type("u64"),
+            expr_type(checker, expr.children[1], some(primitive_type("u64"))),
+            expr.children[1].start,
+            expr.children[1].end);
         if (!array_like(array) || len(array.children) != 1) {
             push_error(checker, ErrorKind.array_required, [], expr.start, expr.end);
         } else { type = array.children[0]; }
@@ -1176,7 +1230,9 @@ fn expr_type(checker: ref Checker, expr: ref slang_decls.Expr,
             }
         }
         var result = unit_type();
-        match (expr.type) { none { } some(syntax) { result = resolve_syntax_type(checker, checker.current_generics, syntax, old_decl); } }
+        match (expr.type) {
+            none { } some(syntax) { result = resolve_syntax_type(checker, checker.current_generics, syntax, old_decl); }
+        }
         checker.return_type = result;
         check_block(checker, expr.body);
         checker.return_type = old_return;
@@ -1209,12 +1265,15 @@ fn place_try(checker: ref Checker, expr: ref slang_decls.Expr, report: bool) -> 
                     some(symbol_index) {
                         var kind = checker.names.symbols[symbol_index].kind;
                         var local = kind is slang_names.SymbolKind.parameter || kind is slang_names.SymbolKind.local ||
-                            kind is slang_names.SymbolKind.loop_binding || kind is slang_names.SymbolKind.pattern_binding ||
+                            kind is slang_names.SymbolKind.loop_binding ||
+                                kind is slang_names.SymbolKind.pattern_binding ||
                             kind is slang_names.SymbolKind.anonymous_parameter;
                         if (local) {
                             match (symbol_type(checker, symbol_index)) {
                                 none { }
-                                some(type) { return some(apply_field_tail(checker, type, expr.text, expr.start, expr.end)); }
+                                some(type) {
+                                    return some(apply_field_tail(checker, type, expr.text, expr.start, expr.end));
+                                }
                             }
                         }
                     }
@@ -1227,7 +1286,12 @@ fn place_try(checker: ref Checker, expr: ref slang_decls.Expr, report: bool) -> 
 
     if (expr.kind is slang_decls.ExprKind.index) {
         var base = expr_type(checker, expr.children[0], none);
-        require_same(checker, primitive_type("u64"), expr_type(checker, expr.children[1], some(primitive_type("u64"))), expr.children[1].start, expr.children[1].end);
+        require_same(
+            checker,
+            primitive_type("u64"),
+            expr_type(checker, expr.children[1], some(primitive_type("u64"))),
+            expr.children[1].start,
+            expr.children[1].end);
         if (base.kind is slang_types.ResolvedKind.array && len(base.children) == 1) { return some(base.children[0]); }
         if (base.kind is slang_types.ResolvedKind.const_array) {
             if (report) { push_error(checker, ErrorKind.not_assignable, [], expr.start, expr.end); }
@@ -1239,7 +1303,9 @@ fn place_try(checker: ref Checker, expr: ref slang_decls.Expr, report: bool) -> 
 
     if (expr.kind is slang_decls.ExprKind.dereference) {
         var base = expr_type(checker, expr.children[0], none);
-        if (base.kind is slang_types.ResolvedKind.reference && len(base.children) == 1) { return some(base.children[0]); }
+        if (base.kind is slang_types.ResolvedKind.reference && len(base.children) == 1) {
+            return some(base.children[0]);
+        }
         if (report) { push_error(checker, ErrorKind.reference_required, [], expr.start, expr.end); }
         return none;
     }
@@ -1276,7 +1342,9 @@ fn check_pattern(checker: ref Checker, pattern: ref slang_decls.Pattern,
         require_same(checker, unit_type(), subject, pattern.start, pattern.end); return;
     }
     if (pattern.kind is slang_decls.PatternKind.none_value) {
-        if (!(subject.kind is slang_types.ResolvedKind.optional)) { push_error(checker, ErrorKind.bad_pattern, "none", pattern.start, pattern.end); }
+        if (!(subject.kind is slang_types.ResolvedKind.optional)) {
+            push_error(checker, ErrorKind.bad_pattern, "none", pattern.start, pattern.end);
+        }
         return;
     }
     if (pattern.kind is slang_decls.PatternKind.some_value) {
@@ -1285,7 +1353,9 @@ fn check_pattern(checker: ref Checker, pattern: ref slang_decls.Pattern,
         }
         if (bind) {
             for (child in pattern.children) {
-                if (child.kind is slang_decls.PatternKind.binding) { bind_pattern_symbol(checker, child, subject.children[0]); }
+                if (child.kind is slang_decls.PatternKind.binding) {
+                    bind_pattern_symbol(checker, child, subject.children[0]);
+                }
             }
         }
         return;
@@ -1332,10 +1402,19 @@ fn check_pattern(checker: ref Checker, pattern: ref slang_decls.Pattern,
                 }
                 var bindings = new TypeBindings { names: [], types: [] };
                 for (var gi: u64 = 0; gi < len(decl.generics); gi += 1) {
-                    bind_type(checker, bindings, decl.generics[gi].name, subject.children[gi], pattern.start, pattern.end, false);
+                    bind_type(
+                        checker,
+                        bindings,
+                        decl.generics[gi].name,
+                        subject.children[gi],
+                        pattern.start,
+                        pattern.end,
+                        false);
                 }
                 var variant_name = pattern.name;
-                match (tail_start(pattern.name)) { none { } some(pos) { variant_name = bytes.slice(pattern.name, pos, len(pattern.name)); } }
+                match (tail_start(pattern.name)) {
+                    none { } some(pos) { variant_name = bytes.slice(pattern.name, pos, len(pattern.name)); }
+                }
                 match (enum_variant(checker, decl, variant_name)) {
                     none { push_error(checker, ErrorKind.bad_pattern, pattern.name, pattern.start, pattern.end); }
                     some(variant) {
@@ -1345,8 +1424,15 @@ fn check_pattern(checker: ref Checker, pattern: ref slang_decls.Pattern,
                         if (bind) {
                             for (var i: u64 = 0; i < len(pattern.children); i += 1) {
                                 if (pattern.children[i].kind is slang_decls.PatternKind.binding) {
-                                    var template = resolve_syntax_type(checker, decl.generics, variant.payload[i], decl.name);
-                                    bind_pattern_symbol(checker, pattern.children[i], substitute_type(template, bindings));
+                                    var template = resolve_syntax_type(
+                                        checker,
+                                        decl.generics,
+                                        variant.payload[i],
+                                        decl.name);
+                                    bind_pattern_symbol(
+                                        checker,
+                                        pattern.children[i],
+                                        substitute_type(template, bindings));
                                 }
                             }
                         }
@@ -1366,7 +1452,12 @@ fn check_condition(checker: ref Checker, expr: ref slang_decls.Expr, allow_bindi
         }
         return;
     }
-    require_same(checker, primitive_type("bool"), expr_type(checker, expr, some(primitive_type("bool"))), expr.start, expr.end);
+    require_same(
+        checker,
+        primitive_type("bool"),
+        expr_type(checker, expr, some(primitive_type("bool"))),
+        expr.start,
+        expr.end);
 }
 
 struct PatternCoverage {
@@ -1487,10 +1578,16 @@ fn check_match_coverage(checker: ref Checker, stmt: ref slang_decls.Stmt,
 fn check_stmt(checker: ref Checker, stmt: ref slang_decls.Stmt) {
     if (stmt.kind is slang_decls.StmtKind.variable) {
         var expected: ?ref slang_types.ResolvedType = none;
-        match (stmt.type) { none { } some(syntax) { expected = some(resolve_syntax_type(checker, checker.current_generics, syntax, checker.current_decl)); } }
+        match (stmt.type) {
+            none { } some(syntax) {
+                expected = some(resolve_syntax_type(checker, checker.current_generics, syntax, checker.current_decl));
+            }
+        }
         var actual = expr_type(checker, stmt.expressions[0], expected);
         var type = actual;
-        match (expected) { none { } some(want) { require_compatible(checker, want, actual, stmt.start, stmt.end); type = want; } }
+        match (expected) {
+            none { } some(want) { require_compatible(checker, want, actual, stmt.start, stmt.end); type = want; }
+        }
         match (find_symbol(checker, slang_names.SymbolKind.local, stmt.name, stmt.start)) {
             none { }
             some(symbol) { set_symbol_type(checker, symbol, type); }
@@ -1580,8 +1677,17 @@ fn check_stmt(checker: ref Checker, stmt: ref slang_decls.Stmt) {
     }
 
     if (stmt.kind is slang_decls.StmtKind.return_stmt) {
-        if (len(stmt.expressions) == 0) { require_same(checker, checker.return_type, unit_type(), stmt.start, stmt.end); }
-        else { require_compatible(checker, checker.return_type, expr_type(checker, stmt.expressions[0], some(checker.return_type)), stmt.start, stmt.end); }
+        if (len(stmt.expressions) == 0) {
+            require_same(checker, checker.return_type, unit_type(), stmt.start, stmt.end);
+        }
+        else {
+            require_compatible(
+                checker,
+                checker.return_type,
+                expr_type(checker, stmt.expressions[0], some(checker.return_type)),
+                stmt.start,
+                stmt.end);
+        }
         return;
     }
 
@@ -1626,7 +1732,12 @@ fn seed_top_level(checker: ref Checker) {
                 if (decl.kind is slang_decls.DeclKind.constant) {
                     match (decl.value_type) {
                         none { }
-                        some(syntax) { set_symbol_type(checker, symbol, resolve_syntax_type(checker, decl.generics, syntax, decl.name)); }
+                        some(syntax) {
+                            set_symbol_type(
+                                checker,
+                                symbol,
+                                resolve_syntax_type(checker, decl.generics, syntax, decl.name));
+                        }
                     }
                 } else if (decl.kind is slang_decls.DeclKind.function && len(decl.generics) == 0) {
                     set_symbol_type(checker, symbol, function_signature(checker, decl));
@@ -1646,7 +1757,12 @@ fn check_decl(checker: ref Checker, decl: slang_decls.Decl) {
                     none { }
                     some(syntax) {
                         var expected = resolve_syntax_type(checker, decl.generics, syntax, decl.name);
-                        require_compatible(checker, expected, expr_type(checker, value, some(expected)), value.start, value.end);
+                        require_compatible(
+                            checker,
+                            expected,
+                            expr_type(checker, value, some(expected)),
+                            value.start,
+                            value.end);
                     }
                 }
             }
@@ -1664,7 +1780,9 @@ fn check_decl(checker: ref Checker, decl: slang_decls.Decl) {
         }
     }
     var result = unit_type();
-    match (decl.return_type) { none { } some(syntax) { result = resolve_syntax_type(checker, decl.generics, syntax, decl.name); } }
+    match (decl.return_type) {
+        none { } some(syntax) { result = resolve_syntax_type(checker, decl.generics, syntax, decl.name); }
+    }
     checker.return_type = result;
     checker.loop_depth = 0;
     checker.candidates = [];

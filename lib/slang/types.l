@@ -237,17 +237,50 @@ fn resolve_qualified(modules: const []Module, module_index: u64, source: ref sla
                     var target_module = modules[target_index];
                     match (find_decl(target_module, parts.rest)) {
                         none {
-                            push_error(out, ErrorKind.unknown_type, module, declaration, source, 0, len(source.children));
+                            push_error(
+                                out,
+                                ErrorKind.unknown_type,
+                                module,
+                                declaration,
+                                source,
+                                0,
+                                len(source.children));
                             return resolved(ResolvedKind.invalid, target_module.name, parts.rest, children, 0, source);
                         }
                         some(target) {
                             if (!type_decl(target.kind)) {
-                                push_error(out, ErrorKind.not_a_type, module, declaration, source, 0, len(source.children));
-                                return resolved(ResolvedKind.invalid, target_module.name, target.name, children, 0, source);
+                                push_error(
+                                    out,
+                                    ErrorKind.not_a_type,
+                                    module,
+                                    declaration,
+                                    source,
+                                    0,
+                                    len(source.children));
+                                return resolved(
+                                    ResolvedKind.invalid,
+                                    target_module.name,
+                                    target.name,
+                                    children,
+                                    0,
+                                    source);
                             }
                             if (!target.exported) {
-                                push_error(out, ErrorKind.private_type, module, declaration, source, 0, len(source.children));
-                                return resolved(ResolvedKind.invalid, target_module.name, target.name, children, 0, source);
+                                push_error(
+                                    out,
+                                    ErrorKind.private_type,
+                                    module,
+                                    declaration,
+                                    source,
+                                    0,
+                                    len(source.children));
+                                return resolved(
+                                    ResolvedKind.invalid,
+                                    target_module.name,
+                                    target.name,
+                                    children,
+                                    0,
+                                    source);
                             }
                             arity(out, module, declaration, source, len(target.generics));
                             return resolved(ResolvedKind.nominal, target_module.name, target.name, children, 0, source);
@@ -331,7 +364,9 @@ fn validate_decl(modules: const []Module, module_index: u64, declaration: slang_
 
     match (declaration.value_type) {
         none { }
-        some(type) { resolve_one(modules, module_index, declaration.generics, type, host_types, declaration.name, out); }
+        some(type) {
+            resolve_one(modules, module_index, declaration.generics, type, host_types, declaration.name, out);
+        }
     }
     for (field in declaration.fields) {
         resolve_one(modules, module_index, declaration.generics, field.type, host_types, declaration.name, out);
@@ -346,7 +381,9 @@ fn validate_decl(modules: const []Module, module_index: u64, declaration: slang_
     }
     match (declaration.return_type) {
         none { }
-        some(type) { resolve_one(modules, module_index, declaration.generics, type, host_types, declaration.name, out); }
+        some(type) {
+            resolve_one(modules, module_index, declaration.generics, type, host_types, declaration.name, out);
+        }
     }
 }
 

@@ -114,7 +114,9 @@ fn parse_string(reader: ref Reader) -> StringParse {
                     some(high) {
                         var cp = high;
                         if (high >= 0xd800 && high <= 0xdbff) {
-                            if (reader.pos + 6 > len(reader.data) || reader.data[reader.pos] != '\\' || reader.data[reader.pos + 1] != 'u') {
+                            if (reader.pos + 6 > len(reader.data) ||
+                                reader.data[reader.pos] != '\\' ||
+                                reader.data[reader.pos + 1] != 'u') {
                                 return StringParse.error(make_error("missing low surrogate", reader.pos));
                             }
                             reader.pos += 2;
@@ -167,7 +169,9 @@ fn parse_number(reader: ref Reader) -> ?[]u8 {
     }
     if (reader.pos < len(reader.data) && (reader.data[reader.pos] == 'e' || reader.data[reader.pos] == 'E')) {
         reader.pos += 1;
-        if (reader.pos < len(reader.data) && (reader.data[reader.pos] == '+' || reader.data[reader.pos] == '-')) { reader.pos += 1; }
+        if (reader.pos < len(reader.data) && (reader.data[reader.pos] == '+' || reader.data[reader.pos] == '-')) {
+            reader.pos += 1;
+        }
         if (reader.pos >= len(reader.data) || !is_digit(reader.data[reader.pos])) { reader.pos = start; return none; }
         while (reader.pos < len(reader.data) && is_digit(reader.data[reader.pos])) { reader.pos += 1; }
     }

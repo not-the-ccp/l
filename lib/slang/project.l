@@ -102,7 +102,14 @@ fn check_module_names(modules: const []Module, out: []Error) {
     for (var i: u64 = 0; i < len(modules); i += 1) {
         for (var j = i + 1; j < len(modules); j += 1) {
             if (bytes.equal(modules[i].name, modules[j].name)) {
-                push_error(out, ErrorKind.duplicate_module, modules[j].name, modules[j].name, empty_error_value(), 0, 0);
+                push_error(
+                    out,
+                    ErrorKind.duplicate_module,
+                    modules[j].name,
+                    modules[j].name,
+                    empty_error_value(),
+                    0,
+                    0);
             }
         }
     }

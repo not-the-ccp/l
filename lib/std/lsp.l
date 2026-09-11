@@ -406,8 +406,16 @@ pub fn get_position(params: json.Json) -> ?Position {
             var char_opt = json.get(pos_json, "character");
             var line: u64 = 0;
             var character: u64 = 0;
-            match (line_opt) { none { return none; } some(v) { var n = json.as_u64(v); match (n) { none { return none; } some(x) { line = x; } } } }
-            match (char_opt) { none { return none; } some(v) { var n = json.as_u64(v); match (n) { none { return none; } some(x) { character = x; } } } }
+            match (line_opt) {
+                none { return none; } some(v) {
+                    var n = json.as_u64(v); match (n) { none { return none; } some(x) { line = x; } }
+                }
+            }
+            match (char_opt) {
+                none { return none; } some(v) {
+                    var n = json.as_u64(v); match (n) { none { return none; } some(x) { character = x; } }
+                }
+            }
             return some(Position { line: line, character: character });
         }
     }
@@ -444,7 +452,14 @@ pub fn get_range(params: json.Json) -> ?Range {
     }
 }
 
-pub fn initialize_result(server_name: const []u8, semantic_types: const [][]u8, formatting: bool, definition: bool, hover: bool, completion: bool, symbols: bool) -> json.Json {
+pub fn initialize_result(
+    server_name: const []u8,
+    semantic_types: const [][]u8,
+    formatting: bool,
+    definition: bool,
+    hover: bool,
+    completion: bool,
+    symbols: bool) -> json.Json {
     var caps = json.object();
     json.put(caps, "positionEncoding", json.Json.string("utf-16"));
     json.put(caps, "textDocumentSync", json.u64_value(2));

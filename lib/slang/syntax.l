@@ -237,7 +237,15 @@ fn parse_params(p: ref Parser) {
 fn precedence(token: const []u8) -> u64 {
     if (bytes.equal(token, "||")) { return 1; }
     if (bytes.equal(token, "&&")) { return 2; }
-    if (bytes.equal(token, "==") || bytes.equal(token, "!=") || bytes.equal(token, "<") || bytes.equal(token, "<=") || bytes.equal(token, ">") || bytes.equal(token, ">=") || bytes.equal(token, "is")) { return 3; }
+    if (bytes.equal(token, "==") ||
+        bytes.equal(token, "!=") ||
+        bytes.equal(token, "<") ||
+        bytes.equal(token, "<=") ||
+        bytes.equal(token, ">") ||
+        bytes.equal(token, ">=") ||
+        bytes.equal(token, "is")) {
+        return 3;
+    }
     if (bytes.equal(token, "|")) { return 4; }
     if (bytes.equal(token, "^")) { return 5; }
     if (bytes.equal(token, "&")) { return 6; }
@@ -422,7 +430,15 @@ fn sync_decl(p: ref Parser) {
     while (!eof(p)) {
         if (at(p, "{")) { depth += 1; advance(p); continue; }
         if (at(p, "}")) { if (depth > 0) { depth -= 1; } advance(p); continue; }
-        if (depth == 0 && (at(p, "pub") || at(p, "import") || at(p, "const") || at(p, "struct") || at(p, "enum") || at(p, "fn"))) { return; }
+        if (depth == 0 &&
+            (at(p, "pub") ||
+            at(p, "import") ||
+            at(p, "const") ||
+            at(p, "struct") ||
+            at(p, "enum") ||
+            at(p, "fn"))) {
+            return;
+        }
         advance(p);
     }
 }

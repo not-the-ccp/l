@@ -28,7 +28,11 @@ def report(project, funcs):
     """Render the human-readable project analysis report."""
     out = [
         f"L code analysis: {'.'.join(project.entry_module)}",
-        f"modules={len({f.module for f in funcs})} functions={len(funcs)} statements={sum(f.metrics['statements'] for f in funcs)} calls={sum(len(f.calls) for f in funcs)} bindings={sum(f.metrics['local_bindings'] for f in funcs)} rebound={sum(f.metrics['rebound_local_bindings'] for f in funcs)}",
+        f"modules={len({f.module for f in funcs})} functions={len(funcs)} "
+        f"statements={sum(f.metrics['statements'] for f in funcs)} "
+        f"calls={sum(len(f.calls) for f in funcs)} "
+        f"bindings={sum(f.metrics['local_bindings'] for f in funcs)} "
+        f"rebound={sum(f.metrics['rebound_local_bindings'] for f in funcs)}",
         "",
     ]
     by = {}
@@ -43,10 +47,14 @@ def report(project, funcs):
                 f"  fn {f.name}({p}) -> {f.return_type}  lines {f.line_start}-{f.line_end}"
             )
             out.append(
-                f"    statements={m['statements']} decisions={m['decisions']} loops={m['loops']} complexity={m['cyclomatic_complexity']} nesting={m['max_nesting']} returns={m['returns']} traps={m['traps']}"
+                f"    statements={m['statements']} decisions={m['decisions']} "
+                f"loops={m['loops']} complexity={m['cyclomatic_complexity']} "
+                f"nesting={m['max_nesting']} returns={m['returns']} traps={m['traps']}"
             )
             out.append(
-                f"    local bindings={m['local_bindings']} rebound={m['rebound_local_bindings']} never-rebound={m['never_rebound_local_bindings']}"
+                f"    local bindings={m['local_bindings']} "
+                f"rebound={m['rebound_local_bindings']} "
+                f"never-rebound={m['never_rebound_local_bindings']}"
             )
             if f.calls:
                 out.append(

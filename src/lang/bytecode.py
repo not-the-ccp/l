@@ -22,7 +22,8 @@ class BCFunc:
 
 
 class BCCompiler:
-    """AST -> compact stack bytecode. Generics are erased because bodies were checked parametrically."""
+    """AST -> compact stack bytecode. Generics are erased because bodies were
+    checked parametrically."""
 
     def __init__(self, cm: CheckedModule):
         """Init (BCCompiler helper for the L Core frontend)."""
@@ -649,7 +650,9 @@ class BCVM:
                 if not isinstance(p, Place):
                     chain = [(x["func"].name, x["ip"]) for x in self.frames]
                     raise RuntimeError(
-                        f"STORE_PLACE expected Place, got {type(p).__name__}={p!r}; value={type(v).__name__}; frames={chain}; stack={[type(x).__name__ for x in S[-12:]]}"
+                        f"STORE_PLACE expected Place, got {type(p).__name__}={p!r}; "
+                        f"value={type(v).__name__}; frames={chain}; "
+                        f"stack={[type(x).__name__ for x in S[-12:]]}"
                     )
                 p.set(copy_value(v))
             elif op == "DUP":

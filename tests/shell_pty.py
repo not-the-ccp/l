@@ -203,7 +203,10 @@ def run() -> None:
         # echo before stopping itself. On fg, lsh must restore that saved child
         # mode; the child verifies `-echo`, prints MODE_OK, restores echo itself,
         # and exits. A shell that only swaps pgrps fails this test.
-        mode_script = b"sh -c 'stty -echo; kill -TSTP $$; stty -a | grep -q -- -echo && echo MODE_OK; stty echo'"
+        mode_script = (
+            b"sh -c 'stty -echo; kill -TSTP $$; stty -a | grep -q -- -echo "
+            b"&& echo MODE_OK; stty echo'"
+        )
         os.write(fd, mode_script + b"\r")
         transcript += wait_text(fd, b"Stopped", timeout=4)
         os.write(fd, b"fg\r")

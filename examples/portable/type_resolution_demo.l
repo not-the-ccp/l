@@ -26,9 +26,15 @@ fn main() -> i64 {
         slang_types.HostType { module: "ffi", name: "Handle" },
     ];
 
+    var base_source: []u8 = "pub struct Box[T] { pub value: T, } struct Secret { value: i64, }";
+    bytes.append(base_source, " pub fn helper() { }");
+    var app_source: []u8 = "import base as b; import ffi; pub struct Local[T] { pub local: T,";
+    bytes.append(app_source, " pub boxed: b.Box[T], pub handle: ffi.Handle, pub bytes: []u8,");
+    bytes.append(app_source, " pub callback: fn(T) -> ?ref b.Box[T], pub view: const []T,");
+    bytes.append(app_source, " pub nested: []const []u8, }");
     var modules: []slang_types.Module = [
-        slang_types.parse_module("base", "pub struct Box[T] { pub value: T, } struct Secret { value: i64, } pub fn helper() { }"),
-        slang_types.parse_module("app", "import base as b; import ffi; pub struct Local[T] { pub local: T, pub boxed: b.Box[T], pub handle: ffi.Handle, pub bytes: []u8, pub callback: fn(T) -> ?ref b.Box[T], pub view: const []T, pub nested: []const []u8, }"),
+        slang_types.parse_module("base", base_source),
+        slang_types.parse_module("app", app_source),
     ];
 
     var good_errors = slang_types.validate(modules, hosts);
