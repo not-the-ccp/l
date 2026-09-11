@@ -710,34 +710,63 @@ class LinuxHost:
             ("linux", "process"): self.process_module(),
         }
 
+    def _contain_fd(self, fd: LinuxFd):
+        """Contain fd (LinuxHost boundary helper for issue #20)."""
+        if not fd.closed:
+            try:
+                os.close(fd.fd)
+            except OSError:
+                pass
+            fd.closed = True
+
+    def _contain_child(self, child: LinuxChild):
+        """Contain child (LinuxHost boundary helper for issue #20)."""
+        if child.waited:
+            return
+        if child.pidfd >= 0:
+            try:
+                signal.pidfd_send_signal(child.pidfd, signal.SIGKILL)
+            except (AttributeError, ProcessLookupError, OSError):
+                try:
+                    os.kill(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            try:
+                os.waitid(os.P_PIDFD, child.pidfd, os.WEXITED)
+            except (ChildProcessError, OSError):
+                pass
+            try:
+                os.close(child.pidfd)
+            except OSError:
+                pass
+        else:
+            try:
+                os.kill(child.pid, signal.SIGKILL)
+            except (ProcessLookupError, OSError):
+                pass
+            try:
+                os.waitpid(child.pid, 0)
+            except (ChildProcessError, OSError):
+                pass
+        child.pidfd = -1
+        child.waited = True
+
+    def checkpoint(self):
+        """Checkpoint (LinuxHost boundary hook for issue #20)."""
+        return (len(self.fds), len(self.children))
+
+    def rollback(self, checkpoint):
+        """Rollback (LinuxHost boundary hook for issue #20)."""
+        nfd, nchild = (int(checkpoint[0]), int(checkpoint[1]))
+        for fd in self.fds[nfd:]:
+            self._contain_fd(fd)
+        for child in self.children[nchild:]:
+            self._contain_child(child)
+
     def cleanup(self):
         """Cleanup (LinuxHost helper for the L Linux host profile)."""
         for fd in self.fds:
-            if not fd.closed:
-                try:
-                    os.close(fd.fd)
-                except OSError:
-                    pass
-                fd.closed = True
+            self._contain_fd(fd)
 
         for child in self.children:
-            if child.waited:
-                continue
-            if child.pidfd >= 0:
-                try:
-                    signal.pidfd_send_signal(child.pidfd, signal.SIGKILL)
-                except (AttributeError, ProcessLookupError, OSError):
-                    try:
-                        os.kill(child.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                try:
-                    os.waitid(os.P_PIDFD, child.pidfd, os.WEXITED)
-                except (ChildProcessError, OSError):
-                    pass
-                try:
-                    os.close(child.pidfd)
-                except OSError:
-                    pass
-            child.pidfd = -1
-            child.waited = True
+            self._contain_child(child)

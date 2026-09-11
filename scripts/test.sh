@@ -8,6 +8,7 @@ export PYTHONPATH="$HERE/src${PYTHONPATH:+:$PYTHONPATH}"
 # Atomicity, basic conformance, and portable library checks.
 "$HERE/tests/build_atomicity.sh"
 "$PYTHON" "$HERE/tests/native_embed.py"
+"$PYTHON" "$HERE/tests/host_callback.py"
 "$PYTHON" "$HERE/tests/core_conformance.py"
 "$PYTHON" "$HERE/tests/const_arrays.py"
 "$PYTHON" "$HERE/src/tools/const_policy.py" --self-test

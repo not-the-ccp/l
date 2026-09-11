@@ -266,6 +266,24 @@ static void linux_job_host_cleanup(LVM *vm) {
     }
 }
 
+/* Recoverable-boundary hooks. Wait events and captured TTY modes are
+ * L-visible opaque values, so rollback must not free newer entries: heap
+ * mutations persist by design and live L values must stay valid. Job
+ * events own no OS resources themselves; child containment is handled by
+ * the base-profile rollback. */
+static void *linux_job_host_checkpoint_events(void) {
+    return g_linux_job_events;
+}
+
+static void *linux_job_host_checkpoint_modes(void) {
+    return g_linux_tty_modes;
+}
+
+static void linux_job_host_rollback(void *events, void *modes) {
+    (void)events;
+    (void)modes;
+}
+
 #else
 
 static int linux_job_host_id(int id) { (void)id; return 0; }
@@ -275,5 +293,13 @@ static LValue linux_job_host_call(LVM *vm, int id, LValue *args, int n) {
     return v_unit();
 }
 static void linux_job_host_cleanup(LVM *vm) { (void)vm; }
+
+/* Recoverable-boundary hooks (no Linux state outside the VM). */
+static void *linux_job_host_checkpoint_events(void) { return NULL; }
+static void *linux_job_host_checkpoint_modes(void) { return NULL; }
+static void linux_job_host_rollback(void *events, void *modes) {
+    (void)events;
+    (void)modes;
+}
 
 #endif

@@ -740,32 +740,52 @@ static LValue linux_host_call(LVM *vm, int id, LValue *args, int n) {
     return v_unit();
 }
 
+static void linux_contain_opaque(LinuxOpaque *o) {
+    if (o->kind == LX_FD && !o->u.fd.closed) {
+        (void)close(o->u.fd.fd);
+        o->u.fd.closed = 1;
+        o->u.fd.fd = -1;
+    } else if (o->kind == LX_CHILD && !o->u.child.waited) {
+        linux_pidfd_kill(o->u.child.pidfd, o->u.child.pid);
+        if (o->u.child.pidfd >= 0) {
+            siginfo_t info;
+            while (waitid((idtype_t)P_PIDFD,
+                           (id_t)o->u.child.pidfd,
+                           &info, WEXITED) < 0 &&
+                   errno == EINTR) {}
+            close(o->u.child.pidfd);
+            o->u.child.pidfd = -1;
+        } else {
+            int st;
+            while (waitpid(o->u.child.pid, &st, 0) < 0 &&
+                   errno == EINTR) {}
+        }
+        o->u.child.waited = 1;
+    }
+}
+
 static void linux_host_cleanup(LVM *vm) {
     (void)vm;
-    for (LinuxOpaque *o = g_linux_opaques; o; o = o->next) {
-        if (o->kind == LX_FD && !o->u.fd.closed) {
-            (void)close(o->u.fd.fd);
-            o->u.fd.closed = 1;
-            o->u.fd.fd = -1;
-        } else if (o->kind == LX_CHILD && !o->u.child.waited) {
-            linux_pidfd_kill(o->u.child.pidfd, o->u.child.pid);
-            if (o->u.child.pidfd >= 0) {
-                siginfo_t info;
-                while (waitid((idtype_t)P_PIDFD, (id_t)o->u.child.pidfd, &info, WEXITED) < 0 && errno == EINTR) {}
-                close(o->u.child.pidfd);
-                o->u.child.pidfd = -1;
-            } else {
-                int st;
-                while (waitpid(o->u.child.pid, &st, 0) < 0 && errno == EINTR) {}
-            }
-            o->u.child.waited = 1;
-        }
-    }
+    for (LinuxOpaque *o = g_linux_opaques; o; o = o->next)
+        linux_contain_opaque(o);
     while (g_linux_opaques) {
         LinuxOpaque *next = g_linux_opaques->next;
         free(g_linux_opaques);
         g_linux_opaques = next;
     }
+}
+
+/* Recoverable-boundary hooks. The checkpoint is the registry head at
+ * entry; rollback contains (closes/reaps but never frees) newer handles
+ * so live L values keep pointing at well-defined closed/failed state. */
+static void *linux_base_host_checkpoint(void) {
+    return g_linux_opaques;
+}
+
+static void linux_base_host_rollback(void *checkpoint) {
+    for (LinuxOpaque *o = g_linux_opaques;
+         o && o != (LinuxOpaque *)checkpoint; o = o->next)
+        linux_contain_opaque(o);
 }
 
 #else
@@ -778,6 +798,12 @@ static LValue linux_host_call(LVM *vm, int id, LValue *args, int n) {
     return v_unit();
 }
 static void linux_host_cleanup(LVM *vm) { (void)vm; }
+
+/* Recoverable-boundary hooks (no Linux state outside the VM). */
+static void *linux_base_host_checkpoint(void) { return NULL; }
+static void linux_base_host_rollback(void *checkpoint) {
+    (void)checkpoint;
+}
 
 #endif
 

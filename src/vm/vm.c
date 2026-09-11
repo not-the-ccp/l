@@ -9,7 +9,9 @@
 #include <locale.h>
 #include <wchar.h>
 #include <poll.h>
+#include <setjmp.h>
 #include <signal.h>
+#include <sys/resource.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -194,6 +196,21 @@ typedef struct {
     size_t key_pushback_len;
     Proc *procs;
     int trapped;
+    /* Recoverable host-callback boundary (issue #20). When recovery is
+     * non-NULL, die() unwinds to the innermost protected call instead of
+     * exiting the process. Standalone lvm_run never sets it, so ordinary
+     * programs keep fatal-on-unhandled-error behavior. */
+    struct LRecovery *recovery;
+    /* C temporaries that span nested L calls (argument vectors). Freed by
+     * die() on the trap path; released normally on success. */
+    struct LCleanup *cleanups;
+    /* Nested vm_call depth; a fixed backstop for runaway recursion. The
+     * primary guard compares live stack use (see vm_stack_guard) so -O0
+     * and instrumented builds trip long before C stack exhaustion. */
+    int depth;
+    /* Lowest C stack address the VM may consume (see vm_stack_note).
+     * The guard trips while a wide margin remains above this floor. */
+    void *stack_floor;
 } LVM;
 
 static LVM *g_vm = NULL;
@@ -234,15 +251,7 @@ static void install_runtime_cleanup(void) {
     signal(SIGPIPE, SIG_IGN);
 }
 
-static void die(const char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    fprintf(stderr, "L runtime error: ");
-    vfprintf(stderr, fmt, ap);
-    fprintf(stderr, "\n");
-    va_end(ap);
-    exit(70);
-}
+static void die(const char *fmt, ...);
 
 static LValue v_unit(void) {
     LValue v = {.tag = V_UNIT};
@@ -789,6 +798,226 @@ static void proc_close_one(Proc *p) {
 
 #include "linux_host.inc"
 
+/* Recoverable host-callback boundary (issue #20).
+ *
+ * A protected host call pushes an LRecovery describing the exact VM,
+ * terminal, and host-resource state at entry. die() unwinds to the
+ * innermost recovery with longjmp instead of exiting: frame heap buffers
+ * are freed while the frame chain is still valid, C temporaries spanning
+ * nested L calls are released from the cleanup stack, transient roots
+ * (operand stack top, pending bindings, match state) are restored, newly
+ * acquired native handles are contained, and terminal state returns to
+ * the entry snapshot. Heap object-graph mutations are NOT rolled back;
+ * completed side effects on pre-existing L state persist by design.
+ *
+ * This is an embedding facility, not a language feature: L gains no
+ * exception semantics and standalone lvm_run keeps fatal behavior. */
+typedef struct LCleanup {
+    void *ptr;
+    struct LCleanup *next;
+} LCleanup;
+
+typedef struct LRecovery {
+    jmp_buf env;
+    struct LRecovery *prev;
+    char msg[512];
+    LFrame *frame_boundary;
+    size_t sp;
+    size_t pending_len;
+    LValue match_value;
+    int has_match;
+    struct termios saved_term;
+    int term_raw;
+    int term_screen;
+    unsigned char key_pushback[16];
+    size_t key_pushback_len;
+    Proc *proc_checkpoint;
+    void *opaque_checkpoint;
+    void *job_event_checkpoint;
+    void *tty_mode_checkpoint;
+    LCleanup *cleanup_checkpoint;
+    int depth_checkpoint;
+} LRecovery;
+
+/* Maximum nested L calls: backstop for runaway recursion when the live
+ * stack budget cannot be determined. The remaining-stack guard below
+ * normally trips first on any realistic thread stack. */
+#define LVM_MAX_DEPTH 65536
+/* Minimum remaining C stack (bytes) tolerated on entry to a nested L
+ * call. Wide enough for -O0 and sanitizer-instrumented frames. */
+#define LVM_STACK_MARGIN (512 * 1024)
+
+#ifdef __linux__
+/* Lowest usable stack address for the live mapping containing addr, plus
+ * the mapping top. rlimit describes the main-stack budget, but sanitizers
+ * and hosts may run the VM on a smaller fixed mapping; only the live
+ * mapping is honest about how far this stack can grow. The main [stack]
+ * mapping expands toward rlimit on demand, so its floor is top minus
+ * rlimit, while any other mapping is fixed at its current extent. */
+static int vm_stack_live_map(void *addr, void **floor, void **top) {
+    FILE *f = fopen("/proc/self/maps", "r");
+    if (!f) return 0;
+    struct rlimit rl;
+    size_t cap = 8 * 1024 * 1024;
+    if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_cur != RLIM_INFINITY &&
+        rl.rlim_cur > 0)
+        cap = (size_t)rl.rlim_cur;
+    char line[512];
+    int ok = 0;
+    while (fgets(line, sizeof(line), f)) {
+        unsigned long long lo = 0, hi = 0;
+        if (sscanf(line, "%llx-%llx", &lo, &hi) != 2 || !hi) continue;
+        unsigned long long p = (unsigned long long)(uintptr_t)addr;
+        if (lo > p || p >= hi) continue;
+        *top = (void *)(uintptr_t)hi;
+        if (strstr(line, "[stack]") && cap < hi)
+            *floor = (void *)(uintptr_t)(hi - cap);
+        else
+            *floor = (void *)(uintptr_t)lo;
+        ok = 1;
+        break;
+    }
+    fclose(f);
+    return ok;
+}
+#endif
+
+static void vm_stack_note(LVM *vm) {
+    int anchor;
+    /* Floor below the outermost boundary entry on the invoking thread.
+     * Stacks on supported targets grow downward toward it. When the live
+     * mapping is unknown, assume the rlimit budget below the entry point,
+     * which errs toward early (safe) trips on small foreign stacks. */
+    void *floor = NULL;
+#ifdef __linux__
+    void *top = NULL;
+    if (!vm_stack_live_map(&anchor, &floor, &top)) floor = NULL;
+#endif
+    if (!floor) {
+        struct rlimit rl;
+        size_t cap = 8 * 1024 * 1024;
+        if (getrlimit(RLIMIT_STACK, &rl) == 0 &&
+            rl.rlim_cur != RLIM_INFINITY && rl.rlim_cur > 0)
+            cap = (size_t)rl.rlim_cur;
+        floor = (char *)&anchor - cap;
+    }
+    vm->stack_floor = floor;
+}
+
+static void vm_stack_guard(LVM *vm) {
+    int probe;
+    if (vm->stack_floor &&
+        (intptr_t)((char *)&probe - (char *)vm->stack_floor) <
+            (intptr_t)LVM_STACK_MARGIN)
+        die("call depth exceeded");
+    if (vm->depth >= LVM_MAX_DEPTH) die("call depth exceeded");
+}
+
+static void vm_temp_push(LVM *vm, void *ptr) {
+    if (!vm || !ptr) return;
+    LCleanup *c = malloc(sizeof(*c));
+    if (!c) {
+        fprintf(stderr, "L runtime error: out of memory\n");
+        exit(70);
+    }
+    c->ptr = ptr;
+    c->next = vm->cleanups;
+    vm->cleanups = c;
+}
+
+static void vm_temp_drop(LVM *vm, void *ptr) {
+    if (!vm) return;
+    LCleanup **pp = &vm->cleanups;
+    while (*pp) {
+        if ((*pp)->ptr == ptr) {
+            LCleanup *c = *pp;
+            *pp = c->next;
+            free(c);
+            return;
+        }
+        pp = &(*pp)->next;
+    }
+}
+
+static void recovery_rollback_term(LVM *vm, LRecovery *r) {
+    if (vm->term_screen && !r->term_screen) {
+        static const char seq[] = "\x1b[0m\x1b[?25h\x1b[?1049l";
+        (void)write(1, seq, sizeof(seq) - 1);
+    }
+    if (r->term_screen && !vm->term_screen) {
+        static const char seq[] = "\x1b[?1049h\x1b[?25h";
+        (void)write(1, seq, sizeof(seq) - 1);
+    }
+    if (vm->term_raw && !r->term_raw) {
+        (void)tcsetattr(0, TCSANOW, &r->saved_term);
+        vm->term_raw = 0;
+    } else if (r->term_raw && !vm->term_raw && isatty(0)) {
+        struct termios t = r->saved_term;
+        t.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+        t.c_oflag &= ~OPOST;
+        t.c_cflag |= CS8;
+        t.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+        t.c_cc[VMIN] = 1;
+        t.c_cc[VTIME] = 0;
+        if (tcsetattr(0, TCSANOW, &t) == 0) {
+            vm->term_raw = 1;
+        } else {
+            vm->term_raw = 0;
+        }
+    }
+    vm->saved_term = r->saved_term;
+    vm->term_screen = r->term_screen;
+    memcpy(vm->key_pushback, r->key_pushback, sizeof(vm->key_pushback));
+    vm->key_pushback_len = r->key_pushback_len;
+}
+
+static void die(const char *fmt, ...) {
+    char buf[512];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    LVM *vm = g_vm;
+    if (vm && vm->recovery) {
+        LRecovery *r = vm->recovery;
+        snprintf(r->msg, sizeof(r->msg), "%s", buf);
+        /* Free frame heap buffers while the chain is still valid. The
+         * LFrame structs themselves live on C stack frames that longjmp
+         * is about to unwind, so only heap members need disposal. */
+        for (LFrame *f = vm->frame; f && f != r->frame_boundary;) {
+            LFrame *prev = f->prev;
+            free(f->locals);
+            free(f->active);
+            free(f->declared);
+            free(f->scopes);
+            f = prev;
+        }
+        while (vm->cleanups != r->cleanup_checkpoint) {
+            LCleanup *c = vm->cleanups;
+            vm->cleanups = c->next;
+            free(c->ptr);
+            free(c);
+        }
+        vm->frame = r->frame_boundary;
+        vm->sp = r->sp;
+        vm->pending_len = r->pending_len;
+        vm->match_value = r->match_value;
+        vm->has_match = r->has_match;
+        vm->depth = r->depth_checkpoint;
+        /* Contain (but never free) processes spawned during the call so
+         * live L values observe closed handles instead of dangling. */
+        for (Proc *p = vm->procs; p && p != r->proc_checkpoint;
+             p = p->next)
+            proc_close_one(p);
+        linux_host_rollback(r->opaque_checkpoint, r->job_event_checkpoint,
+                            r->tty_mode_checkpoint);
+        recovery_rollback_term(vm, r);
+        longjmp(r->env, 1);
+    }
+    fprintf(stderr, "L runtime error: %s\n", buf);
+    exit(70);
+}
+
 static LValue host_call(LVM *vm, int id, LValue *args, int n) {
     if (linux_host_id(id)) return linux_host_call(vm, id, args, n);
     switch (id) {
@@ -1204,6 +1433,8 @@ static int field_index(LObj *st, int field) {
     if (fid < 0 || fid >= vm->p->function_count) die("bad function id");
     const LFunc *fn = &vm->p->functions[fid];
     if (argc != fn->param_count) die("arity mismatch");
+    vm_stack_guard(vm);
+    vm->depth++;
     LFrame fr = {0};
     fr.fn = fn;
     fr.locals = calloc(fn->slot_count ? fn->slot_count : 1, sizeof(LValue));
@@ -1442,8 +1673,12 @@ static int field_index(LObj *st, int field) {
         case OP_CALL_NAMED: {
             int n = in->b;
             LValue *av = xmalloc(sizeof(LValue) * n);
+            /* Track across the nested call so a trap unwind releases
+             * the vector instead of stranding it past longjmp. */
+            vm_temp_push(vm, av);
             for (int i = n - 1; i >= 0; i--) av[i] = popv(vm);
             LValue r = vm_call(vm, in->a, av, n);
+            vm_temp_drop(vm, av);
             free(av);
             pushv(vm, r);
             break;
@@ -1451,12 +1686,14 @@ static int field_index(LObj *st, int field) {
         case OP_CALL_VALUE: {
             int n = in->a;
             LValue *av = xmalloc(sizeof(LValue) * n);
+            vm_temp_push(vm, av);
             for (int i = n - 1; i >= 0; i--) av[i] = popv(vm);
             LValue f = popv(vm);
             LValue r;
             if (f.tag == V_FUNC) r = vm_call(vm, f.as.id, av, n);
             else if (f.tag == V_HOSTFN) r = host_call(vm, f.as.id, av, n);
             else die("not callable");
+            vm_temp_drop(vm, av);
             free(av);
             pushv(vm, r);
             break;
@@ -1558,6 +1795,7 @@ done:
     free(fr.active);
     free(fr.declared);
     free(fr.scopes);
+    vm->depth--;
     return ret;
 }
 
@@ -1583,6 +1821,13 @@ static void vm_cleanup(LVM *vm) {
     vm->frame = NULL;
     vm->pending_len = 0;
     vm->has_match = 0;
+    vm->depth = 0;
+    while (vm->cleanups) {
+        LCleanup *c = vm->cleanups;
+        vm->cleanups = c->next;
+        free(c->ptr);
+        free(c);
+    }
     gc_collect(vm);
     while (vm->objects) {
         LObj *o = vm->objects;
@@ -1605,6 +1850,7 @@ int lvm_run(const LProgram *program, int argc, char **argv) {
     vm.argc = argc;
     vm.argv = argv;
     vm.gc_threshold = 4096;
+    vm_stack_note(&vm);
     LValue r = vm_call(&vm, program->entry_function, NULL, 0);
     int status = 0;
     if (r.tag == V_INT) status = (int)(r.as.u & 255);

@@ -34,3 +34,22 @@ static void linux_host_cleanup(LVM *vm) {
     linux_job_host_cleanup(vm);
     linux_base_host_cleanup(vm);
 }
+
+/* Recoverable-boundary checkpoints, one per profile that owns state.
+ * Rollback order mirrors cleanup: job state first, base handles last. */
+static void *linux_host_checkpoint_opaque(void) {
+    return linux_base_host_checkpoint();
+}
+
+static void *linux_host_checkpoint_events(void) {
+    return linux_job_host_checkpoint_events();
+}
+
+static void *linux_host_checkpoint_modes(void) {
+    return linux_job_host_checkpoint_modes();
+}
+
+static void linux_host_rollback(void *opaque, void *events, void *modes) {
+    linux_job_host_rollback(events, modes);
+    linux_base_host_rollback(opaque);
+}

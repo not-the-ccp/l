@@ -76,6 +76,10 @@ A distribution may define a **hosted profile**: a convention about available hos
 
 The current Unix-like reference profile maps logical module `foo.bar` to `foo/bar.l`, expects an entry `main`, and supplies process/filesystem/terminal modules. None of those conventions are part of L Core.
 
+### Recoverable host callbacks
+
+A hosted application such as Lace runs trusted in-process L extension callbacks through a recoverable boundary instead of one-shot program entry. The native boundary in `src/vm/embed.c` (`src/vm/embed.h`) invokes a named zero-argument L function and reports `LVM_CALL_OK`, `LVM_CALL_TRAP`, or `LVM_CALL_USAGE` back to the host without terminating the process; the Python twin in `src/hosts/host_boundary.py` provides the same `CallOk`/`CallTrap` protocol over the direct host runner. A trapping callback leaves the VM reusable for the next call, and the host decides whether to disable the extension, report the error, or continue. Heap object-graph mutations are not rolled back; only control state and native handles are contained. The convention is defined in [`05-host-module-interface.md`](../language/05-host-module-interface.md) and exercised by `tests/host_callback.py`. This is an embedding facility, not a language feature: L gains no exception semantics, and standalone programs keep fatal-on-unhandled-error behavior.
+
 ## 5. Tools
 
 Tools are programs built around or in L:

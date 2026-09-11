@@ -217,12 +217,22 @@ class ProcessHost:
         for p in self.ps:
             self.close_one(p)
 
+    def checkpoint(self):
+        """Checkpoint (ProcessHost boundary hook for issue #20)."""
+        return len(self.ps)
+
+    def rollback(self, checkpoint):
+        """Rollback (ProcessHost boundary hook for issue #20)."""
+        for p in self.ps[int(checkpoint):]:
+            self.close_one(p)
+
 
 class TermHost:
     """Terminal host backing raw mode, key reads, and screen control."""
     def __init__(self):
         """Init (TermHost helper for the L direct host runner)."""
         self.saved = None
+        self.ui_depth = 0
         self.keys = KeyReader(0)
 
     def module(self):
@@ -308,13 +318,40 @@ class TermHost:
         """Enter ui (TermHost helper for the L direct host runner)."""
         self.enter()
         self.write(array_bytes(b"\x1b[?1049h\x1b[?25h"))
+        self.ui_depth += 1
         return UNITV
 
     def leave_ui(self):
         """Leave ui (TermHost helper for the L direct host runner)."""
         self.write(array_bytes(b"\x1b[0m\x1b[?25h\x1b[?1049l"))
         self.leave()
+        self.ui_depth = max(0, self.ui_depth - 1)
         return UNITV
+
+    def checkpoint(self):
+        """Checkpoint (TermHost boundary hook for issue #20)."""
+        return (self.saved, self.ui_depth, bytes(self.keys._pushback))
+
+    def rollback(self, checkpoint):
+        """Rollback (TermHost boundary hook for issue #20)."""
+        saved, ui_depth, pushback = checkpoint
+        self.keys._pushback = bytearray(pushback)
+        while self.ui_depth > ui_depth:
+            self.write(array_bytes(b"\x1b[0m\x1b[?25h\x1b[?1049l"))
+            self.ui_depth -= 1
+        while self.ui_depth < ui_depth:
+            self.enter()
+            self.write(array_bytes(b"\x1b[?1049h\x1b[?25h"))
+            self.ui_depth += 1
+        if saved is None:
+            if self.saved is not None:
+                self.leave()
+        elif self.saved is None:
+            self.saved = saved
+            if os.isatty(0):
+                tty.setraw(0)
+        else:
+            self.saved = saved
 
     def read_key(self):
         """Read key (TermHost helper for the L direct host runner)."""
