@@ -9,7 +9,7 @@ fn expect(ok: bool) {
     if (!ok) { trap; }
 }
 
-fn expect_bytes(actual: []u8, expected: []u8) {
+fn expect_bytes(actual: const []u8, expected: const []u8) {
     if (!bytes.equal(actual, expected)) { trap; }
 }
 
@@ -63,7 +63,8 @@ fn test_piece_tree_basic() {
     expect_bytes(text.to_bytes(doc), "abQf\n012345\nxyz");
 
     text.replace(doc, 2, 2, [0xff, 0x00]);
-    expect_bytes(text.to_bytes(doc), ['a', 'b', 0xff, 0x00, 'Q', 'f', '\n', '0', '1', '2', '3', '4', '5', '\n', 'x', 'y', 'z']);
+    var wanted: []u8 = ['a', 'b', 0xff, 0x00, 'Q', 'f', '\n', '0', '1', '2', '3', '4', '5', '\n', 'x', 'y', 'z'];
+    expect_bytes(text.to_bytes(doc), wanted);
 
     text.replace(doc, 2, 4, []);
     expect_bytes(text.to_bytes(doc), "abQf\n012345\nxyz");

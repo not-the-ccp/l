@@ -17,7 +17,7 @@ fn line_indent(editor: ref model.Editor, pos: u64) -> []u8 {
     return text.slice(editor.doc, start, cursor);
 }
 
-fn apply(editor: ref model.Editor, start: u64, end: u64, inserted: []u8, cursor: u64) {
+fn apply(editor: ref model.Editor, start: u64, end: u64, inserted: const []u8, cursor: u64) {
     transaction.apply(editor.doc, [transaction.EditSpec {
         start: start,
         end: end,

@@ -94,7 +94,7 @@ fn source_role(analysis: presentation.Analysis, pos: u64) -> Role {
     return Role.plain;
 }
 
-fn push_atom(builder: ref Builder, role: Role, safe_text: []u8) {
+fn push_atom(builder: ref Builder, role: Role, safe_text: const []u8) {
     if (len(safe_text) == 0) { return; }
     var shown = safe_text;
     var w = term.text_width(shown);

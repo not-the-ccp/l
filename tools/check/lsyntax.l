@@ -12,7 +12,7 @@ struct Location {
     column: u64,
 }
 
-fn location(text: []u8, offset: u64) -> Location {
+fn location(text: const []u8, offset: u64) -> Location {
     var line: u64 = 1;
     var column: u64 = 1;
     var i: u64 = 0;
@@ -30,7 +30,7 @@ fn location(text: []u8, offset: u64) -> Location {
     return Location { line: line, column: column };
 }
 
-fn write_location(path: []u8, loc: Location) {
+fn write_location(path: const []u8, loc: Location) {
     stdio.write(path);
     stdio.write(":");
     stdio.write(strconv.format_u64(loc.line));
@@ -203,7 +203,7 @@ fn write_ast(module: slang_decls.Module) {
     }
 }
 
-fn report_errors(path: []u8, source: []u8, errors: []slang_syntax.Error) {
+fn report_errors(path: const []u8, source: const []u8, errors: const []slang_syntax.Error) {
     for (error in errors) {
         var loc = location(source, error.start);
         write_location(path, loc);

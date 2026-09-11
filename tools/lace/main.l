@@ -24,49 +24,49 @@ struct Ui {
 
 struct CountKey {
     count: u64,
-    key: []u8,
+    key: const []u8,
     explicit: bool,
 }
 
-fn set_message(ui: ref Ui, value: []u8) {
+fn set_message(ui: ref Ui, value: const []u8) {
     ui.message = bytes.clone(value);
 }
 
-fn key_is(key: []u8, value: u8) -> bool {
+fn key_is(key: const []u8, value: u8) -> bool {
     return len(key) == 1 && key[0] == value;
 }
 
-fn key_sequence(key: []u8, sequence: []u8) -> bool {
+fn key_sequence(key: const []u8, sequence: const []u8) -> bool {
     return bytes.equal(key, sequence);
 }
 
-fn key_left(key: []u8) -> bool {
+fn key_left(key: const []u8) -> bool {
     return key_sequence(key, "\x1b[D") || key_sequence(key, "\x1bOD");
 }
 
-fn key_right(key: []u8) -> bool {
+fn key_right(key: const []u8) -> bool {
     return key_sequence(key, "\x1b[C") || key_sequence(key, "\x1bOC");
 }
 
-fn key_up(key: []u8) -> bool {
+fn key_up(key: const []u8) -> bool {
     return key_sequence(key, "\x1b[A") || key_sequence(key, "\x1bOA");
 }
 
-fn key_down(key: []u8) -> bool {
+fn key_down(key: const []u8) -> bool {
     return key_sequence(key, "\x1b[B") || key_sequence(key, "\x1bOB");
 }
 
-fn key_home(key: []u8) -> bool {
+fn key_home(key: const []u8) -> bool {
     return key_sequence(key, "\x1b[H") || key_sequence(key, "\x1bOH") ||
         key_sequence(key, "\x1b[1~") || key_sequence(key, "\x1b[7~");
 }
 
-fn key_end(key: []u8) -> bool {
+fn key_end(key: const []u8) -> bool {
     return key_sequence(key, "\x1b[F") || key_sequence(key, "\x1bOF") ||
         key_sequence(key, "\x1b[4~") || key_sequence(key, "\x1b[8~");
 }
 
-fn key_delete(key: []u8) -> bool {
+fn key_delete(key: const []u8) -> bool {
     return key_sequence(key, "\x1b[3~");
 }
 
@@ -156,7 +156,7 @@ fn save(ui: ref Ui) -> bool {
     return false;
 }
 
-fn read_count(first: []u8) -> CountKey {
+fn read_count(first: const []u8) -> CountKey {
     if (len(first) != 1 || first[0] < '1' || first[0] > '9') {
         return CountKey { count: 1, key: first, explicit: false };
     }
@@ -192,7 +192,7 @@ fn drop_prompt_atom(value: []u8) {
     splice(value, start, len(value), []);
 }
 
-fn prompt(ui: ref Ui, prefix: []u8) -> ?[]u8 {
+fn prompt(ui: ref Ui, prefix: const []u8) -> ?[]u8 {
     var value: []u8 = [];
     while (true) {
         var shown = bytes.clone(prefix);
@@ -289,7 +289,7 @@ fn recenter(ui: ref Ui) {
     }
 }
 
-fn do_motion(ui: ref Ui, key: []u8, count: u64, count_explicit: bool) -> bool {
+fn do_motion(ui: ref Ui, key: const []u8, count: u64, count_explicit: bool) -> bool {
     if (key_is(key, 'h') || key_left(key)) { model.move_left(ui.editor, count); return true; }
     if (key_is(key, 'l') || key_right(key)) { model.move_right(ui.editor, count); return true; }
     if (key_is(key, 'j') || key_down(key)) { model.move_vertical(ui.editor, true, count); return true; }
@@ -377,7 +377,7 @@ fn operator_command(ui: ref Ui, op: u8, prefix_count: u64, prefix_explicit: bool
     }
 }
 
-fn visual_command(ui: ref Ui, key: []u8, count: u64, count_explicit: bool) {
+fn visual_command(ui: ref Ui, key: const []u8, count: u64, count_explicit: bool) {
     if (do_motion(ui, key, count, count_explicit)) { return; }
     if (key_is(key, 'g')) { do_g_motion(ui, count); return; }
     if (key_is(key, 0x1b) || key_is(key, 0x03) || key_is(key, 'v')) {
@@ -463,7 +463,7 @@ fn literal_insert(ui: ref Ui) {
     }
 }
 
-fn insert_command(ui: ref Ui, key: []u8) {
+fn insert_command(ui: ref Ui, key: const []u8) {
     if (key_is(key, 0x1b) || key_is(key, 0x03)) {
         model.leave_insert(ui.editor);
         return;
@@ -536,7 +536,10 @@ fn colon_command(ui: ref Ui) {
                 return;
             }
             if (bytes.equal(command, "help")) {
-                set_message(ui, "i/a/o edit · hjkl/arrows/wbe/G/gg move · d/y/c ops · v/V select · / search · :w :q · ^VxFF raw byte");
+                var help: []u8 = [];
+                bytes.append(help, "i/a/o edit · hjkl/arrows/wbe/G/gg move · d/y/c ops");
+                bytes.append(help, " · v/V select · / search · :w :q · ^VxFF raw byte");
+                set_message(ui, help);
                 return;
             }
             set_message(ui, "unknown command");
@@ -544,7 +547,7 @@ fn colon_command(ui: ref Ui) {
     }
 }
 
-fn normal_command(ui: ref Ui, first: []u8) {
+fn normal_command(ui: ref Ui, first: const []u8) {
     var parsed = read_count(first);
     var count = parsed.count;
     var key = parsed.key;
@@ -592,7 +595,10 @@ fn normal_command(ui: ref Ui, first: []u8) {
         var pos = model.cursor(ui.editor);
         var start = pos;
         var n: u64 = 0;
-        while (n < count && start > nav.line_start(ui.editor.doc, pos)) { start = nav.previous_atom(ui.editor.doc, start); n += 1; }
+        while (n < count && start > nav.line_start(ui.editor.doc, pos)) {
+            start = nav.previous_atom(ui.editor.doc, start);
+            n += 1;
+        }
         if (start < pos) { model.delete_span(ui.editor, model.Span { start: start, end: pos }, false, false); }
         return;
     }
@@ -603,7 +609,10 @@ fn normal_command(ui: ref Ui, first: []u8) {
         else if (key_is(key, 'C')) { model.enter_insert(ui.editor, pos); }
         return;
     }
-    if (key_is(key, 'd') || key_is(key, 'y') || key_is(key, 'c')) { operator_command(ui, key[0], count, parsed.explicit); return; }
+    if (key_is(key, 'd') || key_is(key, 'y') || key_is(key, 'c')) {
+        operator_command(ui, key[0], count, parsed.explicit);
+        return;
+    }
     if (key_is(key, 'Y')) {
         var span = model.line_count_span(ui.editor, count);
         model.yank_span(ui.editor, span, true);
@@ -629,7 +638,7 @@ fn normal_command(ui: ref Ui, first: []u8) {
     if (key_is(key, ':')) { colon_command(ui); return; }
 }
 
-fn run(path: []u8) {
+fn run(path: const []u8) {
     var content: []u8 = [];
     var content_opt = fs.read(path);
     match (content_opt) { none { } some(value) { content = value; } }

@@ -116,7 +116,7 @@ fn document_for(store: ref lsp.Documents, params: json.Json) -> ?ref lsp.Documen
     match (uri_opt) { none { return none; } some(uri) { return lsp.document_get(store, uri); } }
 }
 
-fn completion_result(labels: [][]u8) -> json.Json {
+fn completion_result(labels: const [][]u8) -> json.Json {
     var out = json.array();
     for (label in labels) {
         var item = json.object();
@@ -127,7 +127,7 @@ fn completion_result(labels: [][]u8) -> json.Json {
     return out;
 }
 
-fn symbols_result(symbols: []lsp.Symbol) -> json.Json {
+fn symbols_result(symbols: const []lsp.Symbol) -> json.Json {
     var out = json.array();
     for (symbol in symbols) { json.append(out, lsp.symbol_json(symbol)); }
     return out;

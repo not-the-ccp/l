@@ -129,6 +129,33 @@ fn sum(head: ?ref Node) -> i64 {
         "}]; var view: const []ref Box = items; view[0].value = 3; return view[0].value; }",
     ),
     (
+        "value field through const array rejected",
+        "struct Item { value: i64, } fn change(items: const []Item) { items[0].value = 2; } "
+        "fn main() {}",
+    ),
+    (
+        "const inner element mutation rejected",
+        "fn main() { var inner: const []i64 = [1]; var outer: []const []i64 = [inner]; "
+        "outer[0][0] = 2; }",
+    ),
+    (
+        "const qualifies only arrays rejected",
+        "fn bad(value: const i64) -> i64 { return value; } fn main() -> i64 { return bad(1); }",
+    ),
+    (
+        "const local rebinding accepted",
+        "fn main() -> i64 { var mutable: []i64 = [9]; var rebound: const []i64 = [10]; "
+        "rebound = mutable; return rebound[0]; }",
+    ),
+    (
+        "fresh literal in mutable call parameter accepted",
+        'fn first(x: []u8) -> u8 { return x[0]; } fn main() -> u8 { return first("xy"); }',
+    ),
+    (
+        "len over const array accepted",
+        "fn main() -> u64 { var xs: const []i64 = [1, 2]; return len(xs); }",
+    ),
+    (
         "nested array struct place",
         """
 struct Pair { left: i64, right: i64, }

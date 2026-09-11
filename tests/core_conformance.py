@@ -557,5 +557,171 @@ module_case(
     should_error=True,
 )
 
+ok(
+    "const view reads mutable array",
+    r"""
+fn sum(xs: const []i64) -> i64 {
+    var out: i64 = 0;
+    for (x in xs) { out += x; }
+    return out + len(xs) as i64;
+}
+fn main() -> i64 {
+    var xs: []i64 = [1, 2];
+    var view: const []i64 = xs;
+    return sum(xs) + view[0];
+}
+""",
+    6,
+)
+
+ok(
+    "const alias observes mutable writes",
+    r"""
+fn main() -> i64 {
+    var mutable: []i64 = [9];
+    var view: const []i64 = mutable;
+    mutable[0] = 4;
+    var rebound: const []i64 = [10];
+    rebound = mutable;
+    return view[0] * 10 + rebound[0];
+}
+""",
+    44,
+)
+
+ok(
+    "contextual mutable string literal",
+    r"""
+fn first(x: []u8) -> u8 { return x[0]; }
+fn main() -> i64 {
+    var mutable_literal: []u8 = "xy";
+    mutable_literal[0] = 'q';
+    return mutable_literal[0] as i64 + first("xy") as i64;
+}
+""",
+    233,
+)
+
+ok(
+    "splice accepts const replacement",
+    r"""
+fn main() -> i64 {
+    var dst: []u8 = [];
+    var src = "abc";
+    splice(dst, 0, 0, src);
+    return len(dst) as i64;
+}
+""",
+    3,
+)
+
+ok(
+    "shallow const permits inner mutation",
+    r"""
+struct Box { value: i64, }
+fn main() -> i64 {
+    var inner: []i64 = [1];
+    var nested: [][]i64 = [inner];
+    var view: const [][]i64 = nested;
+    view[0][0] = 2;
+    var items: []ref Box = [new Box { value: 1 }];
+    var boxes: const []ref Box = items;
+    boxes[0].value = 3;
+    return inner[0] * 10 + boxes[0].value;
+}
+""",
+    23,
+)
+
+ok(
+    "generic const parameter accepts mutable and string",
+    r"""
+fn first[T](xs: const []T) -> T { return xs[0]; }
+fn one[T](x: T) -> []T { return [x]; }
+fn main() -> i64 {
+    var xs: []i64 = [7];
+    var held: const []i64 = one(4);
+    return first(xs) + first("x") as i64 + held[0];
+}
+""",
+    131,
+)
+
+compile_error(
+    "const array converts to mutable rejected",
+    "fn main() -> i64 {"
+    " var view: const []i64 = [1, 2];"
+    " var xs: []i64 = view; return xs[0]; }",
+    "type mismatch",
+)
+compile_error(
+    "const array index write rejected",
+    "fn main() {"
+    " var view: const []i64 = [1, 2]; view[0] = 3; }",
+    "const []T",
+)
+compile_error(
+    "push through const handle rejected",
+    "fn main() { var values: const []i64 = [1]; push(values, 2); }",
+    "mutable []T",
+)
+compile_error(
+    "pop through const handle rejected",
+    "fn main() -> i64 {"
+    " var values: const []i64 = [1]; return pop(values); }",
+    "mutable []T",
+)
+compile_error(
+    "splice const target rejected",
+    "fn main() {"
+    " var values: const []u8 = \"abc\"; splice(values, 0, 1, \"x\"); }",
+    "mutable []T",
+)
+compile_error(
+    "inferred string literal mutation rejected",
+    "fn main() { var text = \"abc\"; text[0] = 'x'; }",
+    "const []T",
+)
+compile_error(
+    "inferred string rejects mutable generic parameter",
+    r"""
+fn mutate[T](items: []T, value: T) { items[0] = value; }
+fn main() { var text = "abc"; mutate(text, 'x'); }
+""",
+)
+compile_error(
+    "const generic result rejects mutable context",
+    r"""
+fn readonly[T](xs: const []T) -> const []T { return xs; }
+fn main() -> i64 { var xs: []i64 = readonly([4]); return xs[0]; }
+""",
+)
+compile_error(
+    "nested qualifier does not lift",
+    "fn main() -> i64 {"
+    " var nested: [][]i64 = [[1]];"
+    " var view: const []const []i64 = nested; return view[0][0]; }",
+)
+compile_error(
+    "const inner element mutation rejected",
+    "fn main() { var inner: const []i64 = [1];"
+    " var outer: []const []i64 = [inner]; outer[0][0] = 2; }",
+    "const []T",
+)
+compile_error(
+    "value field mutation through const rejected",
+    r"""
+struct Item { value: i64, }
+fn change(items: const []Item) { items[0].value = 2; }
+fn main() {}
+""",
+)
+compile_error(
+    "const qualifies only arrays",
+    "fn bad(value: const i64) -> i64 { return value; }"
+    " fn main() -> i64 { return bad(1); }",
+    "expected []",
+)
+
 print(f"\nCore-only conformance seed: {PASS} passed, {FAIL} failed")
 raise SystemExit(1 if FAIL else 0)

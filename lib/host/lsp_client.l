@@ -17,7 +17,7 @@ pub struct TextChange {
     pub text: const []u8,
 }
 
-pub fn start(argv: [][]u8) -> ref Client {
+pub fn start(argv: const [][]u8) -> ref Client {
     return new Client { process: proc.spawn(argv), reader: lsp.frame_buffer(), next_id: 1, pending: [], alive: true };
 }
 

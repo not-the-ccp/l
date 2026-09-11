@@ -20,7 +20,7 @@ fn append_spaces(out: []u8, count: u64) {
     for (var i: u64 = 0; i < count; i += 1) { push(out, ' '); }
 }
 
-fn safe_inline(value: []u8) -> []u8 {
+fn safe_inline(value: const []u8) -> []u8 {
     var out: []u8 = [];
     var offset: u64 = 0;
     while (offset < len(value)) {
@@ -34,7 +34,7 @@ fn safe_inline(value: []u8) -> []u8 {
 // Append complete display atoms only while they fit on this terminal row.
 // Status/message text used to be written unbounded, so a long path or :help
 // wrapped into the buffer and visually corrupted the screen.
-fn append_fitted(out: []u8, value: []u8, max_columns: u64) -> u64 {
+fn append_fitted(out: []u8, value: const []u8, max_columns: u64) -> u64 {
     var offset: u64 = 0;
     var columns: u64 = 0;
     while (offset < len(value)) {
@@ -83,7 +83,8 @@ fn selected(editor: ref model.Editor, pos: u64) -> bool {
 
 fn append_unit_style(out: []u8, editor: ref model.Editor, unit: display.Unit, is_selected: bool) {
     if (is_selected) { bytes.append(out, "\x1b[7m"); }
-    if (unit.kind is display.UnitKind.invalid_byte || unit.kind is display.UnitKind.control || unit.kind is display.UnitKind.unicode_control) {
+    if (unit.kind is display.UnitKind.invalid_byte || unit.kind is display.UnitKind.control ||
+        unit.kind is display.UnitKind.unicode_control) {
         bytes.append(out, "\x1b[48;5;52m\x1b[38;5;231m");
         return;
     }
@@ -201,7 +202,7 @@ fn render_line(
     }
 }
 
-fn append_status(out: []u8, editor: ref model.Editor, path: []u8, cols: u64) {
+fn append_status(out: []u8, editor: ref model.Editor, path: const []u8, cols: u64) {
     var status: []u8 = [' '];
     bytes.append(status, mode_name(editor));
     bytes.append(status, "  ");
@@ -218,8 +219,8 @@ fn append_status(out: []u8, editor: ref model.Editor, path: []u8, cols: u64) {
 
 pub fn draw(
     editor: ref model.Editor,
-    path: []u8,
-    message: []u8,
+    path: const []u8,
+    message: const []u8,
     top_start: u64,
     top_line_number: u64,
     hscroll: u64,

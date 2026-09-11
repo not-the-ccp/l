@@ -228,7 +228,7 @@ fn partial(pipeline: Pipeline, reason: Incomplete) -> ParseResult {
     });
 }
 
-fn parse_tokens(tokens: []Token, input_len: u64) -> ParseResult {
+fn parse_tokens(tokens: const []Token, input_len: u64) -> ParseResult {
     if (len(tokens) == 0) {
         return ParseResult.ready(Pipeline {
             commands: [],

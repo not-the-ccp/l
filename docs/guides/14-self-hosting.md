@@ -96,9 +96,13 @@ This is exercised by the real `examples/core/generic_queue.l` and by `tests/self
 
 The Python checker is intentionally used as an oracle while the L checker is incomplete. The differential suite compares **accept/reject semantics**, not diagnostic wording, for representative programs and failure cases.
 
-The corpus includes refs/optionals, nested places, arrays, enums/patterns, ordinary and anonymous function values, bad assignments/returns/arity/captures, generic identity/result inference, generic structs/enums, the generic queue example, conflicting/unconstrained inference and type-changing recursive generic calls.
+The corpus includes refs/optionals, nested places, arrays, shallow const-array qualification and mutation rules, enums/patterns, ordinary and anonymous function values, bad assignments/returns/arity/captures, generic identity/result inference, generic structs/enums, the generic queue example, conflicting/unconstrained inference and type-changing recursive generic calls.
 
 A new semantic feature should normally add differential cases before it is considered complete.
+
+### Const-array parity
+
+Const-array support has reached parity between the bootstrap frontend and the L-written frontend. `slang_syntax`/`slang_decls` parse `const []T` at any array layer, `slang_types` represents the mutable versus const capability, and `slang_check` enforces the shallow rules: implicit `[]T` to `const []T` conversion without lifting through nested layers, rejected writes through const slots (including `push`/`pop`/`splice` targets), read-only `len`, read-only `splice` replacement, inferred `const []u8` string literals with fresh-literal mutable contexts, and const `ref` slots that still permit referent mutation. The portable libraries (`lib/std`), the hosted boundaries (`proc.spawn` takes `const [][]u8` while byte-returning reads stay mutable), and the dogfooded tools (`lcheck`, `lsyntax`, Lace, the LSP servers, the shell) spell `const []T` at read-only boundaries, enforced by `src/tools/const_policy.py`. Conformance is covered three ways: the const section of `tests/core_conformance.py` (tree/bytecode/native), the focused `tests/const_arrays.py`, and the const cases in `tests/selfhost_checker_diff.py`.
 
 ## Runtime status
 

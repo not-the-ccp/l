@@ -503,7 +503,7 @@ fn paste(ui: ref Ui) {
     }
 }
 
-fn handle_key(ui: ref Ui, key: []u8) {
+fn handle_key(ui: ref Ui, key: const []u8) {
     if (seq(key, "\x1b[200~")) { paste(ui); return; }
     if (key_is(key, '\r') || key_is(key, '\n')) { submit(ui); return; }
     if (key_is(key, 0x03)) { cancel_line(ui); return; } // Ctrl-C

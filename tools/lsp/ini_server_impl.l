@@ -41,7 +41,7 @@ fn token_range(token: IToken) -> lsp.Range {
     return lsp.range(token.line, token.start16, token.line, token.start16 + token.length16);
 }
 
-fn add_diag(out: []lsp.Diagnostic, line_no: u64, start: u64, end: u64, message: []u8) {
+fn add_diag(out: []lsp.Diagnostic, line_no: u64, start: u64, end: u64, message: const []u8) {
     push(out, lsp.Diagnostic { range: lsp.range(line_no, start, line_no, end), message: bytes.clone(message), severity: 1 });
 }
 
@@ -50,7 +50,7 @@ fn composite(section: const []u8, key: const []u8) -> []u8 {
     bytes.append(out, section); push(out, 0); bytes.append(out, key); return out;
 }
 
-fn seen_contains(seen: [][]u8, value: const []u8) -> bool {
+fn seen_contains(seen: const [][]u8, value: const []u8) -> bool {
     for (item in seen) { if (bytes.equal(item, value)) { return true; } }
     return false;
 }

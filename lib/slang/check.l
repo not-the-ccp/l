@@ -1465,7 +1465,7 @@ struct PatternCoverage {
     key: []u8,
 }
 
-fn coverage_key(pattern: ref slang_decls.Pattern, key: []u8) -> PatternCoverage {
+fn coverage_key(pattern: ref slang_decls.Pattern, key: const []u8) -> PatternCoverage {
     return PatternCoverage { wildcard: false, key: bytes.clone(key) };
 }
 
@@ -1792,7 +1792,7 @@ fn check_decl(checker: ref Checker, decl: slang_decls.Decl) {
     }
 }
 
-pub fn check(source: []u8) -> CheckResult {
+pub fn check(source: const []u8) -> CheckResult {
     var module = slang_types.parse_module("main", source);
     var modules: []slang_types.Module = [module];
     var names = slang_names.resolve(source);

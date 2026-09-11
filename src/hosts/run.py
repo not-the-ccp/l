@@ -141,7 +141,9 @@ class ProcessHost:
             self.close_one(pv.payload)
             return UNITV
 
-        h.function("spawn", [arr(arr(name_ty("u8")))], pt, spawn)
+        h.function(
+            "spawn", [const_arr(arr(name_ty("u8")))], pt, spawn
+        )
         h.function("write", [pt, const_arr(name_ty("u8"))], UNIT, write)
         h.function("read", [pt, name_ty("u64")], opt(arr(name_ty("u8"))), read)
 

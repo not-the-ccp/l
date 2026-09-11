@@ -71,7 +71,7 @@ fn token_range(token: Token) -> lsp.Range {
     return lsp.range(token.line, token.start16, token.line, token.start16 + token.length16);
 }
 
-fn push_diag(out: []lsp.Diagnostic, text: const []u8, start: u64, end: u64, message: []u8) {
+fn push_diag(out: []lsp.Diagnostic, text: const []u8, start: u64, end: u64, message: const []u8) {
     var a = lsp.position_from_offset(text, start);
     var b = lsp.position_from_offset(text, end);
     push(out, lsp.Diagnostic { range: lsp.Range { start: a, end: b }, message: bytes.clone(message), severity: 1 });

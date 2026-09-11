@@ -170,7 +170,7 @@ fn spawn_command(
     }
 }
 
-fn close_pipes(pipes: [][]fd.Fd) {
+fn close_pipes(pipes: const [][]fd.Fd) {
     for (pipe in pipes) {
         fd.close(pipe[0]);
         fd.close(pipe[1]);
@@ -183,7 +183,7 @@ fn close_stdio(input: fd.Fd, output: fd.Fd, error: fd.Fd) {
     fd.close(error);
 }
 
-fn kill_children(children: []process.Child, group: ?process.Group) {
+fn kill_children(children: const []process.Child, group: ?process.Group) {
     var group_killed = false;
     match (group) {
         some(value) {
@@ -202,7 +202,8 @@ fn kill_children(children: []process.Child, group: ?process.Group) {
     }
 }
 
-fn rollback(children: []process.Child, group: ?process.Group, pipes: [][]fd.Fd, input: fd.Fd, output: fd.Fd, error: fd.Fd) {
+fn rollback(children: const []process.Child, group: ?process.Group, pipes: const [][]fd.Fd,
+    input: fd.Fd, output: fd.Fd, error: fd.Fd) {
     kill_children(children, group);
     close_pipes(pipes);
     close_stdio(input, output, error);
