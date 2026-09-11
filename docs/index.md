@@ -63,6 +63,7 @@ Read:
 - [`guides/11-code-analysis.md`](guides/11-code-analysis.md)
 - [`guides/13-roadmap.md`](guides/13-roadmap.md)
 - [`guides/14-self-hosting.md`](guides/14-self-hosting.md)
+- [`architecture/16-slang-frontend.md`](architecture/16-slang-frontend.md) — `lib/slang` layer role, module map, and current limits
 
 The current bootstrap frontend is Python. Native executables use the C VM/runtime with tracing GC. Lace and the bundled L/JSON/INI language servers are written in L. The standalone `lsyntax` and `lcheck` tools are the first L-written compiler-frontend components promoted into native command-line tools.
 

@@ -114,8 +114,8 @@ def resolve_import(
     if len(qname) == 1:
         candidates.extend(
             [
-                ROOT / "lib" / "portable" / f"{qname[0]}.l",
-                ROOT / "lib" / "hosted" / f"{qname[0]}.l",
+                ROOT / "lib" / "std" / f"{qname[0]}.l",
+                ROOT / "lib" / "host" / f"{qname[0]}.l",
                 ROOT / "tools" / "lsp" / f"{qname[0]}.l",
             ]
         )

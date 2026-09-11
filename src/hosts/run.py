@@ -22,17 +22,17 @@ from lang.term_keys import KeyReader
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
-CORE_LIB = REPO / "lib" / "core"
+STD_LIB = REPO / "lib" / "std"
 SLANG_LIB = REPO / "lib" / "slang"
 HOST_LIB = REPO / "lib" / "host"
 TOOLS = REPO / "tools"
 COMMON = {
-    ("arrays",): CORE_LIB / "arrays.l",
-    ("bytes",): CORE_LIB / "bytes.l",
-    ("strconv",): CORE_LIB / "strconv.l",
-    ("utf8",): CORE_LIB / "utf8.l",
-    ("json",): CORE_LIB / "json.l",
-    ("lsp",): CORE_LIB / "lsp.l",
+    ("arrays",): STD_LIB / "arrays.l",
+    ("bytes",): STD_LIB / "bytes.l",
+    ("strconv",): STD_LIB / "strconv.l",
+    ("utf8",): STD_LIB / "utf8.l",
+    ("json",): STD_LIB / "json.l",
+    ("lsp",): STD_LIB / "lsp.l",
     ("slang_syntax",): SLANG_LIB / "syntax.l",
     ("slang_decls",): SLANG_LIB / "decls.l",
     ("slang_types",): SLANG_LIB / "types.l",

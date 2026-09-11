@@ -10,7 +10,7 @@ assignees: ''
 
 ## Proposed layer
 
-L Core / src/lang / src/hosts / src/tools / src/vm / lib/core / lib/slang / lib/host / tools/lace / tools/lsp / tools/shell / tools/check / other
+L Core / src/lang / src/hosts / src/tools / src/vm / lib/std / lib/slang / lib/host / tools/lace / tools/lsp / tools/shell / tools/check / other
 
 ## Proposed change
 

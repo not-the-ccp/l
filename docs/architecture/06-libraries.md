@@ -2,7 +2,7 @@
 
 ## Portable libraries included
 
-`lib/core/` contains ordinary L source that should require no host capability:
+`lib/std/` contains ordinary L source that should require no host capability:
 
 - `arrays.l` — array algorithms built on Core primitives;
 - `bytes.l` — byte/string helpers;

@@ -46,6 +46,7 @@ STALE_PATTERNS = [
     r"15-PORTABLE-LIBRARY",
     # Old source layouts.
     r"native_vm\.c",
+    r"lib/core",
     r"lib/portable",
     r"lib/hosted",
     r"run_lang\.py",

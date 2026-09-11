@@ -23,7 +23,7 @@ HOSTS_RUN = HERE.parent / "hosts" / "run.py"
 from lang.bytecode import BCVM, BCCompiler
 from lang import UNITV, LangError, Parser, Program, TrapSig, UnitVal, internal_name
 from hosts.run import (
-    CORE_LIB,
+    STD_LIB,
     HOST_LIB,
     SLANG_LIB,
     ProcessHost,
@@ -56,7 +56,7 @@ SLANG_MODULE_NAMES = {
 def stdlib_sources() -> dict[tuple[str, ...], str]:
     """Load the bundled stdlib L sources keyed by module path."""
     out: dict[tuple[str, ...], str] = {}
-    for base in (CORE_LIB, SLANG_LIB, HOST_LIB):
+    for base in (STD_LIB, SLANG_LIB, HOST_LIB):
         for p in sorted(base.glob("*.l")):
             stem = SLANG_MODULE_NAMES.get(p.stem, p.stem)
             out[(stem,)] = p.read_text(encoding="utf-8")

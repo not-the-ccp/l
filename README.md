@@ -133,7 +133,7 @@ It can emit CFGs, call graphs, metrics, parser ASTs, Mermaid, Graphviz DOT/SVG, 
 src/             reference lexer/parser/checker/interpreter/bytecode compiler (src/lang),
                  hosted command-line profiles (src/hosts), Python tooling (src/tools)
 src/vm/          native C VM and tracing runtime (src/vm/vm.c)
-lib/core/        optional portable libraries written in L
+lib/std/         optional portable libraries written in L
 lib/host/        optional libraries that depend on host modules
 lib/slang/       L-written self-hosting frontend slices (syntax through checking)
 tools/lace/      Lace modal terminal editor, written in L

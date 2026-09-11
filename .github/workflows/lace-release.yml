@@ -5,7 +5,7 @@ on:
     branches: [master]
     paths:
       - 'tools/lace/**'
-      - 'lib/core/**'
+      - 'lib/std/**'
       - 'lib/slang/**'
       - 'src/vm/**'
       - 'src/lang/**'

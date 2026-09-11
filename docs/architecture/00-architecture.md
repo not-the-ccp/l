@@ -48,6 +48,10 @@ The current bundle includes examples such as:
 
 These are **not required for L Core conformance**. An implementation can ship none of them, a subset, replacements, or a larger ecosystem.
 
+The L-written self-hosting frontend in `lib/slang/` is layered the same way;
+its module map and current limits are fixed in
+[`16-slang-frontend.md`](16-slang-frontend.md).
+
 The long-term intent is that most reusable algorithms and data structures live here rather than becoming compiler intrinsics.
 
 ## 3. Host modules
