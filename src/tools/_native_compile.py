@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""Native-code backend: checked L bytecode to a C translation unit.
+
+Lowers compiled bytecode, types, operators, patterns, and host-call IDs
+into generated C embedding the native VM, then links it with cc.
+"""
 from __future__ import annotations
 
 import argparse
@@ -205,7 +210,9 @@ HOST = {
 
 
 class NativeEmitter:
+    """C translation-unit emitter for compiled L bytecode."""
     def __init__(self, program: Program, entry: str):
+        """Init (NativeEmitter helper for the L native backend)."""
         self.program = program
         self.bc = BCCompiler(program.checked)
         self.c = self.bc.c
@@ -222,12 +229,14 @@ class NativeEmitter:
         self._prepare_slots()
 
     def sid(self, s: str) -> int:
+        """Sid (NativeEmitter helper for the L native backend)."""
         if s not in self.sidmap:
             self.sidmap[s] = len(self.strings)
             self.strings.append(s)
         return self.sidmap[s]
 
     def ty(self, t: Ty) -> int:
+        """Ty (NativeEmitter helper for the L native backend)."""
         if t.kind == "unit":
             return TY["unit"]
         if t.kind == "ref":
@@ -241,6 +250,7 @@ class NativeEmitter:
         raise LangError(f"native VM cannot encode scalar type {t}")
 
     def names_in_pattern(self, p: N, out: set[str]):
+        """Names in pattern (NativeEmitter helper for the L native backend)."""
         if p.kind == "p_bind":
             out.add(p.a[0])
             return
@@ -255,11 +265,13 @@ class NativeEmitter:
                 self.names_in_pattern(x, out)
 
     def _prepare_slots(self):
+        """Prepare slots (NativeEmitter helper for the L native backend)."""
         for name, f in self.bc.funcs.items():
             ordered = []
             seen = set()
 
             def add(n):
+                """Add (_prepare_slots helper for the L native backend)."""
                 if n not in seen:
                     seen.add(n)
                     ordered.append(n)
@@ -277,6 +289,7 @@ class NativeEmitter:
             self.func_slots[name] = {n: i for i, n in enumerate(ordered)}
 
     def pattern(self, p: N, t: Ty, slots: dict[str, int]) -> int:
+        """Pattern (NativeEmitter helper for the L native backend)."""
         k = p.kind
         if k == "p_wild":
             rec = (PK[k], 0, 0, 0, None, 0)
@@ -316,19 +329,23 @@ class NativeEmitter:
         return pid
 
     def blob(self, b: bytes) -> int:
+        """Blob (NativeEmitter helper for the L native backend)."""
         self.blobs.append(bytes(b))
         return len(self.blobs) - 1
 
     def auxints(self, xs) -> int:
+        """Auxints (NativeEmitter helper for the L native backend)."""
         self.aux.append(tuple(xs))
         return len(self.aux) - 1
 
     def cstr(self, s: str) -> str:
+        """Cstr (NativeEmitter helper for the L native backend)."""
         return (
             '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
         )
 
     def transform(self, fname: str, ins: tuple):
+        """Transform (NativeEmitter helper for the L native backend)."""
         op = ins[0]
         slots = self.func_slots[fname]
         d = {"op": OP.get(op)}
@@ -428,6 +445,7 @@ class NativeEmitter:
         return d
 
     def emit(self) -> str:
+        """Emit (NativeEmitter helper for the L native backend)."""
         funins = {
             n: [self.transform(n, i) for i in self.bc.funcs[n].code]
             for n in self.func_names
@@ -507,10 +525,12 @@ class NativeEmitter:
 
 
 def default_hosts(args=()):
+    """Build the default host set for natively compiled tools."""
     return make_hosts(list(args))
 
 
 def build_user(entry: Path, root: Path | None = None):
+    """Load, link, and check a user program from source files."""
     root = root or entry.resolve().parent
     sources, mod = project_sources(entry, root)
     hosts, ph, th = default_hosts([])
@@ -535,6 +555,7 @@ def build_user(entry: Path, root: Path | None = None):
 
 
 def build_tool(kind: str):
+    """Load, link, and check a bundled L tool program."""
     if kind == "editor":
         ph = ProcessHost()
         th = TermHost()
@@ -554,6 +575,7 @@ def build_tool(kind: str):
 def compile_native(
     program: Program, entry: str, out: Path, emit_c: Path | None = None, cc: str = "cc"
 ):
+    """Emit C for a checked program and link it into a native executable."""
     src = NativeEmitter(program, entry).emit()
     if emit_c:
         emit_c.write_text(src)
@@ -583,6 +605,7 @@ def compile_native(
 
 
 def main():
+    """Entry point for the native compiler backend."""
     ap = argparse.ArgumentParser(description="bootstrap L -> native C VM compiler")
     ap.add_argument("source", nargs="?")
     ap.add_argument("-o", "--output", required=True)

@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""Source analysis driver: report call graphs and control flow for L projects.
+
+Developer tool over the Core analysis model; supports text, JSON, DOT,
+Mermaid, and SVG output modes.
+"""
 from __future__ import annotations
 
 import argparse
@@ -20,6 +25,7 @@ from lang import LangError, Program
 
 
 def report(project, funcs):
+    """Render the human-readable project analysis report."""
     out = [
         f"L code analysis: {'.'.join(project.entry_module)}",
         f"modules={len({f.module for f in funcs})} functions={len(funcs)} statements={sum(f.metrics['statements'] for f in funcs)} calls={sum(len(f.calls) for f in funcs)} bindings={sum(f.metrics['local_bindings'] for f in funcs)} rebound={sum(f.metrics['rebound_local_bindings'] for f in funcs)}",
@@ -60,6 +66,7 @@ def report(project, funcs):
 
 
 def svg(dot):
+    """Render a control-flow graph by converting DOT output through dot."""
     exe = shutil.which("dot")
     if exe is None:
         raise LangError(
@@ -78,6 +85,7 @@ def svg(dot):
 
 
 def load_project(source, root, check, include_stdlib):
+    """Load and check an L project rooted at the given entry file."""
     from tools.sdk_cli import cleanup, make_hosts, project_sources, stdlib_sources
 
     root = root or source.resolve().parent
@@ -105,6 +113,7 @@ def load_project(source, root, check, include_stdlib):
 
 
 def modes(ns, p):
+    """List the output modes supported by the analysis driver."""
     if sum(bool(x) for x in (ns.flowchart, ns.call_graph, ns.ast)) > 1:
         p.error("--flowchart, --call-graph, and --ast are mutually exclusive")
     view = ns.view
@@ -142,6 +151,7 @@ def modes(ns, p):
 
 
 def parser():
+    """Build the analysis driver argument parser."""
     p = argparse.ArgumentParser(
         prog="./lc analyze",
         description="L source analyzer: metrics, AST, call graphs, CFGs, and flowcharts",
@@ -167,6 +177,7 @@ def parser():
 
 
 def main(argv=None):
+    """Entry point for the source analysis driver."""
     p = parser()
     ns = p.parse_args(argv)
     view, fmt = modes(ns, p)

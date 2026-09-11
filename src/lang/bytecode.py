@@ -1,5 +1,12 @@
+"""Stack-bytecode compiler and virtual machine for checked L programs.
+
+The compiler lowers a CheckedModule to compact stack bytecode with
+generics erased; the VM executes it against symbolic host references.
+This is Core execution shared by the SDK runner and the native backend.
+"""
 from __future__ import annotations
 
+import weakref
 from dataclasses import dataclass
 
 from lang import *
@@ -7,6 +14,7 @@ from lang import *
 
 @dataclass
 class BCFunc:
+    """Compiled bytecode function: name, parameters, instruction list, return type."""
     name: str
     params: tuple[str, ...]
     code: list[tuple]
@@ -17,6 +25,7 @@ class BCCompiler:
     """AST -> compact stack bytecode. Generics are erased because bodies were checked parametrically."""
 
     def __init__(self, cm: CheckedModule):
+        """Init (BCCompiler helper for the L Core frontend)."""
         self.cm = cm
         self.c = cm.checker
         self.funcs = {}
@@ -26,18 +35,22 @@ class BCCompiler:
             self.compile_fn(f)
 
     def emit(self, *ins):
+        """Emit (BCCompiler helper for the L Core frontend)."""
         self.code.append(tuple(ins))
         return len(self.code) - 1
 
     def mark(self):
+        """Mark (BCCompiler helper for the L Core frontend)."""
         return len(self.code)
 
     def patch(self, at, target):
+        """Patch (BCCompiler helper for the L Core frontend)."""
         x = list(self.code[at])
         x[-1] = target
         self.code[at] = tuple(x)
 
     def compile_fn(self, f: FnInfo):
+        """Compile fn (BCCompiler helper for the L Core frontend)."""
         if f.name in self.funcs:
             return
         old = (
@@ -58,6 +71,7 @@ class BCCompiler:
         self.code, self.loops, self.scope_depth = old
 
     def anon_fn(self, e):
+        """Anon fn (BCCompiler helper for the L Core frontend)."""
         key = id(e)
         if key in self.anon:
             return self.anon[key]
@@ -81,14 +95,17 @@ class BCCompiler:
         return name
 
     def enter_scope(self, bindings=False):
+        """Enter scope (BCCompiler helper for the L Core frontend)."""
         self.emit("SCOPE_ENTER_BINDINGS" if bindings else "SCOPE_ENTER")
         self.scope_depth += 1
 
     def exit_scope(self):
+        """Exit scope (BCCompiler helper for the L Core frontend)."""
         self.emit("SCOPE_EXIT")
         self.scope_depth -= 1
 
     def emit_unwind(self, target_depth):
+        """Emit unwind (BCCompiler helper for the L Core frontend)."""
         n = self.scope_depth - target_depth
         if n < 0:
             raise RuntimeError("bad compile-time scope depth")
@@ -96,6 +113,7 @@ class BCCompiler:
             self.emit("UNWIND", n)
 
     def stmt(self, s):
+        """Stmt (BCCompiler helper for the L Core frontend)."""
         k = s.kind
         if k == "var":
             self.expr(s.a[2])
@@ -280,6 +298,7 @@ class BCCompiler:
         raise LangError("bytecode compiler missing stmt " + k, s.span)
 
     def condition(self, c):
+        """Condition (BCCompiler helper for the L Core frontend)."""
         if c.kind == "is":
             self.expr(c.a[0])
             self.emit("TRY_PATTERN", c.a[1], c.a[0].ty)
@@ -292,6 +311,7 @@ class BCCompiler:
         # Pure structural query.  Do not probe by emitting bytecode and catching:
         # a failed speculative probe can leave instructions behind and corrupt the
         # operand stack.  The checker has already rejected illegal assignments.
+        """Can place (BCCompiler helper for the L Core frontend)."""
         if e.kind in ("qname", "index"):
             return True
         if e.kind == "unary" and e.a[0] == "*":
@@ -304,6 +324,7 @@ class BCCompiler:
         return False
 
     def place(self, e):
+        """Place (BCCompiler helper for the L Core frontend)."""
         if e.kind == "qname":
             q = e.a[0]
             self.emit("LOCAL_PLACE", q[0])
@@ -331,6 +352,7 @@ class BCCompiler:
         raise LangError("bytecode place missing " + e.kind, e.span)
 
     def expr(self, e):
+        """Expr (BCCompiler helper for the L Core frontend)."""
         k = e.kind
         if k == "unit":
             self.emit("PUSH_UNIT")
@@ -484,7 +506,9 @@ class BCCompiler:
 
 
 class BCVM:
+    """Stack virtual machine executing compiled L bytecode against host modules."""
     def __init__(self, bc: BCCompiler, host_modules=None):
+        """Init (BCVM helper for the L Core frontend)."""
         self.bc = bc
         self.c = bc.c
         self.host_modules = host_modules or {}
@@ -496,31 +520,37 @@ class BCVM:
         self.live_arrays = weakref.WeakSet()
 
     def alloc_ref(self, v):
+        """Alloc ref (BCVM helper for the L Core frontend)."""
         r = RefObj(copy_value(v))
         self.live_refs.add(r)
         return r
 
     def alloc_array(self, xs=()):
+        """Alloc array (BCVM helper for the L Core frontend)."""
         a = ArrayObj([copy_value(x) for x in xs])
         self.live_arrays.add(a)
         return a
 
     def run(self, name="main", args=()):
+        """Run (BCVM helper for the L Core frontend)."""
         return self.call(name, list(args))
 
     def lookup(self, n):
+        """Lookup (BCVM helper for the L Core frontend)."""
         for s in reversed(self.frames[-1]["scopes"]):
             if n in s:
                 return s[n]
         raise TrapSig("unknown local " + n)
 
     def local_place(self, n):
+        """Local place (BCVM helper for the L Core frontend)."""
         for s in reversed(self.frames[-1]["scopes"]):
             if n in s:
                 return Place(lambda s=s: s[n], lambda v, s=s: s.__setitem__(n, v))
         raise TrapSig("unknown local " + n)
 
     def call(self, name, args):
+        """Call (BCVM helper for the L Core frontend)."""
         f = self.bc.funcs[name]
         fr = {
             "scopes": [dict(zip(f.params, [copy_value(x) for x in args]))],
@@ -534,6 +564,7 @@ class BCVM:
             self.frames.pop()
 
     def loop(self):
+        """Loop (BCVM helper for the L Core frontend)."""
         fr = self.frames[-1]
         code = fr["func"].code
         S = self.stack
@@ -765,10 +796,12 @@ class BCVM:
 
     def scalar(self, op, a, b, t):
         # use a tiny Interpreter utility without frames
+        """Scalar (BCVM helper for the L Core frontend)."""
         fake = object.__new__(Interpreter)
         return Interpreter.scalar_op(fake, op, a, b, t)
 
     def match(self, p, v, t):
+        """Match (BCVM helper for the L Core frontend)."""
         fake = object.__new__(Interpreter)
         fake.c = self.c
         return Interpreter.match(fake, p, v, t)

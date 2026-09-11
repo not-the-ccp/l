@@ -1,3 +1,8 @@
+"""Core project-level code model: functions, bindings, calls, and metrics.
+
+Collects per-function analyses (call sites, local bindings, statement
+metrics) used by the analyze source tool and its JSON consumers.
+"""
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -25,6 +30,7 @@ STMT_KINDS = {
 
 @dataclass
 class CallSite:
+    """One static call site: callee name plus source position."""
     callee: str
     line: int | None
     col: int | None
@@ -34,17 +40,20 @@ class CallSite:
 
 @dataclass
 class LocalBinding:
+    """One local binding: name, type text, and source position."""
     name: str
     line: int | None
     type: str | None
     reassignments: int = 0
 
     def to_dict(self):
+        """To dict (LocalBinding helper for the L Core frontend)."""
         return {**asdict(self), "reassigned": self.reassignments > 0}
 
 
 @dataclass
 class FunctionAnalysis:
+    """Per-function analysis: calls, bindings, metrics, and graph nodes."""
     module: tuple[str, ...]
     name: str
     params: list[dict[str, str]]
@@ -61,9 +70,11 @@ class FunctionAnalysis:
 
     @property
     def qualified_name(self):
+        """Qualified name (FunctionAnalysis helper for the L Core frontend)."""
         return f"{'.'.join(self.module)}::{self.name}"
 
     def to_dict(self):
+        """To dict (FunctionAnalysis helper for the L Core frontend)."""
         return {
             "name": self.name,
             "qualified_name": self.qualified_name,
@@ -86,12 +97,14 @@ class FunctionAnalysis:
 
 @dataclass
 class ModuleAnalysis:
+    """Per-module analysis grouping its function analyses."""
     name: tuple[str, ...]
     imports: dict[str, tuple[str, ...]]
     declarations: dict[str, int]
     functions: list[FunctionAnalysis] = field(default_factory=list)
 
     def to_dict(self):
+        """To dict (ModuleAnalysis helper for the L Core frontend)."""
         return {
             "name": ".".join(self.name),
             "imports": {k: ".".join(v) for k, v in sorted(self.imports.items())},
@@ -102,15 +115,18 @@ class ModuleAnalysis:
 
 @dataclass
 class ProjectAnalysis:
+    """Whole-project analysis with entry module and module map."""
     entry_module: tuple[str, ...]
     modules: list[ModuleAnalysis]
     asts: dict[tuple[str, ...], N] = field(repr=False)
 
     @property
     def functions(self):
+        """Functions (ProjectAnalysis helper for the L Core frontend)."""
         return [f for m in self.modules for f in m.functions]
 
     def to_dict(self):
+        """To dict (ProjectAnalysis helper for the L Core frontend)."""
         fs = self.functions
         return {
             "entry_module": ".".join(self.entry_module),
@@ -132,6 +148,7 @@ class ProjectAnalysis:
 
 
 def children(value: Any) -> Iterable[N]:
+    """Yield child syntax nodes of an L AST node."""
     if isinstance(value, N):
         yield value
     elif isinstance(value, (tuple, list)):
@@ -143,6 +160,7 @@ def children(value: Any) -> Iterable[N]:
 
 
 def walk(node: N, descend_anon=False):
+    """Depth-first walk over an L AST subtree."""
     yield node
     if node.kind == "anonfn" and not descend_anon:
         return
@@ -151,6 +169,7 @@ def walk(node: N, descend_anon=False):
 
 
 def callee_name(callee: N):
+    """Resolve the static callee name of a call expression, if any."""
     if callee.kind == "qname":
         return ".".join(callee.a[0])
     if callee.kind == "field":
@@ -162,6 +181,7 @@ def callee_name(callee: N):
 
 
 def collect_calls(body):
+    """Collect static call sites inside a function body."""
     out = []
     for stmt in body:
         for n in walk(stmt):
@@ -178,6 +198,7 @@ def collect_calls(body):
 
 
 def direct_local_name(node):
+    """Resolve the local name introduced by a binding pattern, if direct."""
     if isinstance(node, N) and node.kind == "qname":
         parts = node.a[0]
         if len(parts) == 1:
@@ -215,6 +236,7 @@ def collect_bindings(body):
 
 
 def metrics(body, max_nesting, bindings):
+    """Compute statement/binding metrics for a function body."""
     c = {k: 0 for k in STMT_KINDS}
     match_extra = 0
     short = 0
@@ -247,6 +269,7 @@ def metrics(body, max_nesting, bindings):
 
 
 def find_anons(body):
+    """Find anonymous-function nodes inside a function body."""
     out = []
     for stmt in body:
         stack = [stmt]
@@ -260,6 +283,7 @@ def find_anons(body):
 
 
 def analyze_fn(module, name, params, ret, body, node, source, anonymous=False):
+    """Analyze one checked function into a FunctionAnalysis record."""
     cfg = CFGBuilder(source)
     nodes, edges, unreachable, nesting = cfg.build(body)
     sp = getattr(node, "span", None)
@@ -289,6 +313,7 @@ def analyze_fn(module, name, params, ret, body, node, source, anonymous=False):
 
 
 def analyze_project(sources, entry):
+    """Analyze every function in a checked project."""
     modules = []
     asts = {}
     for modname in sorted(sources):
@@ -322,6 +347,7 @@ def analyze_project(sources, entry):
 
 
 def resolve_calls(project):
+    """Resolve call sites to analyzed functions by qualified name."""
     index = {f.qualified_name for f in project.functions}
     for m in project.modules:
         local = {f.name for f in m.functions if "::<anon@" not in f.name}
@@ -344,6 +370,7 @@ def resolve_calls(project):
 
 
 def ast_value(value):
+    """Convert an AST value node to plain JSON-ready data."""
     if isinstance(value, N):
         sp = getattr(value, "span", None)
         span = (
@@ -376,6 +403,7 @@ def ast_value(value):
 
 
 def select_functions(project, module=None, function=None):
+    """Select functions matching the requested module/name filter."""
     from lang import LangError
 
     fs = project.functions

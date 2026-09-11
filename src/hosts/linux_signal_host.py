@@ -1,3 +1,7 @@
+"""Linux signal-disposition host profile.
+
+Exposes ignore/default signal dispositions to L programs running on Linux.
+"""
 from __future__ import annotations
 
 import errno
@@ -11,6 +15,7 @@ class LinuxSignalHost:
 
     @staticmethod
     def _set(number, disposition):
+        """Set (LinuxSignalHost helper for the L Linux host profile)."""
         try:
             signal.signal(int(number), disposition)
             return None
@@ -20,12 +25,15 @@ class LinuxSignalHost:
             return SomeVal(errno.EINVAL)
 
     def _ignore(self, number):
+        """Ignore (LinuxSignalHost helper for the L Linux host profile)."""
         return self._set(number, signal.SIG_IGN)
 
     def _default(self, number):
+        """Default (LinuxSignalHost helper for the L Linux host profile)."""
         return self._set(number, signal.SIG_DFL)
 
     def module(self) -> HostModule:
+        """Module (LinuxSignalHost helper for the L Linux host profile)."""
         host = HostModule(("linux", "process", "signal"))
         i64_ty = name_ty("i64")
         result_ty = opt(i64_ty)
@@ -34,4 +42,5 @@ class LinuxSignalHost:
         return host
 
     def modules(self) -> dict[tuple[str, ...], HostModule]:
+        """Modules (LinuxSignalHost helper for the L Linux host profile)."""
         return {("linux", "process", "signal"): self.module()}

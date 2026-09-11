@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""Direct host runner: execute L programs and LSP servers without the SDK wrapper.
+
+Builds host sets over stdio, filesystem, processes, and terminals, then
+runs checked programs through the tree interpreter or the bytecode VM.
+Also hosts the editor-VM and language-server entry points.
+"""
 from __future__ import annotations
 
 import os
@@ -47,27 +53,33 @@ SERVER_FILES = {
 
 
 def array_bytes(data: bytes):
+    """Wrap Python bytes as an L byte array."""
     return ArrayObj(data)
 
 
 def to_bytes(v):
+    """Unwrap an L byte array to Python bytes."""
     return bytes(v.items)
 
 
 def array_strings(xs):
+    """Wrap a string list as an L string array."""
     return ArrayObj(
         [array_bytes(os.fsencode(x) if isinstance(x, str) else x) for x in xs]
     )
 
 
 def stdio_host():
+    """Build the stdio host module over OS descriptors 0 and 1."""
     h = HostModule(("stdio",))
 
     def rd(n):
+        """Rd (stdio_host helper for the L direct host runner)."""
         b = os.read(0, max(1, min(int(n), 1 << 20)))
         return None if not b else SomeVal(array_bytes(b))
 
     def wr(a):
+        """Wr (stdio_host helper for the L direct host runner)."""
         data = to_bytes(a)
         off = 0
         while off < len(data):
@@ -80,14 +92,18 @@ def stdio_host():
 
 
 class ProcessHost:
+    """Owned child-process host backing the proc module."""
     def __init__(self):
+        """Init (ProcessHost helper for the L direct host runner)."""
         self.ps = []
 
     def module(self):
+        """Module (ProcessHost helper for the L direct host runner)."""
         h = HostModule(("proc",))
         pt = h.opaque_type("Process")
 
         def spawn(argv):
+            """Spawn (module helper for the L direct host runner)."""
             args = [os.fsdecode(bytes(x.items)) for x in argv.items]
             if not args:
                 raise TrapSig("proc.spawn requires nonempty argv")
@@ -103,6 +119,7 @@ class ProcessHost:
             return OpaqueVal(("proc", "Process"), p)
 
         def write(pv, data):
+            """Write (module helper for the L direct host runner)."""
             p = pv.payload
             b = to_bytes(data)
             if p.stdin is None:
@@ -112,6 +129,7 @@ class ProcessHost:
             return UNITV
 
         def read(pv, n):
+            """Read (module helper for the L direct host runner)."""
             p = pv.payload
             if p.stdout is None:
                 return None
@@ -119,6 +137,7 @@ class ProcessHost:
             return None if not b else SomeVal(array_bytes(b))
 
         def close(pv):
+            """Close (module helper for the L direct host runner)."""
             self.close_one(pv.payload)
             return UNITV
 
@@ -127,6 +146,7 @@ class ProcessHost:
         h.function("read", [pt, name_ty("u64")], opt(arr(name_ty("u8"))), read)
 
         def read_timeout(pv, n, ms):
+            """Read timeout (module helper for the L direct host runner)."""
             import select
 
             p = pv.payload
@@ -146,6 +166,7 @@ class ProcessHost:
         )
 
         def shell(command):
+            """Shell (module helper for the L direct host runner)."""
             cmd = os.fsdecode(to_bytes(command))
             return int(subprocess.call(cmd, shell=True, executable="/bin/sh"))
 
@@ -153,6 +174,7 @@ class ProcessHost:
         h.function("shell", [const_arr(name_ty("u8"))], name_ty("i64"), shell)
 
         def write_try(pv, data):
+            """Write try (module helper for the L direct host runner)."""
             p = pv.payload
             b = to_bytes(data)
             if p.stdin is None:
@@ -171,6 +193,7 @@ class ProcessHost:
         return h
 
     def close_one(self, p):
+        """Close one (ProcessHost helper for the L direct host runner)."""
         if p.poll() is not None:
             return
         try:
@@ -188,16 +211,20 @@ class ProcessHost:
                     pass
 
     def cleanup(self):
+        """Cleanup (ProcessHost helper for the L direct host runner)."""
         for p in self.ps:
             self.close_one(p)
 
 
 class TermHost:
+    """Terminal host backing raw mode, key reads, and screen control."""
     def __init__(self):
+        """Init (TermHost helper for the L direct host runner)."""
         self.saved = None
         self.keys = KeyReader(0)
 
     def module(self):
+        """Module (TermHost helper for the L direct host runner)."""
         h = HostModule(("term",))
         h.function("enter_raw", [], UNIT, self.enter)
         h.function("leave_raw", [], UNIT, self.leave)
@@ -222,6 +249,7 @@ class TermHost:
         )
 
         def text_width(value):
+            """Text width (module helper for the L direct host runner)."""
             import unicodedata
 
             text = to_bytes(value).decode("utf-8", "replace")
@@ -261,36 +289,43 @@ class TermHost:
         return h
 
     def enter(self):
+        """Enter (TermHost helper for the L direct host runner)."""
         if os.isatty(0) and self.saved is None:
             self.saved = termios.tcgetattr(0)
             tty.setraw(0)
         return UNITV
 
     def leave(self):
+        """Leave (TermHost helper for the L direct host runner)."""
         if self.saved is not None:
             termios.tcsetattr(0, termios.TCSADRAIN, self.saved)
             self.saved = None
         return UNITV
 
     def enter_ui(self):
+        """Enter ui (TermHost helper for the L direct host runner)."""
         self.enter()
         self.write(array_bytes(b"\x1b[?1049h\x1b[?25h"))
         return UNITV
 
     def leave_ui(self):
+        """Leave ui (TermHost helper for the L direct host runner)."""
         self.write(array_bytes(b"\x1b[0m\x1b[?25h\x1b[?1049l"))
         self.leave()
         return UNITV
 
     def read_key(self):
+        """Read key (TermHost helper for the L direct host runner)."""
         b = self.keys.read()
         return None if b is None else SomeVal(array_bytes(b))
 
     def read_key_timeout(self, ms):
+        """Read key timeout (TermHost helper for the L direct host runner)."""
         b = self.keys.read(int(ms))
         return None if b is None else SomeVal(array_bytes(b))
 
     def write(self, a):
+        """Write (TermHost helper for the L direct host runner)."""
         b = to_bytes(a)
         off = 0
         while off < len(b):
@@ -299,15 +334,18 @@ class TermHost:
 
 
 def fs_host():
+    """Build the filesystem host module."""
     h = HostModule(("fs",))
 
     def rd(path):
+        """Rd (fs_host helper for the L direct host runner)."""
         try:
             return SomeVal(array_bytes(Path(os.fsdecode(to_bytes(path))).read_bytes()))
         except FileNotFoundError:
             return None
 
     def wr(path, data):
+        """Wr (fs_host helper for the L direct host runner)."""
         try:
             Path(os.fsdecode(to_bytes(path))).write_bytes(to_bytes(data))
             return True
@@ -325,6 +363,7 @@ def fs_host():
 
 
 def sys_host(args):
+    """Build the sys host module exposing argv, exe path, and environment."""
     h = HostModule(("sys",))
     h.function("args", [], arr(arr(name_ty("u8"))), lambda: array_strings(args))
     h.function(
@@ -335,6 +374,7 @@ def sys_host(args):
     )
 
     def getenv(name):
+        """Getenv (sys_host helper for the L direct host runner)."""
         value = os.environ.get(os.fsdecode(to_bytes(name)))
         return None if value is None else SomeVal(array_bytes(os.fsencode(value)))
 
@@ -343,6 +383,7 @@ def sys_host(args):
 
 
 def build_sources(main_path: Path, editor=False):
+    """Assemble the L source map for the main program or editor."""
     if editor:
         keep = {("arrays",), ("bytes",), ("strconv",), ("utf8",), ("json",), ("lsp",)}
         d = {k: p.read_text() for k, p in COMMON.items() if k in keep}
@@ -354,6 +395,7 @@ def build_sources(main_path: Path, editor=False):
 
 
 def execute(program, hosts, use_vm=False):
+    """Execute a linked program via the tree interpreter or bytecode VM."""
     if not use_vm:
         return program.run(("main",))
     return BCVM(BCCompiler(program.checked), hosts).run(
@@ -362,12 +404,14 @@ def execute(program, hosts, use_vm=False):
 
 
 def run_server(name, use_vm=False):
+    """Run one of the L-written language servers on stdio."""
     hosts = {("stdio",): stdio_host()}
     p = Program(build_sources(SERVER_FILES[name]), hosts)
     execute(p, hosts, use_vm)
 
 
 def run_editor(path, server_kind, use_vm=False):
+    """Run the Lace modal editor against a file with a language server."""
     ph = ProcessHost()
     th = TermHost()
     server_argv = [sys.executable, str(HERE / "run.py"), server_kind]
@@ -386,6 +430,7 @@ def run_editor(path, server_kind, use_vm=False):
 
 
 def main():
+    """Entry point for the direct host runner."""
     if len(sys.argv) >= 2:
         cmd = sys.argv[1]
         use_vm = cmd.endswith("-vm")

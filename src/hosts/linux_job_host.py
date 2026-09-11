@@ -1,3 +1,8 @@
+"""Linux job-control host profile: process groups, TTY foreground, and wait events.
+
+Owns the linux.process.launch/group/child/wait and linux.tty modules
+used by the shell and editor for foreground job management.
+"""
 from __future__ import annotations
 
 import copy
@@ -21,6 +26,7 @@ MODE_TYPE = ("linux", "tty", "Mode")
 
 @dataclass(frozen=True)
 class LinuxProcessEvent:
+    """Wait event for a child or process group."""
     child: LinuxChild
     kind: str
     code: int
@@ -28,6 +34,7 @@ class LinuxProcessEvent:
 
 @dataclass(frozen=True)
 class LinuxTtyMode:
+    """Saved TTY mode for capture and restore."""
     attrs: list
 
 
@@ -40,9 +47,11 @@ class LinuxJobHost:
     """
 
     def __init__(self, linux: LinuxHost):
+        """Init (LinuxJobHost helper for the L Linux host profile)."""
         self.linux = linux
 
     def _event(self, value) -> LinuxProcessEvent:
+        """Event (LinuxJobHost helper for the L Linux host profile)."""
         if not isinstance(value, OpaqueVal) or value.type_id != EVENT_TYPE:
             raise TrapSig("expected linux.process.wait.Event")
         event = value.payload
@@ -51,6 +60,7 @@ class LinuxJobHost:
         return event
 
     def _mode(self, value) -> LinuxTtyMode:
+        """Mode (LinuxJobHost helper for the L Linux host profile)."""
         if not isinstance(value, OpaqueVal) or value.type_id != MODE_TYPE:
             raise TrapSig("expected linux.tty.Mode")
         mode = value.payload
@@ -59,12 +69,14 @@ class LinuxJobHost:
         return mode
 
     def _find_child(self, pid: int) -> LinuxChild:
+        """Find child (LinuxJobHost helper for the L Linux host profile)."""
         for child in self.linux.children:
             if child.pid == pid:
                 return child
         raise TrapSig("wait returned an untracked child")
 
     def _finish_terminal(self, child: LinuxChild):
+        """Finish terminal (LinuxJobHost helper for the L Linux host profile)."""
         child.waited = True
         if child.pidfd >= 0:
             try:
@@ -74,6 +86,7 @@ class LinuxJobHost:
             child.pidfd = -1
 
     def _from_waitid(self, info) -> OpaqueVal:
+        """From waitid (LinuxJobHost helper for the L Linux host profile)."""
         child = self._find_child(int(info.si_pid))
         if info.si_code == os.CLD_EXITED:
             kind = "exited"
@@ -94,6 +107,7 @@ class LinuxJobHost:
         return OpaqueVal(EVENT_TYPE, LinuxProcessEvent(child, kind, code))
 
     def _waitid(self, idtype: int, ident: int, nonblocking: bool):
+        """Waitid (LinuxJobHost helper for the L Linux host profile)."""
         options = os.WEXITED | os.WSTOPPED | os.WCONTINUED
         if nonblocking:
             options |= os.WNOHANG
@@ -110,9 +124,11 @@ class LinuxJobHost:
         return self._from_waitid(info)
 
     def _current_group(self):
+        """Current group (LinuxJobHost helper for the L Linux host profile)."""
         return OpaqueVal(GROUP_TYPE, LinuxGroup(os.getpgrp()))
 
     def _become_group_leader(self):
+        """Become group leader (LinuxJobHost helper for the L Linux host profile)."""
         try:
             os.setpgid(0, 0)
             return None
@@ -120,12 +136,15 @@ class LinuxJobHost:
             return SomeVal(int(exc.errno or errno.EIO))
 
     def _same_group(self, left, right):
+        """Same group (LinuxJobHost helper for the L Linux host profile)."""
         return self.linux._group(left).pgid == self.linux._group(right).pgid
 
     def _same_child(self, left, right):
+        """Same child (LinuxJobHost helper for the L Linux host profile)."""
         return self.linux._child(left) is self.linux._child(right)
 
     def _wait_child(self, value):
+        """Wait child (LinuxJobHost helper for the L Linux host profile)."""
         child = self.linux._child(value)
         if child.waited:
             raise TrapSig("linux.process.Child was already reaped")
@@ -138,6 +157,7 @@ class LinuxJobHost:
         return result
 
     def _wait_group(self, value):
+        """Wait group (LinuxJobHost helper for the L Linux host profile)."""
         group = self.linux._group(value)
         result = self._waitid(os.P_PGID, group.pgid, False)
         if result is None:
@@ -145,6 +165,7 @@ class LinuxJobHost:
         return result
 
     def _poll_group(self, value):
+        """Poll group (LinuxJobHost helper for the L Linux host profile)."""
         group = self.linux._group(value)
         result = self._waitid(os.P_PGID, group.pgid, True)
         if result is None:
@@ -152,20 +173,25 @@ class LinuxJobHost:
         return SomeVal(result)
 
     def _event_child(self, value):
+        """Event child (LinuxJobHost helper for the L Linux host profile)."""
         event = self._event(value)
         return OpaqueVal(CHILD_TYPE, event.child)
 
     def _event_value(self, value, kind: str):
+        """Event value (LinuxJobHost helper for the L Linux host profile)."""
         event = self._event(value)
         return SomeVal(event.code) if event.kind == kind else None
 
     def _continued(self, value):
+        """Continued (LinuxJobHost helper for the L Linux host profile)."""
         return self._event(value).kind == "continued"
 
     def _is_tty(self, value):
+        """Is tty (LinuxJobHost helper for the L Linux host profile)."""
         return os.isatty(self.linux._fd(value).fd)
 
     def _foreground(self, value):
+        """Foreground (LinuxJobHost helper for the L Linux host profile)."""
         descriptor = self.linux._fd(value).fd
         try:
             pgid = os.tcgetpgrp(descriptor)
@@ -174,6 +200,7 @@ class LinuxJobHost:
             return None
 
     def _set_foreground(self, descriptor_value, group_value):
+        """Set foreground (LinuxJobHost helper for the L Linux host profile)."""
         descriptor = self.linux._fd(descriptor_value).fd
         group = self.linux._group(group_value)
         try:
@@ -183,6 +210,7 @@ class LinuxJobHost:
             return SomeVal(int(exc.errno or errno.EIO))
 
     def _capture_mode(self, descriptor_value):
+        """Capture mode (LinuxJobHost helper for the L Linux host profile)."""
         descriptor = self.linux._fd(descriptor_value).fd
         try:
             return SomeVal(
@@ -195,6 +223,7 @@ class LinuxJobHost:
             return None
 
     def _restore_mode(self, descriptor_value, mode_value):
+        """Restore mode (LinuxJobHost helper for the L Linux host profile)."""
         descriptor = self.linux._fd(descriptor_value).fd
         mode = self._mode(mode_value)
         try:
@@ -204,6 +233,7 @@ class LinuxJobHost:
             return SomeVal(int(exc.errno or errno.EIO))
 
     def launch_module(self) -> HostModule:
+        """Launch module (LinuxJobHost helper for the L Linux host profile)."""
         host = HostModule(("linux", "process", "launch"))
         fd_ty = name_ty(("__host__", "linux", "fd", "Fd"))
         group_ty = name_ty(("__host__", "linux", "process", "Group"))
@@ -219,6 +249,7 @@ class LinuxJobHost:
         return host
 
     def group_module(self) -> HostModule:
+        """Group module (LinuxJobHost helper for the L Linux host profile)."""
         host = HostModule(("linux", "process", "group"))
         group_ty = name_ty(("__host__", "linux", "process", "Group"))
         host.function("current", [], group_ty, self._current_group)
@@ -229,12 +260,14 @@ class LinuxJobHost:
         return host
 
     def child_module(self) -> HostModule:
+        """Child module (LinuxJobHost helper for the L Linux host profile)."""
         host = HostModule(("linux", "process", "child"))
         child_ty = name_ty(("__host__", "linux", "process", "Child"))
         host.function("same", [child_ty, child_ty], name_ty("bool"), self._same_child)
         return host
 
     def wait_module(self) -> HostModule:
+        """Wait module (LinuxJobHost helper for the L Linux host profile)."""
         host = HostModule(("linux", "process", "wait"))
         child_ty = name_ty(("__host__", "linux", "process", "Child"))
         group_ty = name_ty(("__host__", "linux", "process", "Group"))
@@ -266,6 +299,7 @@ class LinuxJobHost:
         return host
 
     def tty_module(self) -> HostModule:
+        """Tty module (LinuxJobHost helper for the L Linux host profile)."""
         host = HostModule(("linux", "tty"))
         fd_ty = name_ty(("__host__", "linux", "fd", "Fd"))
         group_ty = name_ty(("__host__", "linux", "process", "Group"))
@@ -285,6 +319,7 @@ class LinuxJobHost:
         return host
 
     def modules(self) -> dict[tuple[str, ...], HostModule]:
+        """Modules (LinuxJobHost helper for the L Linux host profile)."""
         return {
             ("linux", "process", "launch"): self.launch_module(),
             ("linux", "process", "group"): self.group_module(),

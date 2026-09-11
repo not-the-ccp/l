@@ -1,3 +1,7 @@
+"""Shared command-line interface helpers for the Python bootstrap drivers.
+
+Version string, color-aware diagnostic labels, and LangError rendering.
+"""
 from __future__ import annotations
 
 import os
@@ -8,6 +12,7 @@ VERSION = "0.8"
 
 
 def _use_color(stream=sys.stderr):
+    """Report whether a stream should receive ANSI color output."""
     return (
         bool(getattr(stream, "isatty", lambda: False)())
         and "NO_COLOR" not in os.environ
@@ -15,18 +20,22 @@ def _use_color(stream=sys.stderr):
 
 
 def _c(code, text):
+    """Wrap text in an ANSI color code when color output is enabled."""
     return f"\x1b[{code}m{text}\x1b[0m" if _use_color() else text
 
 
 def fail_label(kind="error"):
+    """Render a failure label for diagnostics."""
     return _c("1;31", kind)
 
 
 def note_label():
+    """Render a note label for diagnostics."""
     return _c("1;36", "note")
 
 
 def emit_lang_error(exc, fallback: Path | None = None):
+    """Render a LangError with source context to stderr."""
     path = getattr(exc, "path", None)
     span = getattr(exc, "span", None)
     msg = getattr(exc, "msg", str(exc))

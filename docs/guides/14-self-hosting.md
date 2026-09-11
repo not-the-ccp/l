@@ -40,7 +40,7 @@ All of these frontend layers are ordinary L modules. They are currently compiled
 
 ## Syntax and structure
 
-`lib/core/slang_syntax.l` contains the L-written lexer and syntax validator/recovery parser. `lib/core/slang_index.l` builds the stable top-level import/declaration view used by later tooling.
+`lib/slang/syntax.l` contains the L-written lexer and syntax validator/recovery parser. `lib/slang/index.l` builds the stable top-level import/declaration view used by later tooling.
 
 `scripts/lsyntax` exposes these layers as a native-running tool:
 
@@ -52,25 +52,25 @@ scripts/lsyntax --ast source.l
 
 The repository tests require the compiled tool to parse substantial real source including Lace, not only synthetic parser examples.
 
-`lib/core/slang_decls.l` now carries the complete structured syntax needed for semantic checking: declaration generic parameters, recursive type syntax, constant initializers, function bodies, expressions, statements and patterns, all with source spans. This includes calls/indexing, operators, casts, `new`/dereference, struct literals, anonymous functions, assignments, loops, conditionals and matches.
+`lib/slang/decls.l` now carries the complete structured syntax needed for semantic checking: declaration generic parameters, recursive type syntax, constant initializers, function bodies, expressions, statements and patterns, all with source spans. This includes calls/indexing, operators, casts, `new`/dereference, struct literals, anonymous functions, assignments, loops, conditionals and matches.
 
 ## Project and name resolution
 
-`lib/core/slang_project.l` resolves already-loaded **logical modules**. Filesystem/package lookup deliberately remains outside the portable frontend and outside L Core.
+`lib/slang/project.l` resolves already-loaded **logical modules**. Filesystem/package lookup deliberately remains outside the portable frontend and outside L Core.
 
 It handles import bindings and aliases, duplicate module/module-scope names, builtin collisions, unresolved modules, import cycles and source visibility.
 
-`lib/core/slang_names.l` resolves runtime names inside executable bodies. It represents parameters, locals, loop and pattern bindings, anonymous-function parameters, top-level values, imports and builtins with stable identities. It enforces L's no-shadowing rule and the noncapturing anonymous-function rule, including the prohibition on silently shadowing an enclosing runtime name inside an anonymous function.
+`lib/slang/names.l` resolves runtime names inside executable bodies. It represents parameters, locals, loop and pattern bindings, anonymous-function parameters, top-level values, imports and builtins with stable identities. It enforces L's no-shadowing rule and the noncapturing anonymous-function rule, including the prohibition on silently shadowing an enclosing runtime name inside an anonymous function.
 
 ## Type identities
 
-`lib/core/slang_types.l` resolves syntax types into semantic `ResolvedType` trees. It handles primitives, generic parameters, local nominal types, imported source types, visibility, type arity, function types and explicit host opaque types supplied by the embedding environment.
+`lib/slang/types.l` resolves syntax types into semantic `ResolvedType` trees. It handles primitives, generic parameters, local nominal types, imported source types, visibility, type arity, function types and explicit host opaque types supplied by the embedding environment.
 
 Generic parameters remain abstract semantic types. This is important: generic declarations are checked once under abstract `T`, rather than being accepted or rejected only after a particular monomorphization.
 
 ## Semantic checker and `lcheck`
 
-`lib/core/slang_check.l` is now a real value/place/body checker rather than a syntax demo. `scripts/lcheck FILE` exposes it as a native-running command:
+`lib/slang/check.l` is now a real value/place/body checker rather than a syntax demo. `scripts/lcheck FILE` exposes it as a native-running command:
 
 ```sh
 scripts/lcheck examples/core/linked_list.l

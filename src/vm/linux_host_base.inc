@@ -1,6 +1,6 @@
 /* Linux-only hosted profile used by native L executables.
  *
- * Native host IDs 25..55 are reserved by bootstrap/native_compile.py. Keeping
+ * Native host IDs 25..55 are reserved by src/tools/_native_compile.py. Keeping
  * their implementation here avoids teaching the portable VM representation
  * about Linux descriptor/process internals. The native runtime already permits
  * only one active LVM per process (g_vm); this profile follows the same model
@@ -770,7 +770,7 @@ static void linux_host_cleanup(LVM *vm) {
 
 #else
 
-/* Keep native_vm.c's dispatch hook linkable on non-Linux builds. */
+/* Keep vm.c's dispatch hook linkable on non-Linux builds. */
 static int linux_host_id(int id) { (void)id; return 0; }
 static LValue linux_host_call(LVM *vm, int id, LValue *args, int n) {
     (void)vm; (void)id; (void)args; (void)n;

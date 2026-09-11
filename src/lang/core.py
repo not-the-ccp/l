@@ -1,3 +1,9 @@
+"""Core L bootstrap frontend: lexer, parser, static checker, tree-walking interpreter, module linker, and host-module model.
+
+This is the portable reference implementation of L Core. Host interaction
+happens only through the HostModule boundary; the native code generator
+lives in the tools layer.
+"""
 from __future__ import annotations
 
 import math
@@ -12,6 +18,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class Span:
+    """Source span: byte offsets plus 1-based line/column endpoints."""
     start: int
     end: int
     line: int
@@ -22,6 +29,7 @@ class Span:
 
 @dataclass(frozen=True)
 class Tok:
+    """Lexical token: kind tag, matched text, span, and original literal spelling."""
     kind: str
     text: str
     span: Span
@@ -29,7 +37,9 @@ class Tok:
 
 
 class LangError(Exception):
+    """Checked or runtime failure carrying a message, an optional span, and module/path context."""
     def __init__(self, msg: str, span: Span | None = None):
+        """Init (LangError helper for the L Core frontend)."""
         super().__init__(msg)
         self.msg = msg
         self.span = span
@@ -91,10 +101,12 @@ class Lexer:
     """Byte-oriented syntax over valid Python str (our study assumes UTF-8 source before this stage)."""
 
     def __init__(self, src: str, keep_comments: bool = False):
+        """Init (Lexer helper for the L Core frontend)."""
         self.src = src
         self.keep_comments = keep_comments
 
     def lex(self) -> list[Tok]:
+        """Lex (Lexer helper for the L Core frontend)."""
         s = self.src
         out = []
         i = 0
@@ -103,9 +115,11 @@ class Lexer:
         n = len(s)
 
         def span(st, sl, sc, en, el, ec):
+            """Span (lex helper for the L Core frontend)."""
             return Span(st, en, sl, sc, el, ec)
 
         def advance(txt):
+            """Advance (lex helper for the L Core frontend)."""
             nonlocal line, col
             parts = txt.split("\n")
             if len(parts) == 1:
@@ -188,6 +202,7 @@ class Lexer:
 
                 # decimal / float
                 def digits(pos):
+                    """Digits (lex helper for the L Core frontend)."""
                     p = pos
                     prev = True
                     while p < n:
@@ -312,6 +327,7 @@ class Lexer:
 
 @dataclass
 class N:
+    """Untyped syntax node: kind tag, child tuple, optional span, and inferred-type slot."""
     kind: str
     a: tuple[Any, ...] = ()
     span: Span | None = None
@@ -320,10 +336,12 @@ class N:
 
 @dataclass(frozen=True)
 class Ty:
+    """Semantic type: unit, named, optional, reference, array, function, or generic parameter."""
     kind: str
     a: tuple[Any, ...] = ()
 
     def __str__(self):
+        """Str (Ty helper for the L Core frontend)."""
         k = self.kind
         if k == "unit":
             return "()"
@@ -350,26 +368,76 @@ UNIT = Ty("unit")
 
 
 def name_ty(n: str | tuple[str, ...], args=()):
+    """Build a named type reference.
+
+    Args:
+        n: Bare name or qualified name tuple.
+        args: Type argument list.
+
+    Returns:
+        The constructed Ty node.
+    """
     return Ty("name", ((n,) if isinstance(n, str) else tuple(n), tuple(args)))
 
 
 def opt(t):
+    """Wrap a type in an optional.
+
+    Args:
+        t: Element type.
+
+    Returns:
+        The optional type.
+    """
     return Ty("opt", (t,))
 
 
 def ref(t):
+    """Wrap a type in a reference.
+
+    Args:
+        t: Pointee type.
+
+    Returns:
+        The reference type.
+    """
     return Ty("ref", (t,))
 
 
 def arr(t):
+    """Wrap a type in a mutable array.
+
+    Args:
+        t: Element type.
+
+    Returns:
+        The array type.
+    """
     return Ty("array", (t,))
 
 
 def fnty(ps, r=UNIT):
+    """Build a function type.
+
+    Args:
+        ps: Parameter type list.
+        r: Return type (unit by default).
+
+    Returns:
+        The function type.
+    """
     return Ty("fn", (tuple(ps), r))
 
 
 def tparam(n):
+    """Build a generic parameter type reference.
+
+    Args:
+        n: Parameter name.
+
+    Returns:
+        The parameter type.
+    """
     return Ty("param", (n,))
 
 
@@ -385,33 +453,69 @@ class ConstArrayTy:
     __slots__ = ("kind", "a")
 
     def __init__(self, element):
+        """Init (ConstArrayTy helper for the L Core frontend)."""
         object.__setattr__(self, "kind", "array")
         object.__setattr__(self, "a", (element,))
 
     def __str__(self):
+        """Str (ConstArrayTy helper for the L Core frontend)."""
         return "const []" + str(self.a[0])
 
     def __eq__(self, other):
+        """Eq (ConstArrayTy helper for the L Core frontend)."""
         return isinstance(other, ConstArrayTy) and self.a == other.a
 
     def __hash__(self):
+        """Hash (ConstArrayTy helper for the L Core frontend)."""
         return hash(("const-array", self.a))
 
 
 def const_arr(element):
+    """Wrap a type in a read-only array capability.
+
+    Args:
+        element: Element type.
+
+    Returns:
+        The const-array capability type.
+    """
     return ConstArrayTy(element)
 
 
 def is_const_array(ty):
+    """Report whether a type is a read-only array capability.
+
+    Args:
+        ty: Type to inspect.
+
+    Returns:
+        True for const-array capabilities.
+    """
     return isinstance(ty, ConstArrayTy)
 
 
 def is_mutable_array(ty):
+    """Report whether a type is an ordinary mutable array.
+
+    Args:
+        ty: Type to inspect.
+
+    Returns:
+        True for mutable array types only.
+    """
     return isinstance(ty, Ty) and ty.kind == "array" and not is_const_array(ty)
 
 
 def same_type(a, b):
-    """Structural type identity including array capability at every layer."""
+    """Structural type identity including array capability at every layer.
+
+    Args:
+        a: First type.
+        b: Second type.
+
+    Returns:
+        True when the types are structurally identical.
+    """
     if not isinstance(a, Ty) or not isinstance(b, Ty):
         return a == b
     if a.kind != b.kind:
@@ -464,16 +568,20 @@ PREC = {
 
 
 class Parser:
+    """Recursive-descent parser from tokens to an untyped module node."""
     def __init__(self, src: str):
+        """Init (Parser helper for the L Core frontend)."""
         self.src = src
         self.ts = [t for t in Lexer(src).lex() if t.kind != "COMMENT"]
         self.i = 0
 
     def t(self, k=None):
+        """T (Parser helper for the L Core frontend)."""
         x = self.ts[self.i]
         return x if k is None else x.kind == k
 
     def take(self, k=None):
+        """Take (Parser helper for the L Core frontend)."""
         x = self.t()
         if k is not None and x.kind != k:
             raise LangError(f"expected {k}, got {x.kind}", x.span)
@@ -481,11 +589,13 @@ class Parser:
         return x
 
     def maybe(self, k):
+        """Maybe (Parser helper for the L Core frontend)."""
         if self.t(k):
             return self.take()
         return None
 
     def node(self, k, *a, st=None, en=None):
+        """Node (Parser helper for the L Core frontend)."""
         if st is None:
             st = self.ts[max(0, self.i - 1)].span
         if en is None:
@@ -498,6 +608,7 @@ class Parser:
         return N(k, tuple(a), sp)
 
     def program(self):
+        """Program (Parser helper for the L Core frontend)."""
         ds = []
         while not self.t("EOF"):
             ds.append(self.decl())
@@ -508,12 +619,14 @@ class Parser:
         )
 
     def qname(self):
+        """Qname (Parser helper for the L Core frontend)."""
         parts = [self.take("NAME").text]
         while self.maybe("."):
             parts.append(self.take("NAME").text)
         return tuple(parts)
 
     def type_params(self):
+        """Type params (Parser helper for the L Core frontend)."""
         if not self.maybe("["):
             return ()
         xs = []
@@ -528,6 +641,7 @@ class Parser:
         return tuple(xs)
 
     def comma_list(self, end, parse):
+        """Comma list (Parser helper for the L Core frontend)."""
         xs = []
         if self.t(end):
             return xs
@@ -540,6 +654,7 @@ class Parser:
         return xs
 
     def decl(self):
+        """Decl (Parser helper for the L Core frontend)."""
         st = self.t().span
         public = bool(self.maybe("pub"))
         if self.maybe("import"):
@@ -565,6 +680,7 @@ class Parser:
             self.take("{")
 
             def fld():
+                """Fld (decl helper for the L Core frontend)."""
                 fst = self.t().span
                 fp = bool(self.maybe("pub"))
                 fn = self.take("NAME").text
@@ -581,6 +697,7 @@ class Parser:
             self.take("{")
 
             def var():
+                """Var (decl helper for the L Core frontend)."""
                 v = self.take("NAME").text
                 payload = ()
                 if self.maybe("("):
@@ -605,9 +722,11 @@ class Parser:
         raise LangError("expected declaration", self.t().span)
 
     def params(self):
+        """Params (Parser helper for the L Core frontend)."""
         self.take("(")
 
         def one():
+            """One (params helper for the L Core frontend)."""
             n = self.take("NAME").text
             self.take(":")
             return (n, self.type())
@@ -617,6 +736,7 @@ class Parser:
         return xs
 
     def type(self):
+        """Type (Parser helper for the L Core frontend)."""
         if self.maybe("?"):
             return opt(self.type())
         if self.maybe("ref"):
@@ -651,6 +771,7 @@ class Parser:
         return name_ty(q, args)
 
     def block(self):
+        """Block (Parser helper for the L Core frontend)."""
         self.take("{")
         xs = []
         while not self.t("}"):
@@ -659,6 +780,7 @@ class Parser:
         return xs, en
 
     def stmt(self):
+        """Stmt (Parser helper for the L Core frontend)."""
         st = self.t().span
         if self.maybe("var"):
             n = self.take("NAME").text
@@ -757,6 +879,7 @@ class Parser:
         return self.node("exprstmt", lhs, st=st, en=en)
 
     def assign_no_semi(self):
+        """Assign no semi (Parser helper for the L Core frontend)."""
         st = self.t().span
         lhs = self.expr()
         op = self.take().kind
@@ -770,6 +893,7 @@ class Parser:
     def condition(self):
         # `is` is parsed at comparison precedence by expr().  The checker allows
         # bindings only when the complete condition is an `is` node.
+        """Condition (Parser helper for the L Core frontend)."""
         return self.expr()
 
     def payload_pattern(self):
@@ -786,6 +910,7 @@ class Parser:
         raise LangError("pattern payload must be a name or _", self.t().span)
 
     def pattern(self):
+        """Pattern (Parser helper for the L Core frontend)."""
         st = self.t().span
         if self.t("NAME") and self.t().text == "_":
             self.take()
@@ -827,6 +952,7 @@ class Parser:
         raise LangError("expected pattern", self.t().span)
 
     def expr(self, minp=0):
+        """Expr (Parser helper for the L Core frontend)."""
         st = self.t().span
         # prefix
         if self.maybe("("):
@@ -981,16 +1107,42 @@ FLOATS = {"f32", "f64"}
 
 
 def int_info(t: Ty):
+    """Integer layout of a primitive type.
+
+    Args:
+        t: Type to inspect.
+
+    Returns:
+        (width, signed) for integer primitives, else None.
+    """
     if t.kind == "name" and not t.a[1] and len(t.a[0]) == 1:
         return INTS.get(t.a[0][0])
     return None
 
 
 def is_prim(t, n):
+    """Report whether a type is a given primitive.
+
+    Args:
+        t: Type to inspect.
+        n: Primitive name such as i64.
+
+    Returns:
+        True on match.
+    """
     return t.kind == "name" and t.a == ((n,), ())
 
 
 def substitute(t: Ty | ConstArrayTy, m: dict[str, Ty]) -> Ty | ConstArrayTy:
+    """Apply a generic-parameter substitution to a type.
+
+    Args:
+        t: Type to rewrite.
+        m: Parameter name to replacement-type map.
+
+    Returns:
+        The substituted type.
+    """
     if is_const_array(t):
         return const_arr(substitute(t.a[0], m))
     if t.kind == "param":
@@ -1006,10 +1158,27 @@ def substitute(t: Ty | ConstArrayTy, m: dict[str, Ty]) -> Ty | ConstArrayTy:
 
 
 def same(a: Ty, b: Ty):
+    """Legacy structural equality alias over semantic types.
+
+    Args:
+        a: First type.
+        b: Second type.
+
+    Returns:
+        True when equal.
+    """
     return a == b
 
 
 def parse_int_text(s):
+    """Parse an L integer literal with base prefixes and digit separators.
+
+    Args:
+        s: Literal text.
+
+    Returns:
+        The unbounded integer value.
+    """
     q = s.replace("_", "")
     if q.lower().startswith("0x"):
         return int(q, 16)
@@ -1019,6 +1188,15 @@ def parse_int_text(s):
 
 
 def wrap_int(v: int, t: Ty):
+    """Wrap an integer to a primitive layout with two's-complement semantics.
+
+    Args:
+        v: Unbounded value.
+        t: Target integer type.
+
+    Returns:
+        The wrapped value.
+    """
     w, signed = int_info(t)
     m = 1 << w
     v %= m
@@ -1028,6 +1206,15 @@ def wrap_int(v: int, t: Ty):
 
 
 def fround(v: float, t: Ty):
+    """Round a float to a primitive layout, mapping overflow to infinity.
+
+    Args:
+        v: Value.
+        t: Target float type.
+
+    Returns:
+        The rounded value.
+    """
     if is_prim(t, "f32"):
         try:
             return struct.unpack("!f", struct.pack("!f", float(v)))[0]
@@ -1037,7 +1224,18 @@ def fround(v: float, t: Ty):
 
 
 def scalar_value(opx, a, b, t, fault=LangError):
-    """Single normative scalar-operation implementation for the reference tools."""
+    """Single normative scalar-operation implementation for the reference tools.
+
+    Args:
+        opx: Operator spelling.
+        a: Left operand.
+        b: Right operand.
+        t: Operand type governing wrap/round behavior.
+        fault: Exception factory for domain errors.
+
+    Returns:
+        The operation result.
+    """
     if opx == "==":
         return (a is b) if t.kind == "ref" else a == b
     if opx == "!=":
@@ -1089,6 +1287,7 @@ def scalar_value(opx, a, b, t, fault=LangError):
 
 @dataclass
 class StructInfo:
+    """Checked struct declaration: visibility, name, parameters, fields, owner."""
     public: bool
     name: str
     gps: tuple[str, ...]
@@ -1098,6 +1297,7 @@ class StructInfo:
 
 @dataclass
 class EnumInfo:
+    """Checked enum declaration: visibility, name, parameters, variants, owner."""
     public: bool
     name: str
     gps: tuple[str, ...]
@@ -1107,6 +1307,7 @@ class EnumInfo:
 
 @dataclass
 class FnInfo:
+    """Checked function declaration: signature plus body and source node."""
     public: bool
     name: str
     gps: tuple[str, ...]
@@ -1118,6 +1319,7 @@ class FnInfo:
 
 @dataclass
 class ConstInfo:
+    """Checked const declaration: type, initializer, value, and evaluation state."""
     public: bool
     name: str
     ty: Ty
@@ -1127,6 +1329,7 @@ class ConstInfo:
 
 
 class Checker:
+    """Static semantic checker: resolves types, validates layouts, checks constants and bodies."""
     def __init__(
         self,
         mod: N,
@@ -1134,6 +1337,7 @@ class Checker:
         imports: dict[tuple[str, ...], CheckedModule] | None = None,
         host_modules: dict | None = None,
     ):
+        """Init (Checker helper for the L Core frontend)."""
         self.mod = mod
         self.module_name = tuple(module_name)
         self.import_modules = imports or {}
@@ -1158,16 +1362,19 @@ class Checker:
         self.collect()
 
     def err(self, msg, node=None):
+        """Err (Checker helper for the L Core frontend)."""
         e = LangError(msg, node.span if isinstance(node, N) else node)
         e.module = tuple(self.current_origin)
         raise e
 
     def claim(self, n, node=None):
+        """Claim (Checker helper for the L Core frontend)."""
         if n in self.top or n in self.builtins:
             self.err(f"duplicate or reserved module name {n}", node)
         self.top.add(n)
 
     def collect(self):
+        """Collect (Checker helper for the L Core frontend)."""
         for d in self.mod.a[0]:
             k = d.kind
             if k == "import":
@@ -1203,11 +1410,13 @@ class Checker:
                 self.consts[n] = ConstInfo(public, n, t, e)
 
     def _unique(self, xs, what, node):
+        """Unique (Checker helper for the L Core frontend)."""
         if len(xs) != len(set(xs)):
             self.err(f"duplicate {what}", node)
 
     def checked(self):
         # declarations/types
+        """Checked (Checker helper for the L Core frontend)."""
         for s in self.structs.values():
             self.gparams = set(s.gps)
             for _, _, t, _ in s.fields:
@@ -1236,6 +1445,7 @@ class Checker:
         return CheckedModule(self)
 
     def resolve_ty(self, t: Ty | ConstArrayTy) -> Ty | ConstArrayTy:
+        """Resolve ty (Checker helper for the L Core frontend)."""
         if is_const_array(t):
             return const_arr(self.resolve_ty(t.a[0]))
         if t.kind == "unit":
@@ -1281,7 +1491,9 @@ class Checker:
         # indirections; optional is not. Re-entering the same nominal
         # declaration on a by-value expansion path is necessarily infinite,
         # even when its type arguments have changed.
+        """Validate layouts (Checker helper for the L Core frontend)."""
         def resolved_decl_type(t, gps):
+            """Resolved decl type (validate_layouts helper for the L Core frontend)."""
             old = self.gparams
             self.gparams = set(gps)
             try:
@@ -1290,6 +1502,7 @@ class Checker:
                 self.gparams = old
 
         def decl_info(name):
+            """Decl info (validate_layouts helper for the L Core frontend)."""
             if name in self.structs:
                 return self.structs[name]
             if name in self.enums:
@@ -1297,6 +1510,7 @@ class Checker:
             return None
 
         def walk(t, env, path):
+            """Walk (validate_layouts helper for the L Core frontend)."""
             t = substitute(t, env)
             if t.kind in ("ref", "array", "fn", "unit", "param"):
                 return
@@ -1336,11 +1550,13 @@ class Checker:
 
     def check_generic_recursion(self):
         # Approximation on source call graph, sufficient for explicit self/mutual references. Calls through fn values aren't generic polymorphic calls.
+        """Check generic recursion (Checker helper for the L Core frontend)."""
         generic = {n for n, f in self.funcs.items() if f.gps}
         edges = {n: set() for n in generic}
         calls = {n: [] for n in generic}
 
         def visit(n, owner):
+            """Visit (check_generic_recursion helper for the L Core frontend)."""
             if not isinstance(n, N):
                 return
             if n.kind == "call":
@@ -1375,6 +1591,7 @@ class Checker:
         low = {}
 
         def strong(v):
+            """Strong (check_generic_recursion helper for the L Core frontend)."""
             nonlocal idx
             ind[v] = low[v] = idx
             idx += 1
@@ -1407,12 +1624,15 @@ class Checker:
         # Full rule is checked at call sites while body is typechecked.
 
     def push(self):
+        """Push (Checker helper for the L Core frontend)."""
         self.scopes.append({})
 
     def pop(self):
+        """Pop (Checker helper for the L Core frontend)."""
         self.scopes.pop()
 
     def bind(self, n, t, node=None):
+        """Bind (Checker helper for the L Core frontend)."""
         if n == "_":
             self.err("_ cannot be a variable name", node)
         if (
@@ -1426,12 +1646,14 @@ class Checker:
         self.scopes[-1][n] = t
 
     def lookup_local(self, n):
+        """Lookup local (Checker helper for the L Core frontend)."""
         for s in reversed(self.scopes):
             if n in s:
                 return s[n]
         return None
 
     def check_fn(self, f: FnInfo):
+        """Check fn (Checker helper for the L Core frontend)."""
         self.source_reserved = set(getattr(f.node, "reserved", ()))
         if set(f.gps) & self.source_reserved:
             self.err(
@@ -1456,12 +1678,14 @@ class Checker:
         self.source_reserved = set()
 
     def block_returns(self, ss):
+        """Block returns (Checker helper for the L Core frontend)."""
         for s in ss:
             if self.stmt_returns(s):
                 return True
         return False
 
     def contains_break(self, ss):
+        """Contains break (Checker helper for the L Core frontend)."""
         for s in ss:
             if s.kind == "break":
                 return True
@@ -1474,6 +1698,7 @@ class Checker:
         return False
 
     def stmt_returns(self, s):
+        """Stmt returns (Checker helper for the L Core frontend)."""
         if s.kind in ("return", "trap"):
             return True
         if s.kind == "if":
@@ -1494,6 +1719,7 @@ class Checker:
         return False
 
     def block(self, ss, new=True):
+        """Block (Checker helper for the L Core frontend)."""
         if new:
             self.push()
         for s in ss:
@@ -1502,6 +1728,7 @@ class Checker:
             self.pop()
 
     def stmt(self, s):
+        """Stmt (Checker helper for the L Core frontend)."""
         k = s.kind
         if k == "var":
             n, t, e = s.a
@@ -1611,10 +1838,12 @@ class Checker:
         self.err(f"unhandled statement {k}", s)
 
     def bindings(self, b, node):
+        """Bindings (Checker helper for the L Core frontend)."""
         for n, t in b.items():
             self.bind(n, t, node)
 
     def condition(self, c):
+        """Condition (Checker helper for the L Core frontend)."""
         if c.kind == "is":
             t = self.expr(c.a[0])
             b, _ = self.pattern(c.a[1], t)
@@ -1623,6 +1852,7 @@ class Checker:
         return {}
 
     def pattern(self, p, t: Ty):
+        """Pattern (Checker helper for the L Core frontend)."""
         p.subject_ty = t
         k = p.kind
         if k == "p_wild":
@@ -1679,6 +1909,7 @@ class Checker:
         self.err("unsupported pattern", p)
 
     def payload_binding(self, p, t):
+        """Payload binding (Checker helper for the L Core frontend)."""
         if p.kind == "p_wild":
             return {}
         if p.kind == "p_bind":
@@ -1686,6 +1917,7 @@ class Checker:
         self.err("nested destructuring patterns are not supported in v5", p)
 
     def _variant_for_pattern(self, q, t):
+        """Variant for pattern (Checker helper for the L Core frontend)."""
         if t.kind != "name" or len(t.a[0]) != 1:
             return None
         en = t.a[0][0]
@@ -1711,6 +1943,7 @@ class Checker:
         )
 
     def check_exhaustive(self, t, seen, node):
+        """Check exhaustive (Checker helper for the L Core frontend)."""
         keys = set(seen)
         if t == UNIT:
             if "()" not in keys:
@@ -1747,12 +1980,14 @@ class Checker:
         )
 
     def is_ambiguous_value(self, e):
+        """Is ambiguous value (Checker helper for the L Core frontend)."""
         return e.kind in ("none", "array") and (e.kind != "array" or not e.a[0])
 
     def req(self, a, b, node=None):
         # Qualification is deliberately available only at the outer array layer.
         # It is not lifted through optionals, nominal generic arguments, refs, or
         # nested arrays.
+        """Req (Checker helper for the L Core frontend)."""
         if is_const_array(a):
             if b.kind == "array" and same_type(a.a[0], b.a[0]):
                 return
@@ -1761,6 +1996,7 @@ class Checker:
         self.err(f"type mismatch: expected {a}, got {b}", node)
 
     def expr(self, e: N, expected: Ty | None = None) -> Ty:
+        """Expr (Checker helper for the L Core frontend)."""
         k = e.kind
         if k == "unit":
             t = UNIT
@@ -1912,6 +2148,7 @@ class Checker:
             )
 
             def contextual_numeric(x):
+                """Contextual numeric (expr helper for the L Core frontend)."""
                 return x.kind in ("int", "float") or (
                     x.kind == "unary"
                     and x.a[0] == "-"
@@ -1998,6 +2235,7 @@ class Checker:
         return t
 
     def qname_expr(self, q, node, expected=None):
+        """Qname expr (Checker helper for the L Core frontend)."""
         first = q[0]
         t = self.lookup_local(first)
         if t is not None:
@@ -2023,6 +2261,7 @@ class Checker:
         self.err(f'unknown value {".".join(q)}', node)
 
     def field_type(self, t: Ty, name, node):
+        """Field type (Checker helper for the L Core frontend)."""
         base = t.a[0] if t.kind == "ref" else t
         if (
             base.kind != "name"
@@ -2043,6 +2282,7 @@ class Checker:
         )
 
     def struct_lit(self, e, expected):
+        """Struct lit (Checker helper for the L Core frontend)."""
         cal, fields = e.a
         if cal.kind != "qname" or len(cal.a[0]) != 1:
             self.err("struct literal requires struct name", e)
@@ -2098,6 +2338,7 @@ class Checker:
         return actual
 
     def _resolved_decl_ty(self, t, gps):
+        """Resolved decl ty (Checker helper for the L Core frontend)."""
         old = self.gparams
         self.gparams = set(gps)
         try:
@@ -2106,6 +2347,7 @@ class Checker:
             self.gparams = old
 
     def call_type(self, e, expected):
+        """Call type (Checker helper for the L Core frontend)."""
         cal, args = e.a
         # builtins
         if cal.kind == "qname" and len(cal.a[0]) == 1 and cal.a[0][0] in self.builtins:
@@ -2180,6 +2422,7 @@ class Checker:
         return r
 
     def instantiate_call(self, f: FnInfo, args, expected, node):
+        """Instantiate call (Checker helper for the L Core frontend)."""
         if len(args) != len(f.params):
             self.err(
                 f"{f.name} expects {len(f.params)} arguments, got {len(args)}", node
@@ -2212,6 +2455,7 @@ class Checker:
         return substitute(f.ret, m)
 
     def is_fully_bound(self, t, m):
+        """Is fully bound (Checker helper for the L Core frontend)."""
         if t.kind == "param":
             return t.a[0] in m
         if t.kind == "name":
@@ -2225,6 +2469,7 @@ class Checker:
         return True
 
     def unify(self, p: Ty, a: Ty, m, node, soft=False):
+        """Unify (Checker helper for the L Core frontend)."""
         if p.kind == "param":
             n = p.a[0]
             if n in m and m[n] != a:
@@ -2255,6 +2500,7 @@ class Checker:
         return True
 
     def resolve_variant_qname(self, q, expected, args):
+        """Resolve variant qname (Checker helper for the L Core frontend)."""
         if len(q) != 2 or q[0] not in self.enums:
             return None
         en, v = q
@@ -2285,6 +2531,7 @@ class Checker:
         return et, tuple(substitute(x, m) for x in pts), m
 
     def anon_type(self, e, expected):
+        """Anon type (Checker helper for the L Core frontend)."""
         ps, rt, b = e.a
         old_scopes = self.scopes
         old_ret = self.ret
@@ -2317,6 +2564,7 @@ class Checker:
         return t
 
     def fieldless_enum(self, t):
+        """Fieldless enum (Checker helper for the L Core frontend)."""
         if t.kind != "name" or len(t.a[0]) != 1:
             return False
         info = self.enums.get(t.a[0][0])
@@ -2325,6 +2573,7 @@ class Checker:
         )
 
     def binop(self, opx, l, r, node):
+        """Binop (Checker helper for the L Core frontend)."""
         if opx in ("&&", "||"):
             self.req(name_ty("bool"), l, node)
             self.req(l, r, node)
@@ -2366,12 +2615,14 @@ class Checker:
         self.err(f"unknown operator {opx}", node)
 
     def check_cast(self, a, b, node):
+        """Check cast (Checker helper for the L Core frontend)."""
         anum = int_info(a) or (a.kind == "name" and a.a[0][0] in FLOATS)
         bnum = int_info(b) or (b.kind == "name" and b.a[0][0] in FLOATS)
         if not (anum and bnum):
             self.err(f"cannot cast {a} to {b}", node)
 
     def place(self, e):
+        """Place (Checker helper for the L Core frontend)."""
         if e.kind == "qname":
             q = e.a[0]
             t = self.lookup_local(q[0])
@@ -2409,6 +2660,7 @@ class Checker:
         self.err("expression is not assignable", e)
 
     def eval_const(self, n):
+        """Eval const (Checker helper for the L Core frontend)."""
         c = self.consts[n]
         if c.state == 2:
             return c.value
@@ -2425,6 +2677,7 @@ class Checker:
         return val
 
     def const_expr(self, e, expected=None):
+        """Const expr (Checker helper for the L Core frontend)."""
         k = e.kind
         if k == "bool":
             return e.a[0], name_ty("bool")
@@ -2484,9 +2737,11 @@ class Checker:
         )
 
     def eval_scalar_op(self, opx, a, b, t):
+        """Eval scalar op (Checker helper for the L Core frontend)."""
         return scalar_value(opx, a, b, t, LangError)
 
     def cast_value(self, v, fr, to, fault=LangError):
+        """Cast value (Checker helper for the L Core frontend)."""
         if int_info(to):
             if isinstance(v, float):
                 if not math.isfinite(v):
@@ -2502,6 +2757,7 @@ class Checker:
         return fround(float(v), to)
 
     def external_member_type(self, alias, rest, node):
+        """External member type (Checker helper for the L Core frontend)."""
         q = self.imports[alias]
         mod = self.import_modules.get(q)
         if mod is None:
@@ -2514,9 +2770,11 @@ class Checker:
 
 @dataclass
 class CheckedModule:
+    """Fully checked module ready for interpretation, bytecode lowering, or native emission."""
     checker: Checker
 
     def member_type(self, rest, node=None, external=False):
+        """Member type (CheckedModule helper for the L Core frontend)."""
         if len(rest) != 1:
             raise LangError(
                 "only direct module members are currently addressable",
@@ -2542,7 +2800,9 @@ class CheckedModule:
 
 
 class UnitVal:
+    """Runtime unit value."""
     def __repr__(self):
+        """Repr (UnitVal helper for the L Core frontend)."""
         return "()"
 
 
@@ -2551,11 +2811,13 @@ UNITV = UnitVal()
 
 @dataclass
 class SomeVal:
+    """Runtime optional payload wrapper."""
     value: Any
 
 
 @dataclass
 class EnumVal:
+    """Runtime enum value: variant index plus payload list."""
     name: str
     variant: str
     payload: list[Any]
@@ -2563,66 +2825,85 @@ class EnumVal:
 
 @dataclass
 class StructVal:
+    """Runtime struct value: field value list."""
     name: str
     fields: dict[str, Any]
 
 
 class ArrayObj:
+    """Runtime array object: mutable item list with const-view tracking."""
     def __init__(self, items=()):
+        """Init (ArrayObj helper for the L Core frontend)."""
         self.items = list(items)
 
     def __repr__(self):
+        """Repr (ArrayObj helper for the L Core frontend)."""
         return f"Array({self.items!r})"
 
 
 class RefObj:
+    """Runtime reference cell with optional const-view tracking."""
     def __init__(self, value):
+        """Init (RefObj helper for the L Core frontend)."""
         self.value = value
 
     def __repr__(self):
+        """Repr (RefObj helper for the L Core frontend)."""
         return f"Ref({self.value!r})"
 
 
 @dataclass(frozen=True)
 class UserFnVal:
+    """Runtime source-level function value with captured definition."""
     name: str
 
 
 @dataclass(frozen=True)
 class AnonFnVal:
+    """Runtime anonymous-function value with captured definition."""
     node_id: int
 
 
 @dataclass
 class HostFnVal:
+    """Runtime host-function value callable from L code."""
     fn: Callable
 
 
 class ReturnSig(Exception):
+    """Control signal unwinding a function body with a return value."""
     def __init__(self, v):
+        """Init (ReturnSig helper for the L Core frontend)."""
         self.v = v
 
 
 class BreakSig(Exception):
+    """Control signal unwinding the innermost loop."""
     pass
 
 
 class ContinueSig(Exception):
+    """Control signal restarting the innermost loop."""
     pass
 
 
 class TrapSig(Exception):
+    """Runtime trap signal aborting execution with a diagnostic."""
     pass
 
 
 class Place:
+    """Assignable place: a read/write cell pair used by the interpreter."""
     def __init__(self, get, set):
+        """Init (Place helper for the L Core frontend)."""
         self.get = get
         self.set = set
 
 
 class Interpreter:
+    """Tree-walking interpreter executing checked modules against host modules."""
     def __init__(self, checked: CheckedModule, host_modules: dict | None = None):
+        """Init (Interpreter helper for the L Core frontend)."""
         self.cm = checked
         self.c = checked.checker
         self.host_modules = host_modules or {}
@@ -2633,28 +2914,34 @@ class Interpreter:
         self.top_consts = {n: ci.value for n, ci in self.c.consts.items()}
 
     def alloc_ref(self, v):
+        """Alloc ref (Interpreter helper for the L Core frontend)."""
         r = RefObj(copy_value(v))
         self.live_refs.add(r)
         return r
 
     def alloc_array(self, items=()):
+        """Alloc array (Interpreter helper for the L Core frontend)."""
         a = ArrayObj([copy_value(x) for x in items])
         self.live_arrays.add(a)
         return a
 
     def pushframe(self, initial=None):
+        """Pushframe (Interpreter helper for the L Core frontend)."""
         self.frames.append(dict(initial or {}))
 
     def popframe(self):
+        """Popframe (Interpreter helper for the L Core frontend)."""
         self.frames.pop()
 
     def get_local(self, n):
+        """Get local (Interpreter helper for the L Core frontend)."""
         for f in reversed(self.frames):
             if n in f:
                 return f[n]
         raise TrapSig(f"unknown local {n}")
 
     def set_local(self, n, v):
+        """Set local (Interpreter helper for the L Core frontend)."""
         for f in reversed(self.frames):
             if n in f:
                 f[n] = copy_value(v)
@@ -2662,9 +2949,11 @@ class Interpreter:
         raise TrapSig(f"unknown local {n}")
 
     def run(self, name="main", args=()):
+        """Run (Interpreter helper for the L Core frontend)."""
         return self.call_user(self.c.funcs[name], list(args))
 
     def call_user(self, f: FnInfo, args):
+        """Call user (Interpreter helper for the L Core frontend)."""
         self.pushframe({n: copy_value(v) for (n, _), v in zip(f.params, args)})
         try:
             self.block(f.body, new=False)
@@ -2675,6 +2964,7 @@ class Interpreter:
             self.popframe()
 
     def block(self, ss, new=True):
+        """Block (Interpreter helper for the L Core frontend)."""
         if new:
             self.pushframe()
         try:
@@ -2685,6 +2975,7 @@ class Interpreter:
                 self.popframe()
 
     def stmt(self, s):
+        """Stmt (Interpreter helper for the L Core frontend)."""
         k = s.kind
         if k == "var":
             self.frames[-1][s.a[0]] = copy_value(self.eval(s.a[2]))
@@ -2795,6 +3086,7 @@ class Interpreter:
         raise TrapSig(f"unhandled stmt {k}")
 
     def cond(self, c):
+        """Cond (Interpreter helper for the L Core frontend)."""
         if c.kind == "is":
             v = self.eval(c.a[0])
             m = self.match(c.a[1], v, c.a[0].ty)
@@ -2802,6 +3094,7 @@ class Interpreter:
         return bool(self.eval(c)), {}
 
     def match(self, p, v, t):
+        """Match (Interpreter helper for the L Core frontend)."""
         k = p.kind
         if k == "p_wild":
             return {}
@@ -2843,6 +3136,7 @@ class Interpreter:
         return None
 
     def eval(self, e):
+        """Eval (Interpreter helper for the L Core frontend)."""
         k = e.kind
         if k == "unit":
             return UNITV
@@ -2953,6 +3247,7 @@ class Interpreter:
         raise TrapSig(f"unhandled expr {k}")
 
     def qvalue(self, q, e):
+        """Qvalue (Interpreter helper for the L Core frontend)."""
         try:
             v = self.get_local(q[0])
             start = 1
@@ -2976,6 +3271,7 @@ class Interpreter:
         raise TrapSig("unknown value " + ".".join(q))
 
     def call_value(self, f, args):
+        """Call value (Interpreter helper for the L Core frontend)."""
         if isinstance(f, UserFnVal):
             return self.call_user(self.c.funcs[f.name], args)
         if isinstance(f, AnonFnVal):
@@ -2994,6 +3290,7 @@ class Interpreter:
         raise TrapSig("value is not callable")
 
     def get_field(self, v, f):
+        """Get field (Interpreter helper for the L Core frontend)."""
         if isinstance(v, RefObj):
             v = v.value
         if not isinstance(v, StructVal):
@@ -3001,6 +3298,7 @@ class Interpreter:
         return v.fields[f]
 
     def place(self, e):
+        """Place (Interpreter helper for the L Core frontend)."""
         if e.kind == "qname":
             q = e.a[0]
             # find owning frame once; then traverse fields without reevaluating
@@ -3052,11 +3350,20 @@ class Interpreter:
         raise TrapSig("not a place")
 
     def scalar_op(self, opx, a, b, t):
+        """Scalar op (Interpreter helper for the L Core frontend)."""
         return scalar_value(opx, a, b, t, TrapSig)
 
 
 def copy_value(v):
     # Language value-copy semantics: aggregates inline-copy; arrays/refs/functions are handle values.
+    """Deep-copy an L value across the interpreter boundary.
+
+    Args:
+        v: Value to copy.
+
+    Returns:
+        The independent copy.
+    """
     if (
         v is UNITV
         or v is None
@@ -3080,6 +3387,15 @@ INTERNAL_SEP = "$"
 
 
 def internal_name(mod: tuple[str, ...], n: str) -> str:
+    """Mangle a module-qualified definition into a flat internal name.
+
+    Args:
+        mod: Module path tuple.
+        n: Definition name.
+
+    Returns:
+        The mangled name.
+    """
     return INTERNAL_SEP.join(mod) + INTERNAL_SEP + n
 
 
@@ -3089,6 +3405,7 @@ class Program:
     def __init__(
         self, sources: dict[tuple[str, ...], str], host_modules: dict | None = None
     ):
+        """Init (Program helper for the L Core frontend)."""
         self.sources = {tuple(k): v for k, v in sources.items()}
         self.host_modules = host_modules or {}
         self.parsed = {m: Parser(s).program() for m, s in self.sources.items()}
@@ -3118,10 +3435,12 @@ class Program:
         ).checked()
 
     def _toposort(self):
+        """Toposort (Program helper for the L Core frontend)."""
         state = {}
         out = []
 
         def dfs(m, path):
+            """Dfs (_toposort helper for the L Core frontend)."""
             if state.get(m) == 1:
                 raise LangError(
                     "import cycle: " + " -> ".join(".".join(x) for x in path + [m])
@@ -3142,6 +3461,7 @@ class Program:
         return out
 
     def _rewrite_merge(self):
+        """Rewrite merge (Program helper for the L Core frontend)."""
         ds = []
         for m in self.order:
             for alias, target in self.imports[m].items():
@@ -3159,6 +3479,7 @@ class Program:
         return N("module", (tuple(ds),), None)
 
     def _resolve_source_name(self, m, q, node=None):
+        """Resolve source name (Program helper for the L Core frontend)."""
         if not q:
             return q
         first = q[0]
@@ -3182,6 +3503,7 @@ class Program:
         return q
 
     def _ty(self, m, t, gps=frozenset()):
+        """Ty (Program helper for the L Core frontend)."""
         if is_const_array(t):
             return const_arr(self._ty(m, t.a[0], gps))
         if t.kind == "name":
@@ -3202,6 +3524,7 @@ class Program:
         return t
 
     def _expr(self, m, e, gps=frozenset()):
+        """Expr (Program helper for the L Core frontend)."""
         if not isinstance(e, N):
             return e
         k = e.kind
@@ -3246,6 +3569,7 @@ class Program:
         return N(k, tuple(aa), e.span)
 
     def _pattern(self, m, p, gps=frozenset()):
+        """Pattern (Program helper for the L Core frontend)."""
         if p.kind == "p_name":
             q, subs = p.a
             # plain binding must not be rewritten merely because its spelling matches some top-level thing; no-shadowing checker will reject such spelling anyway.
@@ -3264,6 +3588,7 @@ class Program:
         )
 
     def _stmt(self, m, s, gps=frozenset()):
+        """Stmt (Program helper for the L Core frontend)."""
         k = s.kind
         if k == "var":
             return N(
@@ -3356,6 +3681,7 @@ class Program:
         return N(k, s.a, s.span)
 
     def _decl(self, m, d):
+        """Decl (Program helper for the L Core frontend)."""
         k = d.kind
         if k == "const":
             pub, n, t, e = d.a
@@ -3416,9 +3742,11 @@ class Program:
         raise LangError("unexpected decl during link")
 
     def interpreter(self):
+        """Interpreter (Program helper for the L Core frontend)."""
         return Interpreter(self.checked, self.host_modules)
 
     def run(self, module: tuple[str, ...], name="main", args=()):
+        """Run (Program helper for the L Core frontend)."""
         return self.interpreter().run(internal_name(tuple(module), name), args)
 
 
@@ -3427,6 +3755,7 @@ class Program:
 
 @dataclass(frozen=True)
 class OpaqueVal:
+    """Runtime opaque handle owned by a host module."""
     type_id: tuple[str, ...]
     payload: Any
 
@@ -3435,6 +3764,7 @@ class HostModule:
     """Typed implementation-defined module surface. No ABI/layout is exposed to language code."""
 
     def __init__(self, name: tuple[str, ...]):
+        """Init (HostModule helper for the L Core frontend)."""
         self.name = tuple(name)
         self.types = set()
         self.func_types = {}
@@ -3443,20 +3773,24 @@ class HostModule:
         self.const_values = {}
 
     def opaque_type(self, name: str):
+        """Opaque type (HostModule helper for the L Core frontend)."""
         self.types.add(name)
         return name_ty(("__host__",) + self.name + (name,))
 
     def function(self, name: str, params: list[Ty], ret: Ty, fn: Callable):
+        """Function (HostModule helper for the L Core frontend)."""
         self.func_types[name] = fnty(params, ret)
         self.func_values[name] = HostFnVal(fn)
         return self
 
     def constant(self, name: str, ty: Ty, val: Any):
+        """Constant (HostModule helper for the L Core frontend)."""
         self.const_types[name] = ty
         self.const_values[name] = val
         return self
 
     def resolve_type(self, rest, args):
+        """Resolve type (HostModule helper for the L Core frontend)."""
         if len(rest) != 1 or rest[0] not in self.types:
             raise LangError(f'unknown opaque type {".".join(self.name+tuple(rest))}')
         if args:
@@ -3464,6 +3798,7 @@ class HostModule:
         return name_ty(("__host__",) + self.name + (rest[0],))
 
     def member_type(self, rest, node=None):
+        """Member type (HostModule helper for the L Core frontend)."""
         if len(rest) != 1:
             raise LangError(
                 "host module member access must be direct",
@@ -3479,6 +3814,7 @@ class HostModule:
         )
 
     def get_value(self, rest):
+        """Get value (HostModule helper for the L Core frontend)."""
         if len(rest) != 1:
             raise TrapSig("bad host member")
         n = rest[0]

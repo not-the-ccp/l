@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""SDK command implementation: check, run, compile, exec, edit, and lsp.
+
+Loads L projects (stdlib plus user sources), builds host sets, and runs
+programs through the tree interpreter or bytecode VM. Editor and LSP
+subprocesses are hosted by hosts.run.
+"""
 from __future__ import annotations
 
 import argparse
@@ -10,6 +16,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+
+# Editor/LSP processes are hosted directly by src/hosts/run.py.
+HOSTS_RUN = HERE.parent / "hosts" / "run.py"
 
 from lang.bytecode import BCVM, BCCompiler
 from lang import UNITV, LangError, Parser, Program, TrapSig, UnitVal, internal_name
@@ -45,6 +54,7 @@ SLANG_MODULE_NAMES = {
 
 
 def stdlib_sources() -> dict[tuple[str, ...], str]:
+    """Load the bundled stdlib L sources keyed by module path."""
     out: dict[tuple[str, ...], str] = {}
     for base in (CORE_LIB, SLANG_LIB, HOST_LIB):
         for p in sorted(base.glob("*.l")):
@@ -70,6 +80,7 @@ if IS_LINUX:
 
 
 def module_name(root: Path, path: Path) -> tuple[str, ...]:
+    """Map a project file to its dotted module path under a root."""
     rel = path.resolve().relative_to(root.resolve())
     return tuple(rel.with_suffix("").parts)
 
@@ -77,6 +88,7 @@ def module_name(root: Path, path: Path) -> tuple[str, ...]:
 def project_sources(
     entry: Path, root: Path
 ) -> tuple[dict[tuple[str, ...], str], tuple[str, ...]]:
+    """Load an entry file plus its transitive L imports."""
     entry = entry.resolve()
     root = root.resolve()
     if not entry.is_file():
@@ -94,6 +106,7 @@ def project_sources(
     entry_mod = module_name(root, entry)
 
     def load(mod: tuple[str, ...], forced_path: Path | None = None):
+        """Load (project_sources helper for the L SDK)."""
         if mod in sources or mod in visiting or mod in HOST_MODULES:
             return
         visiting.add(mod)
@@ -131,6 +144,7 @@ def project_sources(
 
 
 def make_hosts_full(argv: list[str]):
+    """Build the full host set with explicit process/terminal owners."""
     ph = ProcessHost()
     th = TermHost()
     hosts = {
@@ -159,6 +173,7 @@ def make_hosts(argv: list[str]):
 
 
 def cleanup(ph: ProcessHost, th: TermHost, lh=None):
+    """Release terminal, process, and Linux host resources."""
     try:
         th.leave()
     finally:
@@ -170,6 +185,7 @@ def cleanup(ph: ProcessHost, th: TermHost, lh=None):
 
 
 def build_program(entry: Path, root: Path, argv: list[str]):
+    """Load, link, and check a program with its host set."""
     sources, mod = project_sources(entry, root)
     hosts, ph, th, lh = make_hosts_full(argv)
     try:
@@ -183,12 +199,14 @@ def build_program(entry: Path, root: Path, argv: list[str]):
 
 
 def printable_result(v):
+    """Render an L result value for display."""
     if v is UNITV or isinstance(v, UnitVal):
         return "()"
     return repr(v)
 
 
 def exit_status(v) -> int:
+    """Map an L result value to a process exit status."""
     if v is UNITV or isinstance(v, UnitVal):
         return 0
     if isinstance(v, bool):
@@ -199,6 +217,7 @@ def exit_status(v) -> int:
 
 
 def cmd_check(ns) -> int:
+    """Implement the check subcommand."""
     entry = Path(ns.file)
     root = Path(ns.root) if ns.root else entry.resolve().parent
     p, mod, hosts, ph, th, lh = build_program(entry, root, [])
@@ -210,6 +229,7 @@ def cmd_check(ns) -> int:
 
 
 def cmd_run(ns) -> int:
+    """Implement the run subcommand."""
     entry = Path(ns.file)
     root = Path(ns.root) if ns.root else entry.resolve().parent
     p, mod, hosts, ph, th, lh = build_program(entry, root, ns.args)
@@ -227,6 +247,7 @@ def cmd_run(ns) -> int:
 
 
 def serializable_bc(p: Program) -> BCCompiler:
+    """Prepare bytecode stripped of unpicklable host callables."""
     bc = BCCompiler(p.checked)
     # Host modules contain Python callables. Bytecode references hosts symbolically,
     # so the artifact does not need those callables; the runner reconstructs them.
@@ -236,6 +257,7 @@ def serializable_bc(p: Program) -> BCCompiler:
 
 
 def cmd_compile(ns) -> int:
+    """Implement the compile subcommand."""
     entry = Path(ns.file)
     root = Path(ns.root) if ns.root else entry.resolve().parent
     p, mod, hosts, ph, th, lh = build_program(entry, root, [])
@@ -256,6 +278,7 @@ def cmd_compile(ns) -> int:
 
 
 def cmd_exec(ns) -> int:
+    """Implement the exec subcommand."""
     path = Path(ns.file)
     payload = pickle.loads(path.read_bytes())
     if not isinstance(payload, dict) or payload.get("magic") != ARTIFACT_MAGIC:
@@ -271,6 +294,7 @@ def cmd_exec(ns) -> int:
 
 
 def cmd_edit(ns) -> int:
+    """Implement the edit subcommand."""
     path = Path(ns.file)
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -289,22 +313,24 @@ def cmd_edit(ns) -> int:
         server = "json-lsp"
     elif server == "ini":
         server = "ini-lsp"
-    cmd = [sys.executable, str(HERE / "run_lang.py"), "editor-vm", str(path), server]
+    cmd = [sys.executable, str(HOSTS_RUN), "editor-vm", str(path), server]
     return subprocess.call(cmd)
 
 
 def cmd_lsp(ns) -> int:
+    """Implement the lsp subcommand."""
     name = {
         "l": "slang-lsp",
         "slang": "slang-lsp",
         "json": "json-lsp",
         "ini": "ini-lsp",
     }[ns.kind]
-    os.execv(sys.executable, [sys.executable, str(HERE / "run_lang.py"), name + "-vm"])
+    os.execv(sys.executable, [sys.executable, str(HOSTS_RUN), name + "-vm"])
     return 127
 
 
 def parser() -> argparse.ArgumentParser:
+    """Build the SDK argument parser."""
     p = argparse.ArgumentParser(prog="l", description="Small L language SDK")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -361,6 +387,7 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    """Entry point for the SDK command implementation."""
     ns = parser().parse_args()
     try:
         return ns.func(ns)

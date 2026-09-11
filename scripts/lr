@@ -1,29 +1,63 @@
 #!/usr/bin/env python3
+"""L compile-and-run driver: build an L source file and execute it.
+
+Usage:
+    scripts/lr SOURCE [--root DIR] [--cc CC] [-- ARGS...]
+"""
+
 from __future__ import annotations
-import argparse, os, subprocess, sys, tempfile
+
+import argparse
+import os
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
-HERE=Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(HERE / 'src'))
+
+HERE = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(HERE / "src"))
+
 from lang import LangError
 from lang.cli_common import VERSION, emit_lang_error
 from tools.native_compile import build_user, compile_native
 
-p=argparse.ArgumentParser(prog='./lr',description='L compile-and-run driver')
-p.add_argument('--version',action='version',version=f'lr {VERSION}')
-p.add_argument('source',nargs='?')
-p.add_argument('--root')
-p.add_argument('--cc',default=os.environ.get('CC','cc'))
-p.add_argument('args',nargs=argparse.REMAINDER)
-ns=p.parse_args()
-if not ns.source:p.error('source is required')
-args=ns.args
-if args and args[0]=='--':args=args[1:]
-try:
-    program,entry=build_user(Path(ns.source).resolve(),Path(ns.root).resolve() if ns.root else None)
-    with tempfile.TemporaryDirectory(prefix='lr-') as td:
-        exe=Path(td)/'program';compile_native(program,entry,exe,None,ns.cc)
-        raise SystemExit(subprocess.call([str(exe),*args]))
-except LangError as e:
-    emit_lang_error(e,Path(ns.source).resolve());raise SystemExit(1)
-except subprocess.CalledProcessError as e:
-    print(f'C compiler failed with status {e.returncode}',file=sys.stderr);raise SystemExit(e.returncode)
+
+def parser() -> argparse.ArgumentParser:
+    """Build the lr argument parser."""
+    p = argparse.ArgumentParser(prog="./lr", description="L compile-and-run driver")
+    p.add_argument("--version", action="version", version=f"lr {VERSION}")
+    p.add_argument("source", nargs="?")
+    p.add_argument("--root")
+    p.add_argument("--cc", default=os.environ.get("CC", "cc"))
+    p.add_argument("args", nargs=argparse.REMAINDER)
+    return p
+
+
+def main() -> int:
+    """Compile an L source file to a temp executable and run it."""
+    ns = parser().parse_args()
+    if not ns.source:
+        parser().error("source is required")
+    args = ns.args
+    if args and args[0] == "--":
+        args = args[1:]
+    try:
+        program, entry = build_user(
+            Path(ns.source).resolve(), Path(ns.root).resolve() if ns.root else None
+        )
+        with tempfile.TemporaryDirectory(prefix="lr-") as td:
+            exe = Path(td) / "program"
+            compile_native(program, entry, exe, None, ns.cc)
+            return subprocess.call([str(exe), *args])
+    except LangError as e:
+        emit_lang_error(e, Path(ns.source).resolve())
+        return 1
+    except subprocess.CalledProcessError as e:
+        print(
+            f"C compiler failed with status {e.returncode}", file=sys.stderr
+        )
+        return e.returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

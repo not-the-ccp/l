@@ -1,3 +1,8 @@
+"""Core control-flow and call-graph construction over L source syntax.
+
+Builds per-function control-flow graphs and renders them (and the
+project-wide call graph) as DOT or Mermaid for the analyze source tool.
+"""
 from __future__ import annotations
 
 import re
@@ -9,6 +14,7 @@ from lang import N
 
 @dataclass
 class CFGNode:
+    """Control-flow graph node: identity, kind, label, and optional source position."""
     id: str
     kind: str
     label: str
@@ -19,6 +25,7 @@ class CFGNode:
 
 @dataclass
 class CFGEdge:
+    """Control-flow graph edge: source, target, label, and flow kind."""
     source: str
     target: str
     label: str | None = None
@@ -27,18 +34,22 @@ class CFGEdge:
 
 @dataclass
 class LoopContext:
+    """Loop compilation context: break/continue targets for the active loop."""
     break_target: str
     continue_target: str
     break_used: bool = False
 
 
 def compact(text: str, limit: int = 140) -> str:
+    """Compact a dotted identifier path for graph labels."""
     text = re.sub(r"\s+", " ", text.strip())
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 class CFGBuilder:
+    """Control-flow graph builder over L function bodies."""
     def __init__(self, source: str):
+        """Init (CFGBuilder helper for the L Core frontend)."""
         self.source = source
         self.nodes: list[CFGNode] = []
         self.edges: list[CFGEdge] = []
@@ -51,6 +62,7 @@ class CFGBuilder:
     def node(
         self, kind: str, label: str, ast: N | None = None, synthetic: bool = False
     ) -> str:
+        """Node (CFGBuilder helper for the L Core frontend)."""
         ident = f"n{self.serial}"
         self.serial += 1
         sp = getattr(ast, "span", None)
@@ -69,13 +81,16 @@ class CFGBuilder:
     def edge(
         self, src: str, dst: str, label: str | None = None, kind: str = "flow"
     ) -> None:
+        """Edge (CFGBuilder helper for the L Core frontend)."""
         self.edges.append(CFGEdge(src, dst, label, kind))
 
     def connect(self, frontier: list[tuple[str, str | None]], dst: str) -> None:
+        """Connect (CFGBuilder helper for the L Core frontend)."""
         for src, label in frontier:
             self.edge(src, dst, label)
 
     def text(self, ast: N | None, fallback: str = "?") -> str:
+        """Text (CFGBuilder helper for the L Core frontend)."""
         sp = getattr(ast, "span", None)
         if sp is None:
             return fallback
@@ -85,6 +100,7 @@ class CFGBuilder:
             return fallback
 
     def stmt_text(self, stmt: N) -> str:
+        """Stmt text (CFGBuilder helper for the L Core frontend)."""
         if stmt.kind == "assign":
             lhs, op, rhs = stmt.a
             return f"{self.text(lhs)} {op} {self.text(rhs)}"
@@ -100,6 +116,7 @@ class CFGBuilder:
     def build(
         self, body: tuple[N, ...]
     ) -> tuple[list[CFGNode], list[CFGEdge], list[int], int]:
+        """Build (CFGBuilder helper for the L Core frontend)."""
         out = self.block(body, [(self.entry, None)], None, 0)
         for src, label in out:
             self.edge(src, self.exit, label)
@@ -112,6 +129,7 @@ class CFGBuilder:
         loop: LoopContext | None,
         depth: int,
     ):
+        """Block (CFGBuilder helper for the L Core frontend)."""
         self.max_nesting = max(self.max_nesting, depth)
         cur = list(frontier)
         for stmt in body:
@@ -127,6 +145,7 @@ class CFGBuilder:
         loop: LoopContext | None,
         depth: int,
     ):
+        """Stmt (CFGBuilder helper for the L Core frontend)."""
         k = stmt.kind
         if k == "if":
             cond, yes, no = stmt.a
@@ -226,6 +245,7 @@ class CFGBuilder:
 
 
 def mermaid_escape(text: str) -> str:
+    """Escape graph text for Mermaid labels."""
     return (
         text.replace("&", "&amp;")
         .replace('"', "&quot;")
@@ -235,10 +255,12 @@ def mermaid_escape(text: str) -> str:
 
 
 def dot_escape(text: str) -> str:
+    """Escape graph text for DOT labels."""
     return text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
 def render_cfg_mermaid(funcs) -> str:
+    """Render one control-flow graph in Mermaid syntax."""
     out = ["flowchart TD"]
     for fi, fn in enumerate(funcs):
         out.append(f'  subgraph sg{fi}["{mermaid_escape(fn.qualified_name)}"]')
@@ -264,6 +286,7 @@ def render_cfg_mermaid(funcs) -> str:
 
 
 def render_cfg_dot(funcs) -> str:
+    """Render one control-flow graph in DOT syntax."""
     out = ["digraph l_cfg {", "  rankdir=TB;"]
     for fi, fn in enumerate(funcs):
         out += [
@@ -290,6 +313,7 @@ def render_cfg_dot(funcs) -> str:
 
 
 def call_edges(funcs):
+    """Collect caller-to-callee edges across analyzed functions."""
     selected = {f.qualified_name for f in funcs}
     counts = {}
     for fn in funcs:
@@ -301,6 +325,7 @@ def call_edges(funcs):
 
 
 def render_calls_mermaid(funcs) -> str:
+    """Render the project call graph in Mermaid syntax."""
     edges = call_edges(funcs)
     internal = {f.qualified_name for f in funcs}
     names = sorted(internal | {b for _, b, _, _ in edges})
@@ -316,6 +341,7 @@ def render_calls_mermaid(funcs) -> str:
 
 
 def render_calls_dot(funcs) -> str:
+    """Render the project call graph in DOT syntax."""
     edges = call_edges(funcs)
     internal = {f.qualified_name for f in funcs}
     names = sorted(internal | {b for _, b, _, _ in edges})

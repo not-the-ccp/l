@@ -1,3 +1,8 @@
+"""Terminal key-event framing shared by the Python host implementations.
+
+Frames stdin bytes into the same key events as the native L host: one
+ordinary byte, one complete UTF-8 scalar, or one CSI/SS3 escape sequence.
+"""
 from __future__ import annotations
 
 import os
@@ -13,10 +18,12 @@ class KeyReader:
     """
 
     def __init__(self, fd: int = 0):
+        """Init (KeyReader helper for the L host runner)."""
         self.fd = fd
         self._pushback = bytearray()
 
     def _read_byte(self, timeout_ms: int | None) -> int | None:
+        """Read byte (KeyReader helper for the L host runner)."""
         if self._pushback:
             value = self._pushback[0]
             del self._pushback[0]
@@ -31,6 +38,7 @@ class KeyReader:
         return data[0]
 
     def read(self, timeout_ms: int | None = None) -> bytes | None:
+        """Read (KeyReader helper for the L host runner)."""
         first = self._read_byte(timeout_ms)
         if first is None:
             return None

@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-from __future__ import annotations
+"""Public native compiler entry point with hosted-profile extensions.
 
-"""Public native compiler entrypoint with hosted-profile extensions."""
+The compiler implementation lives in :mod:`tools._native_compile`. This
+module extends its host-call table with the Linux hosted-profile IDs before
+re-exporting the implementation's public names, so natively compiled
+executables can reach Linux descriptors, process groups, and TTY control.
+"""
+
+from __future__ import annotations
 
 import tools._native_compile as _impl
 
@@ -35,9 +41,37 @@ _impl.HOST.update(
     }
 )
 
-globals().update(
-    {name: value for name, value in vars(_impl).items() if not name.startswith("_")}
+from tools._native_compile import (
+    BOP,
+    HERE,
+    HOST,
+    OP,
+    PK,
+    TY,
+    UOP,
+    NativeEmitter,
+    build_tool,
+    build_user,
+    compile_native,
+    default_hosts,
+    main,
 )
 
+__all__ = [
+    "BOP",
+    "HERE",
+    "HOST",
+    "OP",
+    "PK",
+    "TY",
+    "UOP",
+    "NativeEmitter",
+    "build_tool",
+    "build_user",
+    "compile_native",
+    "default_hosts",
+    "main",
+]
+
 if __name__ == "__main__":
-    raise SystemExit(_impl.main())
+    raise SystemExit(main())

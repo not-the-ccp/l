@@ -2,7 +2,7 @@
 
 ## Bootstrap/reference frontend
 
-`src/lang/_core.py` contains the current lexer/parser/checker/tree interpreter/module linker/host-module model.
+`src/lang/core.py` contains the current lexer/parser/checker/tree interpreter/module linker/host-module model.
 
 `src/lang/bytecode.py` contains the bytecode compiler/VM.
 

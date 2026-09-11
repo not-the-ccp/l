@@ -1,3 +1,9 @@
+"""Atomic file publication for compiler drivers.
+
+Build artifacts are staged beside their destination and moved into place
+with os.replace only after a successful build, so a failed compile can
+never truncate an existing output.
+"""
 from __future__ import annotations
 
 import os

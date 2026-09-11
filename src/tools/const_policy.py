@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""Const-policy check: const-by-default array parameter audit for L sources.
+"""
 from __future__ import annotations
 
 """Enforce L's const-by-default array parameter policy.
@@ -33,6 +35,7 @@ WAIVER_RE = re.compile(
 
 @dataclass
 class Module:
+    """Parsed L module under audit with its source path."""
     path: Path
     source: str
     ast: N
@@ -41,10 +44,12 @@ class Module:
 
 
 def is_mutable_array(ty) -> bool:
+    """Report whether a source type spelling is a mutable array."""
     return getattr(ty, "kind", None) == "array" and not is_const_array(ty)
 
 
 def direct_name(node: object, name: str) -> bool:
+    """Resolve the direct callee name of a call expression."""
     return (
         isinstance(node, N)
         and node.kind == "qname"
@@ -54,6 +59,7 @@ def direct_name(node: object, name: str) -> bool:
 
 
 def l_files() -> list[Path]:
+    """Enumerate L source files under a directory."""
     out: list[Path] = []
     for path in ROOT.rglob("*.l"):
         rel = path.relative_to(ROOT)
@@ -70,6 +76,7 @@ def l_files() -> list[Path]:
 
 
 def parse_modules(paths: list[Path]) -> dict[Path, Module]:
+    """Parse every L file under a root into auditable modules."""
     modules: dict[Path, Module] = {}
     errors: list[str] = []
     for path in paths:
@@ -99,6 +106,7 @@ def resolve_import(
     modules: dict[Path, Module],
     by_stem: dict[str, list[Path]],
 ) -> Module | None:
+    """Resolve an import path to an audited module, if present."""
     candidates = [
         module.path.parent.joinpath(*qname).with_suffix(".l"),
         ROOT.joinpath(*qname).with_suffix(".l"),
@@ -123,6 +131,7 @@ def resolve_import(
 
 
 def waivers(module: Module, fn: N) -> dict[str, str]:
+    """Load the const-policy waiver list for known exceptions."""
     lines = module.source.splitlines()
     line = (fn.span.line if fn.span else 1) - 2
     found: dict[str, str] = {}
@@ -148,6 +157,7 @@ def callee_param_type(
     modules: dict[Path, Module],
     by_stem: dict[str, list[Path]],
 ):
+    """Look up a callee parameter type across audited modules."""
     if callee.kind != "qname":
         return None
     qname = tuple(callee.a[0])
@@ -176,6 +186,7 @@ def audit_function(
     modules: dict[Path, Module],
     by_stem: dict[str, list[Path]],
 ) -> list[str]:
+    """Audit one function for mutable-array parameter policy."""
     _public, fn_name, _gps, params, ret, body = fn.a
     mutable = {name for name, ty in params if is_mutable_array(ty)}
     if not mutable:
@@ -185,14 +196,17 @@ def audit_function(
     opaque: dict[str, list[str]] = {name: [] for name in mutable}
 
     def reason(name: str, text: str) -> None:
+        """Reason (audit_function helper for the L const-policy check)."""
         if text not in reasons[name]:
             reasons[name].append(text)
 
     def escape(name: str, text: str) -> None:
+        """Escape (audit_function helper for the L const-policy check)."""
         if text not in opaque[name]:
             opaque[name].append(text)
 
     def walk_expr(node: object) -> None:
+        """Walk expr (audit_function helper for the L const-policy check)."""
         if not isinstance(node, N):
             return
         if node.kind == "call":
@@ -230,6 +244,7 @@ def audit_function(
             walk_value(item)
 
     def walk_stmt(node: N) -> None:
+        """Walk stmt (audit_function helper for the L const-policy check)."""
         if node.kind == "assign":
             lhs, _op, rhs = node.a
             if isinstance(lhs, N) and lhs.kind == "index":
@@ -284,6 +299,7 @@ def audit_function(
             walk_value(item)
 
     def walk_value(value: object) -> None:
+        """Walk value (audit_function helper for the L const-policy check)."""
         if isinstance(value, N):
             if value.kind in {
                 "assign", "return", "var", "for", "if", "while", "forin",
@@ -323,6 +339,7 @@ def audit_function(
 
 
 def run(paths: list[Path]) -> list[str]:
+    """Audit a source tree and report violations."""
     modules = parse_modules(paths)
     by_stem: dict[str, list[Path]] = {}
     for path in modules:
@@ -336,6 +353,7 @@ def run(paths: list[Path]) -> list[str]:
 
 
 def self_test() -> None:
+    """Run the built-in const-policy self test."""
     samples = {
         "read": "fn f(xs: []u8) -> u64 { return len(xs); }",
         "write": "fn f(xs: []u8) { xs[0] = 1; }",
@@ -358,6 +376,7 @@ def self_test() -> None:
 
 
 def main() -> int:
+    """Entry point for the const-policy check."""
     if "--self-test" in sys.argv:
         self_test()
         print("const-by-default policy self-test PASS")
