@@ -41,6 +41,34 @@ the toolchain version. `src/lang/cli_common.py` reads it at import time for
 `scripts/lc --version` / `scripts/lr --version`; do not duplicate the
 version string anywhere else.
 
+## Docs-coherence rule (binding)
+
+Any commit changing language semantics, stdlib API, host API, or toolchain
+behavior MUST update the corresponding docs in the SAME commit, or the commit
+is subject to revert on review. Mapping:
+
+- Core semantics/grammar/checker/VM behavior -> `docs/language/01-core-language.md`
+  + `docs/language/02-grammar.ebnf` (if syntax) + `docs/language/03-core-semantics.md`
+  + `docs/language/12-language-tour.md` (if user-visible) + conformance vectors.
+- Rationale/considered-alternatives -> `docs/design/09-design-rationale.md`.
+- Open/deferred questions -> `docs/design/10-open-questions.md` (move on resolve).
+- Stdlib API/behavior (`lib/std/`, `lib/slang/`) -> the module's doc header
+  + hosted/tour examples that use it.
+- Host/toolchain API or behavior (`lib/host/`, `src/hosts/`, `src/vm/`,
+  `tools/`, `scripts/`) -> `docs/language/05-host-module-interface.md`
+  (boundary) or `docs/architecture/00-architecture.md` (layering) + tool docs.
+- Note: host files live at `src/vm/embed.c` + `src/vm/embed.h`, `src/hosts/`, `lib/host/`.
+- New privileged text/string representation or freezing rule -> architecture doc
+  §1/`09` rationale entry (text is currently deliberate non-Core; changing that
+  is a layering change, not a patch).
+
+Review checklist (reviewer verifies all that apply):
+[ ] spec + grammar + semantics + tour agree (no stale sentence left);
+[ ] `tests/check_docs.py` and `python3 tests/core_conformance.py` pass;
+[ ] `./scripts/test.sh` passes from repo root;
+[ ] stdlib/host renames carry the deprecation alias for one release;
+[ ] `10-open-questions.md` updated (resolved moved, deferred recorded w/ trigger).
+
 ## Test conventions
 
 - Tests live in `tests/`: `core_conformance.py` (Core conformance seed),
