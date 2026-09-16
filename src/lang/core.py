@@ -2995,7 +2995,10 @@ class Interpreter:
                 nv = self.eval(r)
             else:
                 nv = self.scalar_op(opx[:-1], old, self.eval(r), l.ty)
-            p.set(copy_value(nv))
+            try:
+                p.set(copy_value(nv))
+            except IndexError:
+                raise TrapSig("array index out of bounds")
             return
         if k == "exprstmt":
             self.eval(s.a[0])
@@ -3334,26 +3337,66 @@ class Interpreter:
             i = self.eval(e.a[1])
             if i < 0 or i >= len(a.items):
                 raise TrapSig("array index out of bounds")
-            return Place(lambda: a.items[i], lambda v: a.items.__setitem__(i, v))
+            # Snapshot (array, index); the cell is resolved fresh at each
+            # get/set so a RHS that resizes the array revalidates instead of
+            # writing through a stale offset. Index expressions still run once.
+            def _get(a=a, i=i):
+                if i < 0 or i >= len(a.items):
+                    raise TrapSig("array index out of bounds")
+                return a.items[i]
+
+            def _set(v, a=a, i=i):
+                if i < 0 or i >= len(a.items):
+                    raise TrapSig("array index out of bounds")
+                a.items[i] = v
+
+            return Place(_get, _set)
         if e.kind == "unary" and e.a[0] == "*":
             r = self.eval(e.a[1])
             return Place(lambda: r.value, lambda v: setattr(r, "value", v))
         if e.kind == "field":
             # If the base is itself an assignable value (notably an array element
-            # containing a value struct), preserve that storage identity instead of
-            # evaluating/copying the base.  A ref-valued expression may be evaluated
-            # once because the referent itself supplies storage identity.
+            # containing a value struct), keep the base *place* and resolve the
+            # field lazily so a RHS that resizes the array revalidates the
+            # bounds at write time instead of mutating a detached temporary.
+            # A ref-valued expression may be evaluated once because the referent
+            # itself supplies storage identity.
             try:
                 bp = self.place(e.a[0])
-                b = bp.get()
+                b0 = bp.get()
             except TrapSig:
                 b = self.eval(e.a[0])
-            if isinstance(b, RefObj):
-                b = b.value
-            if not isinstance(b, StructVal):
+                if isinstance(b, RefObj):
+                    b = b.value
+                if not isinstance(b, StructVal):
+                    raise TrapSig("field place on non-struct")
+                f = e.a[1]
+                return Place(
+                    lambda: b.fields[f], lambda v: b.fields.__setitem__(f, v)
+                )
+            if isinstance(b0, RefObj):
+                b0 = b0.value
+            if not isinstance(b0, StructVal):
                 raise TrapSig("field place on non-struct")
             f = e.a[1]
-            return Place(lambda: b.fields[f], lambda v: b.fields.__setitem__(f, v))
+
+            def _fget(bp=bp, f=f):
+                b = bp.get()
+                if isinstance(b, RefObj):
+                    b = b.value
+                if not isinstance(b, StructVal):
+                    raise TrapSig("field place on non-struct")
+                return b.fields[f]
+
+            def _fset(v, bp=bp, f=f):
+                b = bp.get()
+                if isinstance(b, RefObj):
+                    b = b.value
+                if not isinstance(b, StructVal):
+                    raise TrapSig("field place on non-struct")
+                b.fields[f] = v
+
+            return Place(_fget, _fset)
         raise TrapSig("not a place")
 
     def scalar_op(self, opx, a, b, t):

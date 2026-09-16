@@ -273,7 +273,7 @@ Assignable places include locals, mutable-array elements, dereferenced refs, fie
 
 An element of `const []T` is not an assignable place. This restriction is shallow: obtaining a `ref U` or mutable `[]U` from a const array preserves the mutation capability carried by that value.
 
-Every subexpression used to identify an assignment place is evaluated exactly once. Compound assignment evaluates the place once, reads it, evaluates the RHS, applies the operation, and writes it back.
+Every subexpression used to identify an assignment place is evaluated exactly once. Compound assignment evaluates the place once, reads it, evaluates the RHS, applies the operation, and writes it back. The write revalidates array-element places, so a RHS that shrinks the array turns a stale index into an array-bounds trap.
 
 ## Patterns
 

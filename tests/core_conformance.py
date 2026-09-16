@@ -424,6 +424,62 @@ trap(
     "bad shift trap",
     "fn main() -> u8 { var x: u8 = 1; var n: u64 = 8; return x << n; }",
 )
+trap(
+    "stale place write traps",
+    "fn main() -> i64 { var a: []i64 = [1,2,3]; a[2] = pop(a); return 0; }",
+)
+trap(
+    "stale compound place write traps",
+    "fn main() -> i64 { var a: []i64 = [1,2,3]; a[2] += pop(a); return 0; }",
+)
+trap(
+    "stale nested place write traps",
+    r"""
+struct S { x: i64, }
+fn get(a: []S) -> i64 { pop(a); return 5; }
+fn main() -> i64 {
+    var a: []S = [S { x: 1 }, S { x: 2 }];
+    a[1].x = get(a);
+    return 0;
+}
+""",
+)
+ok(
+    "resized array keeps valid place write",
+    "fn main() -> i64 {"
+    " var a: []i64 = [1,2,3]; a[0] = pop(a);"
+    " return a[0] * 10 + len(a) as i64; }",
+    32,
+)
+ok(
+    "grown array keeps place write",
+    r"""
+fn grow(a: []i64) -> i64 {
+    push(a, 9); push(a, 9); push(a, 9); push(a, 9);
+    push(a, 9); push(a, 9); push(a, 9); push(a, 9);
+    return 7;
+}
+fn main() -> i64 {
+    var a: []i64 = [1];
+    a[0] = grow(a);
+    return a[0] * 10 + len(a) as i64;
+}
+""",
+    79,
+)
+ok(
+    "resized array keeps valid nested place write",
+    r"""
+struct S { x: i64, }
+fn get(a: []S) -> i64 { pop(a); return 5; }
+fn main() -> i64 {
+    var a: []S = [S { x: 1 }, S { x: 2 }];
+    a[0].x = get(a);
+    return a[0].x * 10 + len(a) as i64;
+}
+""",
+    51,
+)
 
 compile_error("no null token", "fn main() { var x = null; }", "unknown")
 compile_error(

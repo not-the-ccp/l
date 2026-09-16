@@ -605,16 +605,23 @@ class BCVM:
                 S.append(self.local_place(ins[1]))
             elif op == "FIELD_PLACE":
                 p = S.pop()
-                base = p.get()
                 f = ins[1]
-                if isinstance(base, RefObj):
-                    base = base.value
-                S.append(
-                    Place(
-                        lambda base=base, f=f: base.fields[f],
-                        lambda v, base=base, f=f: base.fields.__setitem__(f, v),
-                    )
-                )
+                # Keep the base place and resolve the field lazily so a RHS
+                # that resizes an array revalidates at write time instead of
+                # mutating a detached temporary. Place identity still runs once.
+                def _fget(p=p, f=f):
+                    base = p.get()
+                    if isinstance(base, RefObj):
+                        base = base.value
+                    return base.fields[f]
+
+                def _fset(v, p=p, f=f):
+                    base = p.get()
+                    if isinstance(base, RefObj):
+                        base = base.value
+                    base.fields[f] = v
+
+                S.append(Place(_fget, _fset))
             elif op == "VALUE_FIELD_PLACE":
                 base = S.pop()
                 f = ins[1]
@@ -631,12 +638,19 @@ class BCVM:
                 a = S.pop()
                 if i < 0 or i >= len(a.items):
                     raise TrapSig("array index out of bounds")
-                S.append(
-                    Place(
-                        lambda a=a, i=i: a.items[i],
-                        lambda v, a=a, i=i: a.items.__setitem__(i, v),
-                    )
-                )
+                # Snapshot (array, index); resolve the cell fresh at each
+                # get/set so a RHS that resizes the array revalidates.
+                def _iget(a=a, i=i):
+                    if i < 0 or i >= len(a.items):
+                        raise TrapSig("array index out of bounds")
+                    return a.items[i]
+
+                def _iset(v, a=a, i=i):
+                    if i < 0 or i >= len(a.items):
+                        raise TrapSig("array index out of bounds")
+                    a.items[i] = v
+
+                S.append(Place(_iget, _iset))
             elif op == "DEREF_PLACE":
                 r = S.pop()
                 S.append(
@@ -654,7 +668,10 @@ class BCVM:
                         f"value={type(v).__name__}; frames={chain}; "
                         f"stack={[type(x).__name__ for x in S[-12:]]}"
                     )
-                p.set(copy_value(v))
+                try:
+                    p.set(copy_value(v))
+                except IndexError:
+                    raise TrapSig("array index out of bounds")
             elif op == "DUP":
                 S.append(S[-1])
             elif op == "POP":

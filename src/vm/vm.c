@@ -50,7 +50,20 @@ static int l_wcwidth(wchar_t wc) {
 /* Generated-program ABI. Keep this intentionally boring. */
 typedef struct LObj LObj;
 typedef struct LValue LValue;
-typedef struct LPlace { LObj *owner; LValue *cell; } LPlace;
+/* Array-element places snapshot (array, index) and revalidate at each
+   access so a RHS that resizes the array traps instead of writing through
+   a stale items pointer (use-after-realloc on growth, past-end on shrink).
+   Field places derived from an array element additionally snapshot the
+o   element object (root); a store that finds a different object (or an
+   out-of-range index) reports the classified array-bounds trap. Direct
+   (non-array) places keep owner/cell with arr == NULL. */
+typedef struct LPlace {
+    LObj *owner;
+    LValue *cell;
+    LObj *arr;
+    size_t idx;
+    LObj *root;
+} LPlace;
 
 enum {
     V_UNIT, V_NONE, V_BOOL, V_INT, V_FLOAT,
@@ -309,7 +322,32 @@ static LValue v_place(LObj *owner, LValue *cell) {
     LValue v = {.tag = V_PLACE};
     v.as.place.owner = owner;
     v.as.place.cell = cell;
+    v.as.place.arr = NULL;
+    v.as.place.idx = 0;
+    v.as.place.root = NULL;
     return v;
+}
+
+static LValue v_place_index(LObj *arr, size_t idx) {
+    LValue v = {.tag = V_PLACE};
+    v.as.place.owner = NULL;
+    v.as.place.cell = NULL;
+    v.as.place.arr = arr;
+    v.as.place.idx = idx;
+    v.as.place.root = NULL;
+    return v;
+}
+
+/* Resolve the current cell for a place, revalidating array bounds. */
+static LValue *place_cell(LVM *vm, LPlace *pl) {
+    (void)vm;
+    if (!pl->arr) return pl->cell;
+    if (pl->idx >= pl->arr->u.array.len) die("array index out of bounds");
+    if (!pl->root) return &pl->arr->u.array.items[pl->idx];
+    LValue cur = pl->arr->u.array.items[pl->idx];
+    if (cur.tag != V_OBJ || cur.as.obj != pl->root)
+        die("array index out of bounds");
+    return pl->cell;
 }
 
 static void *xmalloc(size_t n) {
@@ -403,7 +441,11 @@ static void mark_obj(LObj *o) {
 
 static void mark_value(LValue v) {
     if (v.tag == V_OBJ) mark_obj(v.as.obj);
-    else if (v.tag == V_PLACE) mark_obj(v.as.place.owner);
+    else if (v.tag == V_PLACE) {
+        mark_obj(v.as.place.owner);
+        mark_obj(v.as.place.arr);
+        mark_obj(v.as.place.root);
+    }
 }
 
 static void gc_collect(LVM *vm) {
@@ -1506,10 +1548,20 @@ static int field_index(LObj *st, int field) {
         case OP_FIELD_PLACE: {
             LValue p = popv(vm);
             if (p.tag != V_PLACE) die("expected place");
-            LValue b = *p.as.place.cell;
+            LValue b = *place_cell(vm, &p.as.place);
             LObj *owner = NULL;
             LValue *cell = field_cell(b, in->a, &owner);
-            pushv(vm, v_place(owner, cell));
+            LValue np = v_place(owner, cell);
+            if (p.as.place.arr) {
+                np.as.place.arr = p.as.place.arr;
+                np.as.place.idx = p.as.place.idx;
+                if (p.as.place.root) {
+                    np.as.place.root = p.as.place.root;
+                } else if (b.tag == V_OBJ) {
+                    np.as.place.root = b.as.obj;
+                }
+            }
+            pushv(vm, np);
             break;
         }
         case OP_VALUE_FIELD_PLACE: {
@@ -1526,7 +1578,7 @@ static int field_index(LObj *st, int field) {
                 die("index place on non-array");
             size_t i = (size_t)iv.as.u;
             if (i >= av.as.obj->u.array.len) die("array index out of bounds");
-            pushv(vm, v_place(av.as.obj, &av.as.obj->u.array.items[i]));
+            pushv(vm, v_place_index(av.as.obj, i));
             break;
         }
         case OP_DEREF_PLACE: {
@@ -1539,14 +1591,14 @@ static int field_index(LObj *st, int field) {
         case OP_LOAD_PLACE: {
             LValue p = popv(vm);
             if (p.tag != V_PLACE) die("load place");
-            pushv(vm, value_copy(vm, *p.as.place.cell));
+            pushv(vm, value_copy(vm, *place_cell(vm, &p.as.place)));
             break;
         }
         case OP_STORE_PLACE: {
             LValue x = popv(vm);
             LValue p = popv(vm);
             if (p.tag != V_PLACE) die("store place");
-            *p.as.place.cell = value_copy(vm, x);
+            *place_cell(vm, &p.as.place) = value_copy(vm, x);
             break;
         }
         case OP_DUP:

@@ -44,6 +44,8 @@ An element reached through `const []T` is not an assignable place. The qualifier
 
 For compound assignment, place-identifying subexpressions are evaluated once. For example, `a[f()] += g()` calls `f()` once.
 
+Assignment evaluates place-identifying subexpressions left to right, then the right-hand side, then revalidates the place at write time: an array-element place whose index is no longer in bounds (for instance because the right-hand side shrank the array with `pop` or `splice`) traps as an array-bounds error. Only the bounds check repeats; index expressions are still evaluated once.
+
 A field on a temporary value struct is not assignable merely because the same field on a ref-returning expression would be. Storage identity matters.
 
 ## Integers
