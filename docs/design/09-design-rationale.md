@@ -60,6 +60,31 @@ Tagged enums can represent recoverable errors in normal data. Convenience propag
 
 It makes lexers, syntax highlighters, incremental editors, and range semantic-token requests unusually robust. This became a concrete performance/product benefit in Lace/LSP work.
 
+## Why revalidate assignment places at write time?
+
+Compound assignment evaluates place-identifying subexpressions exactly once,
+left to right, then the right-hand side, then re-checks array-element bounds
+at the write. The alternative, evaluating the RHS first, would reorder
+observable evaluation and break the left-to-right rule; the other
+alternative, trusting the pre-RHS bounds check, would write through a stale
+index after a RHS that shrinks the array with `pop` or `splice`. Write-time
+revalidation keeps single evaluation and total left-to-right order while
+turning the stale index into a classified array-bounds trap rather than an
+out-of-range write. Only the bounds check repeats; index expressions still
+run once.
+
+## Why a closed set of Core mechanisms?
+
+Core grows by demonstrated recurring problem, not by symmetry. Each closed
+set in the specification, the eight-family trap inventory
+(`03-core-semantics.md` Traps), the equality KEEP matrix
+(`01-core-language.md` Equality), the four Core array operations, names
+exactly what implementations must provide and rejects the adjacent
+generalizations (`?T`-lifting, structural equality derivation, frozen
+arrays) until evidence arrives. The parked list in `10-open-questions.md`
+records what that evidence would look like per item, so a future proposal
+knows its burden in advance.
+
 ## Why no filesystem-defined module semantics?
 
 An embedded interpreter, browser runtime, archive-backed compiler, database-backed system, or build tool should be able to supply modules without pretending they are files. Filesystem mapping belongs in a hosted profile/toolchain.

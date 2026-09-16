@@ -71,11 +71,22 @@ There are no uninitialized locals.
 
 ## Bytes, strings, and arrays
 
-There is no special string type. A string literal is a mutable byte array:
+There is no special string type. A string literal is bytes, and its
+inferred type is read-only:
 
 ```l
-var message: []u8 = "hello";
+var message = "hello";              // inferred const []u8
+var buffer: []u8 = "hello";         // fresh mutable []u8 copy
 ```
+
+The second line is contextual typing of the literal, not a conversion:
+a literal occurring directly in an explicitly mutable `[]u8` position
+materializes as a fresh mutable array. An existing `const []u8` value
+never becomes mutable; assigning one to a `[]u8` binding is an error.
+
+Ownership convention: accept `const []u8` parameters, return owned `[]u8`
+results, and clone when storing. `put` in `lib/std/json.l` is the exemplar:
+it takes `key: const []u8` and stores `bytes.clone(key)`.
 
 `[]T` is a mutable dynamic array object. Copying an array value copies its handle, not its elements:
 

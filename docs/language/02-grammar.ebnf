@@ -92,10 +92,11 @@ unary           = ( "!" | "~" | "-" | "*" ), unary
                 | postfix ;
 
 postfix         = primary,
-                  { call_suffix | index_suffix | field_suffix | struct_literal_suffix },
+                  { generic_call_suffix | call_suffix | index_suffix | field_suffix | struct_literal_suffix },
                   [ "as", type ] ;
 
 call_suffix     = "(", comma_list(expression), ")" ;
+generic_call_suffix = "[", comma_list(type), "]", "(", comma_list(expression), ")" ;
 index_suffix    = "[", expression, "]" ;
 field_suffix    = ".", ident ;
 struct_literal_suffix = "{", comma_list(struct_literal_field), "}" ;
@@ -125,4 +126,17 @@ ident           = ASCII letter or "_", followed by ASCII letters/digits/"_" ;
    - string/byte literals may not cross a line;
    - numeric '_' separators are only permitted between radix digits;
    - decimal leading zeroes are allowed and never imply octal.
+*)
+
+(* Disambiguation notes (checked by tests/check_docs.py so the R1/R2
+   disputed trio cannot silently regress):
+   - `f[T](args)` is generic_call_suffix, not indexing: after `f[`, the
+     bracket content is tried as a type list followed by `(`; on failure
+     it parses as index_suffix. The checker additionally requires a
+     direct function name (see 01-core-language.md Generics).
+   - a bare `qname` pattern with no parenthesized payload list is a
+     tag-only test (see 03-core-semantics.md Optionals and patterns).
+   - const_decl always requires an explicit `: type` annotation, and only
+     scalar constant expressions are accepted (see 01-core-language.md
+     Variables and constants).
 *)

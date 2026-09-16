@@ -81,6 +81,26 @@ Enums are nominal tagged sums.
 
 A fieldless enum supports `==` and `!=` by tag. Payload enums do not receive implicit structural equality.
 
+## Equality
+
+`==` and `!=` are defined for a closed set of types only:
+
+```text
+KEEP:     bool, every integer width, f32/f64 (value comparison)
+          ref T (identity comparison)
+          fieldless enum (tag comparison)
+REJECTED: (), structs, arrays ([]T and const []T), payload enums,
+          ?T, fn values
+```
+
+Using `==` on a rejected type is a static error. There is deliberately no
+`?T`-lifting (unwrap with `is`/`match` first) and no derived structural
+equality for structs, arrays, or payload enums; both were rejected on cost
+grounds (review decisions D-T2 and M-K2: lifting would hide
+`none`-handling, and derivation would smuggle recursive structural rules
+into a Core that keeps equality shallow and decidable). Ordering
+(`<`, `<=`, `>`, `>=`) is numeric-only.
+
 ## Optional values
 
 There is no `null`.
@@ -198,6 +218,14 @@ fn sort_by[T](xs: []T, less: fn(T, T) -> bool) { ... }
 
 Generic calls infer type arguments by structural unification from arguments and, where available, the expected result type. Array capability is part of the type: a mutable `[]T` argument may satisfy a `const []T` parameter at the same array layer, but a const argument may not satisfy a mutable parameter. No unrelated implicit conversions participate.
 
+When inference has nothing to work from, the canonical escape hatch is
+explicit type arguments at the call site: `f[T](args)`. The bracket list
+holds types, and the call must name a function directly; a generic function
+still cannot be used as a first-class value, so the hatch applies only at
+a direct call. The self-hosted slang frontend does not yet parse this form
+(see the gap note in `docs/architecture/16-slang-frontend.md`); the
+bootstrap frontend is normative.
+
 Generic functions are not first-class polymorphic values. A recursive generic call must preserve its type parameters exactly; mutually recursive generic functions are rejected in the current Core design to keep native monomorphization finite and simple.
 
 ## Functions and anonymous functions
@@ -255,6 +283,12 @@ trap
 
 Conditions have type `bool`; integers are not truthy/falsy.
 
+`for (name in array)` walks the array live by index, re-checking length
+each iteration, so elements appended during the loop are visited. The loop
+name is a fresh local per iteration holding a value copy of the current
+element, not a place into the array: assigning to it affects only the copy.
+See `03-core-semantics.md` (Arrays) for the full rule.
+
 Braces are mandatory.
 
 `trap;` terminates the current execution in a host-defined uncatchable manner. There are no language exceptions.
@@ -307,7 +341,7 @@ while (cursor is some(node)) {
 
 A non-binding `is` test may be used as an ordinary boolean expression.
 
-A tag-only `is` test on a payload-carrying variant (payloads omitted) matches any payload of that variant and agrees with the corresponding `match` arm on every backend.
+A tag-only `is` test on a payload-carrying variant (payloads omitted) matches any payload of that variant and agrees with the corresponding `match` arm on every backend. (Desugar rule: `03-core-semantics.md` §Optionals and patterns.)
 
 ## Modules and visibility
 

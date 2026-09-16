@@ -73,6 +73,28 @@ CODE_SPAN_RE = re.compile(r"```.*?```|`[^`\n]*`", re.DOTALL)
 PATH_MENTION_RE = re.compile(r"(?:scripts|src)/[A-Za-z0-9_.\-/]+")
 TRAILING_PUNCT = ".,;:!?)\"'"
 
+# R1/R2 disputed trio: retired denials that must never come back, plus the
+# grammar productions that pin the resolutions. STAGE S3 regression gate.
+DISPUTED_STALE_RES = [
+    # The retired "no escape hatch" denial (replaced by f[T](args)).
+    re.compile(r"no explicit generic-call type-argument syntax"),
+    # The retired "string literal is mutable" claim (inferred const []u8).
+    re.compile(r"string literal is a mutable byte array"),
+]
+GRAMMAR_FILE = os.path.join(ROOT, "docs", "language", "02-grammar.ebnf")
+# (description, regex that must match the grammar text)
+DISPUTED_GRAMMAR_RES = [
+    ("generic-call hatch production", re.compile(r"generic_call_suffix\s*="),),
+    (
+        "tag-only pattern production (payloads optional)",
+        re.compile(r"pattern\s*=.*qname,\s*\[", re.DOTALL),
+    ),
+    (
+        "module-const annotation production",
+        re.compile(r"const_decl\s*=\s*\"const\",\s*ident,\s*\":\",\s*type"),
+    ),
+]
+
 
 def markdown_files() -> list[str]:
     found = []
@@ -138,6 +160,30 @@ def check_path_mentions(path: str, relpath: str, errors: list[str]) -> None:
                     )
 
 
+def check_disputed_trio(files: list[str], errors: list[str]) -> None:
+    """R1/R2 regression gate: retired denials stay dead, trio productions stay."""
+    for path in files:
+        relpath = os.path.relpath(path, ROOT)
+        with open(path, encoding="utf-8") as handle:
+            for lineno, line in enumerate(handle, 1):
+                for stale_re in DISPUTED_STALE_RES:
+                    match = stale_re.search(line)
+                    if match:
+                        errors.append(
+                            f"{relpath}:{lineno}: regressed dispute denial "
+                            f"{match.group(0)!r}: {line.strip()}"
+                        )
+    try:
+        with open(GRAMMAR_FILE, encoding="utf-8") as handle:
+            grammar = handle.read()
+    except OSError:
+        errors.append("disputed trio: grammar file missing: " + GRAMMAR_FILE)
+        return
+    for desc, gram_re in DISPUTED_GRAMMAR_RES:
+        if not gram_re.search(grammar):
+            errors.append(f"disputed trio: grammar lost {desc}")
+
+
 def main() -> int:
     errors: list[str] = []
     files = markdown_files()
@@ -149,6 +195,7 @@ def main() -> int:
         check_stale_tokens(path, relpath, errors)
         check_links(path, relpath, errors)
         check_path_mentions(path, relpath, errors)
+    check_disputed_trio(files, errors)
     if errors:
         print(f"check_docs: {len(errors)} problem(s) in {len(files)} file(s):")
         for error in errors:

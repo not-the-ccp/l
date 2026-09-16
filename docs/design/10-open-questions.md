@@ -40,6 +40,65 @@ This file tracks open questions and their resolutions as the language evolves.
 ### Frozen/value arrays
 **Resolution**: Deferred to libraries. No language change needed.
 
+### Place revalidation at write
+**Resolution**: Shipped. Compound assignment evaluates place-identifying
+subexpressions once, left to right, then the RHS, then revalidates
+array-element places at write time; a RHS that shrinks the array turns a
+stale index into an array-bounds trap (see `01-core-language.md` Assignment
+and places). Integer semantics likewise pinned: exact widths, two's
+complement, wrapping `+`/`-`/`*`, truncating division, and the eight-family
+trap inventory in `03-core-semantics.md`.
+
+## Parked (post-v1, each with entry criteria)
+
+These are explicitly not open design work; each names what evidence would
+reopen it. This section is the counterpart of the closed-set doctrine in
+`09-design-rationale.md`.
+
+### Core str
+Parked. Entry criterion: a portable library demonstrates text handling
+(graphemes, normalization, case folding) that cannot be expressed over
+`const []u8` bytes. Until then, text stays a library interpretation.
+
+### Deep subtyping
+Parked. Entry criterion: a recurring program problem needs more than the
+single-layer `[]T -> const []T` qualification (e.g. transitive/deep const).
+No such case has been demonstrated.
+
+### ?T-lift
+Parked and rejected for v1 (review decision D-T2). Entry criterion: shipped
+code shows `some(...)` wrapping dominating handlers without hiding
+`none`-paths. Unwrap explicitly with `is`/`match` until then.
+
+### Implicit T->?T / postfix-?
+Parked with ?T-lift above. Entry criterion: demonstrated ergonomic pressure
+from shipped code for either the implicit conversion or `?` sugar; a
+proposal must show the `none`-path stays explicit.
+
+### defer
+Parked. Entry criterion: resource-cleanup patterns in real code that
+`match`/early-return cannot express cleanly. No such pattern has been shown.
+
+### host-v1
+Parked under "Host profile standardization" below. Entry criterion: two
+independent embeddings need the same portable surface, versioned separately
+from Core.
+
+### Captures
+Parked. Entry criterion: editor/LSP/library work demonstrably blocked
+without closure environments (see `09-design-rationale.md`: noncapturing
+anonymous functions compile as hidden top-level functions; captures would
+change every function value's representation).
+
+### Variance
+Parked. Entry criterion: real generic code blocked by invariance under the
+current structural-unification rules.
+
+### Frozen arrays
+Parked (see "Frozen/value arrays" above). Entry criterion: a stable-hashing
+or cross-thread sharing use case with measurements justifying copy, freeze,
+or ownership machinery over the current shallow `const []T`.
+
 ## Still open (post-v1)
 
 ### Host profile standardization

@@ -112,6 +112,14 @@ Ordinary array literals infer mutable arrays. A string literal has default/infer
 
 `const []T` provides read-only access, not global immutability. It does not establish stable content hashing, uniqueness, absence of aliases, or thread-safety guarantees.
 
+`for (name in array)` is a live indexed walk: the length is re-checked
+each iteration, so pushes during the loop extend the walk, and each element
+is fetched fresh. The loop name binds a fresh local per iteration to a
+value copy of the element (aggregates inline-copied, handles shared), not
+a place into the array, so writes to it never reach the array. Both array
+capabilities may be iterated. (Summary in `01-core-language.md` §Control
+flow.)
+
 ## Managed memory
 
 `new` creates fresh object identity.
@@ -158,7 +166,7 @@ A binding `is` pattern must be the entire condition, avoiding flow-sensitive bin
 
 Non-binding pattern tests may occur in ordinary boolean expressions.
 
-A tag-only pattern on a payload-carrying variant (payloads omitted) is equivalent to a wildcard per payload: it agrees with the corresponding `match` arm.
+A tag-only pattern on a payload-carrying variant (payloads omitted) is equivalent to a wildcard per payload: it agrees with the corresponding `match` arm. (Pointer: `01-core-language.md` §Patterns.)
 
 `match` over optional/enum/bool must be exhaustive unless `_` covers the remainder. Integer/byte matches require `_` for exhaustiveness.
 
@@ -176,7 +184,7 @@ A generic declaration is checked while type parameters are abstract. Validity do
 
 Inference is structural. Mutable and const array capabilities remain distinct types, with `[]T -> const []T` available when satisfying a read-only array parameter. Qualification does not flow in the opposite direction.
 
-If a type parameter cannot be determined from arguments and expected result type, the call is invalid; Core currently has no explicit generic-call type-argument syntax as an escape hatch.
+If a type parameter cannot be determined from arguments and expected result type, inference alone leaves the call invalid; the canonical escape hatch is explicit type arguments at a direct call, `f[T](args)`, as specified in `01-core-language.md` (Generics).
 
 Because Core intentionally permits simple monomorphizing native implementations, mutually recursive generic functions are rejected, and direct generic recursion must use the same type parameters unchanged.
 
@@ -194,6 +202,17 @@ Core operations either:
 2. are rejected statically; or
 3. trap at runtime.
 
-Typical traps include array bounds errors, empty `pop`, invalid `splice` ranges, invalid shifts, integer division by zero, and invalid float-to-integer conversion.
+Core has exactly eight trap families, one line each:
+
+```text
+bounds             out-of-range array index (read, write, or stale place write)
+pop-empty          pop on an empty array
+splice-range       splice with start > end or end beyond length
+shift-width        shift count (u64) at or beyond the LHS width
+divzero            integer division or remainder by zero
+f2i-range          float-to-integer cast of NaN/infinity/out-of-range value
+explicit-trap      trap; statement
+match-fallthrough  non-exhaustive match reached at runtime
+```
 
 Traps are not catchable in Core.
