@@ -158,6 +158,8 @@ A binding `is` pattern must be the entire condition, avoiding flow-sensitive bin
 
 Non-binding pattern tests may occur in ordinary boolean expressions.
 
+A tag-only pattern on a payload-carrying variant (payloads omitted) is equivalent to a wildcard per payload: it agrees with the corresponding `match` arm.
+
 `match` over optional/enum/bool must be exhaustive unless `_` covers the remainder. Integer/byte matches require `_` for exhaustiveness.
 
 Patterns are shallow; payload positions bind names or `_` rather than recursively destructuring nested constructors.

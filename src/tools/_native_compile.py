@@ -316,6 +316,12 @@ class NativeEmitter:
                     raise LangError("native unresolved pattern")
             else:
                 en, vn, pts = v
+                # Tag-only check on a payload variant: the checker fills in
+                # one wildcard per payload, so materialize the same here.
+                # Otherwise the table records n=0 and the VM arity check
+                # rejects every payload-carrying value of this variant.
+                if not subs:
+                    subs = tuple(N("p_wild") for _ in pts)
                 child = [self.pattern(sp, pt, slots) for sp, pt in zip(subs, pts)]
                 auxid = None
                 if child:

@@ -307,6 +307,8 @@ while (cursor is some(node)) {
 
 A non-binding `is` test may be used as an ordinary boolean expression.
 
+A tag-only `is` test on a payload-carrying variant (payloads omitted) matches any payload of that variant and agrees with the corresponding `match` arm on every backend.
+
 ## Modules and visibility
 
 ```text

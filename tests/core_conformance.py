@@ -317,6 +317,75 @@ fn main() -> i64 {
 )
 
 ok(
+    "tag-only payload is agrees with match (local true)",
+    r"""
+enum E { empty, value(i64), pair(i64,i64), }
+fn main() -> i64 {
+    var e: E = E.value(7);
+    if (e is E.value) { return 0; }
+    return 1;
+}
+""",
+    0,
+)
+
+ok(
+    "tag-only payload is agrees with match (local false)",
+    r"""
+enum E { empty, value(i64), pair(i64,i64), }
+fn main() -> i64 {
+    var e: E = E.empty;
+    if (e is E.value) { return 0; }
+    return 1;
+}
+""",
+    1,
+)
+
+ok(
+    "tag-only payload is agrees with match (param)",
+    r"""
+enum E { empty, value(i64), pair(i64,i64), }
+fn check(e: E) -> i64 {
+    if (e is E.pair) { return 0; }
+    return 1;
+}
+fn main() -> i64 { return check(E.pair(2, 5)); }
+""",
+    0,
+)
+
+ok(
+    "tag-only payload is agrees with match (typed binding)",
+    r"""
+enum E { empty, value(i64), pair(i64,i64), }
+fn main() -> i64 {
+    var e: E = E.pair(2, 5);
+    var ok: bool = e is E.pair;
+    if (ok) { return 0; }
+    return 1;
+}
+""",
+    0,
+)
+
+ok(
+    "tag-only payload match arm",
+    r"""
+enum E { empty, value(i64), pair(i64,i64), }
+fn main() -> i64 {
+    var e: E = E.value(7);
+    match (e) {
+        E.empty { return 1; }
+        E.value { return 0; }
+        E.pair(_, _) { return 2; }
+    }
+}
+""",
+    0,
+)
+
+ok(
     "generic reverse",
     r"""
 fn reverse[T](a: []T) {
