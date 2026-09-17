@@ -92,6 +92,7 @@ fn write_expr_kind(kind: slang_decls.ExprKind) {
     if (kind is slang_decls.ExprKind.binary) { stdio.write("binary"); return; }
     if (kind is slang_decls.ExprKind.cast) { stdio.write("cast"); return; }
     if (kind is slang_decls.ExprKind.call) { stdio.write("call"); return; }
+    if (kind is slang_decls.ExprKind.generic_call) { stdio.write("generic-call"); return; }
     if (kind is slang_decls.ExprKind.index) { stdio.write("index"); return; }
     if (kind is slang_decls.ExprKind.field) { stdio.write("field"); return; }
     if (kind is slang_decls.ExprKind.dereference) { stdio.write("deref"); return; }

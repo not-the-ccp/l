@@ -330,6 +330,31 @@ fn main() -> i64 {
     ("binary contextual overflow", "fn main() { var x: i8 = 0b1000_0000; }"),
     ("decimal underscore literal", "fn main() { var x: u16 = 65_535; }"),
     ("unsigned unary minus remains valid", "fn main() { var x: u8 = -1; }"),
+    (
+        "explicit generic call, zero value args",
+        "fn empty[T]() -> []T { return []; } fn main() -> i64 { var xs = empty[i64](); return "
+        "len(xs) as i64; }",
+    ),
+    (
+        "explicit phantom type argument",
+        "fn tag[T](x: i64) -> i64 { return x; } fn main() -> i64 { return tag[u8](5); }",
+    ),
+    (
+        "explicit type argument differs from inference",
+        "fn ident[T](x: T) -> T { return x; } fn main() -> i64 { return ident[u8](7) as i64; }",
+    ),
+    (
+        "multiple explicit type arguments",
+        "fn pair[A, B](x: A, y: B) -> A { return x; } fn main() -> i64 { return pair[i64, u8](7, 1); }",
+    ),
+    (
+        "explicit type-argument arity mismatch rejected",
+        "fn empty[T]() -> []T { return []; } fn main() -> i64 { var xs = empty[i64, u8](); return 0; }",
+    ),
+    (
+        "explicit type arguments on non-generic rejected",
+        "fn plain(x: i64) -> i64 { return x; } fn main() -> i64 { return plain[i64](1); }",
+    ),
 ]
 
 

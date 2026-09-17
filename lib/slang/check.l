@@ -901,6 +901,67 @@ fn instantiate_generic_call(checker: ref Checker, decl: slang_decls.Decl,
     return substitute_type(result, bindings);
 }
 
+// Explicit generic call `f[T](args)`: mirrors the bootstrap generic_call rule
+// (direct function name, exact type-argument count, argument check against
+// substituted parameter types). Unlike instantiate_generic_call there is no
+// inference: the spelling fixes every generic parameter, phantom ones included.
+fn explicit_generic_call(checker: ref Checker, decl: slang_decls.Decl,
+    type_arguments: []ref slang_decls.Type, args: []ref slang_decls.Expr,
+    start: u64, end: u64) -> ref slang_types.ResolvedType {
+    if (len(type_arguments) != len(decl.generics)) {
+        push_error(checker, ErrorKind.arity, decl.name, start, end);
+        return invalid_type();
+    }
+    var names: [][]u8 = [];
+    var types: []ref slang_types.ResolvedType = [];
+    for (var i: u64 = 0; i < len(type_arguments); i += 1) {
+        var resolved = resolve_syntax_type(
+            checker, checker.current_generics, type_arguments[i], checker.current_decl);
+        push(names, bytes.clone(decl.generics[i].name));
+        push(types, resolved);
+    }
+    var bindings = new TypeBindings { names: names, types: types };
+    if (len(args) != len(decl.parameters)) {
+        push_error(checker, ErrorKind.arity, decl.name, start, end);
+        return invalid_type();
+    }
+    var result = unit_type();
+    match (decl.return_type) {
+        none { }
+        some(syntax) { result = resolve_syntax_type(checker, decl.generics, syntax, decl.name); }
+    }
+    for (var i: u64 = 0; i < len(args); i += 1) {
+        var template = resolve_syntax_type(checker, decl.generics, decl.parameters[i].type, decl.name);
+        var want = substitute_type(template, bindings);
+        require_compatible(checker, want, expr_type(checker, args[i], some(want)), args[i].start, args[i].end);
+    }
+    return substitute_type(result, bindings);
+}
+
+fn generic_call_type(checker: ref Checker, expr: ref slang_decls.Expr) -> ref slang_types.ResolvedType {
+    var callee = expr.children[0];
+    var args: []ref slang_decls.Expr = [];
+    for (var i: u64 = 1; i < len(expr.children); i += 1) { push(args, expr.children[i]); }
+    if (!(callee.kind is slang_decls.ExprKind.name) || first_dot(callee.text) is some(_)) {
+        push_error(checker, ErrorKind.function_required, [], expr.start, expr.end);
+        return invalid_type();
+    }
+    match (find_decl(checker, callee.text)) {
+        none {
+            push_error(checker, ErrorKind.not_a_value, callee.text, expr.start, expr.end);
+            return invalid_type();
+        }
+        some(decl) {
+            if (!(decl.kind is slang_decls.DeclKind.function)) {
+                push_error(checker, ErrorKind.function_required, callee.text, expr.start, expr.end);
+                return invalid_type();
+            }
+            return explicit_generic_call(
+                checker, decl, expr.type_arguments, args, expr.start, expr.end);
+        }
+    }
+}
+
 fn call_type(checker: ref Checker, expr: ref slang_decls.Expr,
     expected: ?ref slang_types.ResolvedType) -> ref slang_types.ResolvedType {
     var callee = expr.children[0];
@@ -1215,6 +1276,8 @@ fn expr_type(checker: ref Checker, expr: ref slang_decls.Expr,
         type = struct_literal_type(checker, expr, expected);
     } else if (expr.kind is slang_decls.ExprKind.call) {
         type = call_type(checker, expr, expected);
+    } else if (expr.kind is slang_decls.ExprKind.generic_call) {
+        type = generic_call_type(checker, expr);
     } else if (expr.kind is slang_decls.ExprKind.anonymous_function) {
         var old_return = checker.return_type;
         var old_decl = checker.current_decl;

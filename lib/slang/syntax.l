@@ -283,6 +283,72 @@ fn parse_pattern(p: ref Parser) {
     var token = current(p); report(p, token, "expected pattern"); if (!eof(p)) { advance(p); }
 }
 
+// Silent type-shape recognizer for generic-call speculation (`f[T](args)`).
+// Unlike parse_type it never reports errors; the caller restores the parser
+// position on failure, so bracketed index expressions are unaffected.
+fn type_shape(p: ref Parser) -> bool {
+    if (at(p, "?")) { advance(p); return type_shape(p); }
+    if (at(p, "ref")) { advance(p); return type_shape(p); }
+    if (at(p, "const")) {
+        advance(p);
+        if (!at(p, "[")) { return false; }
+        advance(p);
+        if (!at(p, "]")) { return false; }
+        advance(p);
+        return type_shape(p);
+    }
+    if (at(p, "[")) {
+        advance(p);
+        if (!at(p, "]")) { return false; }
+        advance(p);
+        return type_shape(p);
+    }
+    if (at(p, "(")) {
+        advance(p);
+        if (!at(p, ")")) { return false; }
+        advance(p);
+        return true;
+    }
+    if (at(p, "fn")) {
+        advance(p);
+        if (!at(p, "(")) { return false; }
+        advance(p);
+        if (!at(p, ")")) {
+            while (true) {
+                if (!type_shape(p)) { return false; }
+                if (!at(p, ",")) { break; }
+                advance(p);
+                if (at(p, ")")) { break; }
+            }
+        }
+        if (!at(p, ")")) { return false; }
+        advance(p);
+        if (at(p, "->")) { advance(p); return type_shape(p); }
+        return true;
+    }
+    if (!at_kind(p, Kind.name)) { return false; }
+    advance(p);
+    while (at(p, ".")) {
+        advance(p);
+        if (!at_kind(p, Kind.name)) { return false; }
+        advance(p);
+    }
+    if (at(p, "[")) {
+        advance(p);
+        if (!at(p, "]")) {
+            while (true) {
+                if (!type_shape(p)) { return false; }
+                if (!at(p, ",")) { break; }
+                advance(p);
+                if (at(p, "]")) { break; }
+            }
+        }
+        if (!at(p, "]")) { return false; }
+        advance(p);
+    }
+    return true;
+}
+
 fn parse_expr(p: ref Parser, min_prec: u64) {
     var token = current(p);
     if (at(p, "(")) {
@@ -330,7 +396,40 @@ fn parse_expr(p: ref Parser, min_prec: u64) {
             }
             need(p, ")"); continue;
         }
-        if (at(p, "[")) { advance(p); parse_expr(p, 0); need(p, "]"); continue; }
+        if (at(p, "[")) {
+            var saved = p.pos;
+            advance(p);
+            var generic = true;
+            if (!at(p, "]")) {
+                while (true) {
+                    if (!type_shape(p)) { generic = false; break; }
+                    if (!at(p, ",")) { break; }
+                    advance(p);
+                    if (at(p, "]")) { break; }
+                }
+            }
+            if (generic && at(p, "]")) {
+                advance(p);
+                if (at(p, "(")) {
+                    advance(p);
+                    if (!at(p, ")")) {
+                        while (true) {
+                            parse_expr(p, 0);
+                            if (!at(p, ",")) { break; }
+                            advance(p);
+                            if (at(p, ")")) { break; }
+                        }
+                    }
+                    need(p, ")");
+                    continue;
+                }
+            }
+            p.pos = saved;
+            advance(p);
+            parse_expr(p, 0);
+            need(p, "]");
+            continue;
+        }
         if (at(p, ".")) { advance(p); need_name(p); continue; }
         if (at(p, "{")) {
             advance(p);

@@ -88,6 +88,7 @@ pub enum ExprKind {
     binary,
     cast,
     call,
+    generic_call,
     index,
     field,
     dereference,
@@ -112,6 +113,7 @@ pub struct Expr {
     pub fields: []NamedExpr,
     pub parameters: []Parameter,
     pub type: ?ref Type,
+    pub type_arguments: []ref Type,
     pub body: []ref Stmt,
     pub pattern: ?ref Pattern,
     pub start: u64,
@@ -343,6 +345,170 @@ fn parse_type(parser: ref Parser) -> ref Type {
         parameter_count: 0, start: name.start, end: end };
 }
 
+// Predictive type parse for generic-call speculation. The bootstrap frontend
+// tries a type-argument list on `f[` with backtracking; L traps are
+// uncatchable, so this mirror returns none instead of trapping and the caller
+// restores the parser position. Accepted shapes match parse_type exactly.
+fn try_parse_type(parser: ref Parser) -> ?ref Type {
+    if (at(parser, "?")) {
+        var start = advance(parser).start;
+        match (try_parse_type(parser)) {
+            none { return none; }
+            some(inner) {
+                return some(new Type { kind: TypeKind.optional, name: [], children: [inner],
+                    parameter_count: 0, start: start, end: inner.end });
+            }
+        }
+    }
+    if (at(parser, "ref")) {
+        var start = advance(parser).start;
+        match (try_parse_type(parser)) {
+            none { return none; }
+            some(inner) {
+                return some(new Type { kind: TypeKind.reference, name: [], children: [inner],
+                    parameter_count: 0, start: start, end: inner.end });
+            }
+        }
+    }
+    if (at(parser, "const")) {
+        var start = advance(parser).start;
+        if (!at(parser, "[")) { return none; }
+        advance(parser);
+        if (!at(parser, "]")) { return none; }
+        advance(parser);
+        match (try_parse_type(parser)) {
+            none { return none; }
+            some(inner) {
+                return some(new Type { kind: TypeKind.const_array, name: [], children: [inner],
+                    parameter_count: 0, start: start, end: inner.end });
+            }
+        }
+    }
+    if (at(parser, "[")) {
+        var start = advance(parser).start;
+        if (!at(parser, "]")) { return none; }
+        advance(parser);
+        match (try_parse_type(parser)) {
+            none { return none; }
+            some(inner) {
+                return some(new Type { kind: TypeKind.array, name: [], children: [inner],
+                    parameter_count: 0, start: start, end: inner.end });
+            }
+        }
+    }
+    if (at(parser, "(")) {
+        var start = advance(parser).start;
+        if (!at(parser, ")")) { return none; }
+        var end = advance(parser).end;
+        return some(empty_type(TypeKind.unit, start, end));
+    }
+    if (at(parser, "fn")) {
+        var start = advance(parser).start;
+        if (!at(parser, "(")) { return none; }
+        advance(parser);
+        var children: []ref Type = [];
+        var parameter_count: u64 = 0;
+        if (!at(parser, ")")) {
+            while (true) {
+                match (try_parse_type(parser)) {
+                    none { return none; }
+                    some(parameter) {
+                        push(children, parameter);
+                        parameter_count += 1;
+                    }
+                }
+                if (!at(parser, ",")) { break; }
+                advance(parser);
+                if (at(parser, ")")) { break; }
+            }
+        }
+        if (!at(parser, ")")) { return none; }
+        var close = advance(parser);
+        var output = empty_type(TypeKind.unit, close.end, close.end);
+        if (at(parser, "->")) {
+            advance(parser);
+            match (try_parse_type(parser)) {
+                none { return none; }
+                some(returned) { output = returned; }
+            }
+        }
+        push(children, output);
+        return some(new Type { kind: TypeKind.function, name: [], children: children,
+            parameter_count: parameter_count, start: start, end: output.end });
+    }
+    if (!(current(parser).kind is slang_syntax.Kind.name)) { return none; }
+    var first = advance(parser);
+    var text = bytes.clone(first.text);
+    var end = first.end;
+    while (at(parser, ".")) {
+        advance(parser);
+        if (!(current(parser).kind is slang_syntax.Kind.name)) { return none; }
+        var part = advance(parser);
+        bytes.append(text, ".");
+        bytes.append(text, part.text);
+        end = part.end;
+    }
+    var arguments: []ref Type = [];
+    if (at(parser, "[")) {
+        advance(parser);
+        if (!at(parser, "]")) {
+            while (true) {
+                match (try_parse_type(parser)) {
+                    none { return none; }
+                    some(argument) {
+                        push(arguments, argument);
+                        end = argument.end;
+                    }
+                }
+                if (!at(parser, ",")) { break; }
+                advance(parser);
+                if (at(parser, "]")) { break; }
+            }
+        }
+        if (!at(parser, "]")) { return none; }
+        end = advance(parser).end;
+    }
+    return some(new Type { kind: TypeKind.named, name: text, children: arguments,
+        parameter_count: 0, start: first.start, end: end });
+}
+
+// Speculative `f[T](args)` parse: type-argument list plus the `(` must follow,
+// else none and the caller falls back to indexing (bootstrap rule).
+fn try_parse_generic_call(parser: ref Parser, callee: ref Expr) -> ?ref Expr {
+    advance(parser);
+    var type_arguments: []ref Type = [];
+    if (!at(parser, "]")) {
+        while (true) {
+            match (try_parse_type(parser)) {
+                none { return none; }
+                some(argument) { push(type_arguments, argument); }
+            }
+            if (!at(parser, ",")) { break; }
+            advance(parser);
+            if (at(parser, "]")) { break; }
+        }
+    }
+    if (!at(parser, "]")) { return none; }
+    advance(parser);
+    if (!at(parser, "(")) { return none; }
+    advance(parser);
+    var children: []ref Expr = [callee];
+    if (!at(parser, ")")) {
+        while (true) {
+            push(children, parse_expr(parser, 0));
+            if (!at(parser, ",")) { break; }
+            advance(parser);
+            if (at(parser, ")")) { break; }
+        }
+    }
+    if (!at(parser, ")")) { return none; }
+    var end = advance(parser).end;
+    var generic = empty_expr(ExprKind.generic_call, callee.start, end);
+    generic.children = children;
+    generic.type_arguments = type_arguments;
+    return some(generic);
+}
+
 fn parse_generics(parser: ref Parser) -> []GenericParam {
     var out: []GenericParam = [];
     if (!at(parser, "[")) { return out; }
@@ -388,6 +554,7 @@ fn empty_expr(kind: ExprKind, start: u64, end: u64) -> ref Expr {
         fields: [],
         parameters: [],
         type: none,
+        type_arguments: [],
         body: [],
         pattern: none,
         start: start,
@@ -625,6 +792,11 @@ fn parse_expr(parser: ref Parser, min_precedence: u64) -> ref Expr {
             continue;
         }
         if (at(parser, "[")) {
+            var saved = parser.pos;
+            match (try_parse_generic_call(parser, value)) {
+                some(generic) { value = generic; continue; }
+                none { parser.pos = saved; }
+            }
             advance(parser);
             var index = parse_expr(parser, 0);
             var end = take(parser, "]").end;

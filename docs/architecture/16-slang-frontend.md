@@ -50,10 +50,11 @@ imports them under historical `slang_*` module names
 - `scripts/lcheck` checks a single source module from the CLI; project-level
   checking across multiple logical modules plus host declarations is still on
   the roadmap in `../guides/14-self-hosting.md`.
-- Explicit generic-call type arguments (`f[T](args)`) are not yet parsed or
-  checked by slang: `slang_decls.ExprKind` has `call` and `index` but no
-  `generic_call`, so `f[...]` always parses as indexing. The bootstrap
-  frontend (`src/lang/core.py`) is normative for this form. Porting the
-  speculative type-list parse plus the direct-function-name check is queued
-  work (review note Minimalist-R3 estimates ~35 lines); intentionally not
-  implemented here.
+- Explicit generic-call type arguments (`f[T](args)`) are parsed and checked
+  by slang: `slang_decls.ExprKind` has `generic_call` carrying `type_arguments`,
+  built by a speculative type-list parse in `decls.l` that falls back to
+  indexing when the brackets do not hold types followed by `(`. The checker
+  (`check.l`) requires a direct function name and an exact type-argument
+  count, then checks the arguments against the substituted parameter types
+  with no inference. The bootstrap frontend (`src/lang/core.py`) remains
+  normative for this form.
