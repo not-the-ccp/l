@@ -111,6 +111,7 @@ fn write_stmt_kind(kind: slang_decls.StmtKind) {
     if (kind is slang_decls.StmtKind.for_loop) { stdio.write("for"); return; }
     if (kind is slang_decls.StmtKind.for_in) { stdio.write("for-in"); return; }
     if (kind is slang_decls.StmtKind.match_stmt) { stdio.write("match"); return; }
+    if (kind is slang_decls.StmtKind.let_else) { stdio.write("let-else"); return; }
     if (kind is slang_decls.StmtKind.return_stmt) { stdio.write("return"); return; }
     if (kind is slang_decls.StmtKind.break_stmt) { stdio.write("break"); return; }
     if (kind is slang_decls.StmtKind.continue_stmt) { stdio.write("continue"); return; }
@@ -165,6 +166,10 @@ fn write_stmt(stmt: ref slang_decls.Stmt, depth: u64) {
         some(value) { indent(depth + 1); stdio.write("init\n"); write_stmt(value, depth + 2); }
     }
     for (expr in stmt.expressions) { write_expr(expr, depth + 1); }
+    match (stmt.pattern) {
+        none { }
+        some(pattern) { write_pattern(pattern, depth + 1); }
+    }
     match (stmt.step) {
         none { }
         some(value) { indent(depth + 1); stdio.write("step\n"); write_stmt(value, depth + 2); }

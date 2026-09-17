@@ -129,6 +129,7 @@ pub enum StmtKind {
     for_loop,
     for_in,
     match_stmt,
+    let_else,
     return_stmt,
     break_stmt,
     continue_stmt,
@@ -153,6 +154,7 @@ pub struct Stmt {
     pub init: ?ref Stmt,
     pub step: ?ref Stmt,
     pub arms: []MatchArm,
+    pub pattern: ?ref Pattern,
     pub start: u64,
     pub end: u64,
 }
@@ -890,6 +892,7 @@ fn empty_stmt(kind: StmtKind, start: u64, end: u64) -> ref Stmt {
         init: none,
         step: none,
         arms: [],
+        pattern: none,
         start: start,
         end: end,
     };
@@ -1043,6 +1046,21 @@ fn parse_stmt(parser: ref Parser) -> ref Stmt {
         var out = empty_stmt(StmtKind.match_stmt, start, end);
         out.expressions = [value];
         out.arms = arms;
+        return out;
+    }
+
+    if (at(parser, "let")) {
+        advance(parser);
+        var pattern = parse_pattern(parser);
+        take(parser, "=");
+        var scrutinee = parse_expr(parser, 0);
+        take(parser, "else");
+        var otherwise = parse_block(parser);
+        var end = take(parser, ";").end;
+        var out = empty_stmt(StmtKind.let_else, start, end);
+        out.pattern = some(pattern);
+        out.expressions = [scrutinee];
+        out.alternate = otherwise;
         return out;
     }
 

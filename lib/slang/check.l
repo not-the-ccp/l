@@ -39,6 +39,8 @@ pub enum ErrorKind {
     generic_inference,
     duplicate_pattern,
     non_exhaustive_match,
+    empty_let_else,
+    diverging_else_required,
     literal_range,
 }
 
@@ -1739,6 +1741,49 @@ fn check_stmt(checker: ref Checker, stmt: ref slang_decls.Stmt) {
         return;
     }
 
+    if (stmt.kind is slang_decls.StmtKind.let_else) {
+        var subject = expr_type(checker, stmt.expressions[0], none);
+        var subject_invalid = subject.kind is slang_types.ResolvedKind.invalid;
+        var subject_ok = subject_invalid ||
+            (subject.kind is slang_types.ResolvedKind.optional && len(subject.children) == 1);
+        if (!subject_ok) {
+            push_error(checker, ErrorKind.bad_pattern, [], stmt.start, stmt.end);
+        }
+        var shape_ok = false;
+        match (stmt.pattern) {
+            none { }
+            some(pattern) {
+                if (pattern.kind is slang_decls.PatternKind.some_value ||
+                    pattern.kind is slang_decls.PatternKind.none_value) {
+                    shape_ok = true;
+                } else if (!subject_invalid) {
+                    push_error(checker, ErrorKind.bad_pattern, pattern.name,
+                        pattern.start, pattern.end);
+                }
+            }
+        }
+        if (len(stmt.alternate) == 0) {
+            push_error(checker, ErrorKind.empty_let_else, [], stmt.start, stmt.end);
+        } else if (!block_diverges(stmt.alternate)) {
+            push_error(checker, ErrorKind.diverging_else_required, [],
+                stmt.start, stmt.end);
+        }
+        check_block(checker, stmt.alternate);
+        // Install the success bindings only after the else block, mirroring
+        // the bootstrap checker: the failure path must not observe them.
+        // bind_pattern_symbol attaches types to the names-l payload symbols,
+        // which are scope-correct already, so no candidate scope is needed.
+        match (stmt.pattern) {
+            none { }
+            some(pattern) {
+                if (shape_ok && !subject_invalid && subject_ok) {
+                    check_pattern(checker, pattern, subject, true);
+                }
+            }
+        }
+        return;
+    }
+
     if (stmt.kind is slang_decls.StmtKind.return_stmt) {
         if (len(stmt.expressions) == 0) {
             require_same(checker, checker.return_type, unit_type(), stmt.start, stmt.end);
@@ -1767,6 +1812,32 @@ fn check_stmt(checker: ref Checker, stmt: ref slang_decls.Stmt) {
 
 fn check_block(checker: ref Checker, body: []ref slang_decls.Stmt) {
     for (stmt in body) { check_stmt(checker, stmt); }
+}
+
+fn stmt_diverges(stmt: ref slang_decls.Stmt) -> bool {
+    // SUFFICIENT syntactic criterion only, mirroring the bootstrap oracle:
+    // True guarantees the statement never falls through, but False proves
+    // nothing (exact divergence is unprovable). `while (true)` without break
+    // and diverging `match` arms are conservatively NOT recognized, so some
+    // genuinely diverging else-blocks are rejected.
+    if (stmt.kind is slang_decls.StmtKind.return_stmt ||
+        stmt.kind is slang_decls.StmtKind.break_stmt ||
+        stmt.kind is slang_decls.StmtKind.continue_stmt ||
+        stmt.kind is slang_decls.StmtKind.trap_stmt) {
+        return true;
+    }
+    if (stmt.kind is slang_decls.StmtKind.conditional) {
+        return len(stmt.alternate) > 0 && block_diverges(stmt.body) &&
+            block_diverges(stmt.alternate);
+    }
+    return false;
+}
+
+fn block_diverges(body: []ref slang_decls.Stmt) -> bool {
+    // Leading-sequence rule: a block diverges when some statement in the
+    // sequence diverges; statements after it are unreachable.
+    for (stmt in body) { if (stmt_diverges(stmt)) { return true; } }
+    return false;
 }
 
 fn stmt_returns(stmt: ref slang_decls.Stmt) -> bool {

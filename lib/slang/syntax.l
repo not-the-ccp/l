@@ -517,6 +517,10 @@ fn parse_stmt(p: ref Parser) {
         while (!eof(p) && !at(p, "}")) { parse_pattern(p); parse_block(p); }
         need(p, "}"); return;
     }
+    if (at(p, "let")) {
+        advance(p); parse_pattern(p); need(p, "="); parse_expr(p, 0);
+        need(p, "else"); parse_block(p); need(p, ";"); return;
+    }
     if (at(p, "return")) { advance(p); if (!at(p, ";")) { parse_expr(p, 0); } need(p, ";"); return; }
     if (at(p, "break") || at(p, "continue") || at(p, "trap")) { advance(p); need(p, ";"); return; }
     parse_expr(p, 0);

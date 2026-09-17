@@ -20,7 +20,16 @@ This file tracks open questions and their resolutions as the language evolves.
 **Resolution**: IEEE binary32/binary64, round-to-nearest-even. No FMA contraction. Trap on NaN/infinity for explicit integer casts. Float overflow wraps to infinity. Division by zero follows IEEE semantics (no trap). A normative section will be written in the spec.
 
 ### Error propagation
-**Resolution**: Deferred. `match` and tag-only `is` are sufficient for v1. A `let-else` statement for `?T` may be added post-v1 based on experience.
+**Resolution**: Adopted (S5). `match` and tag-only `is` remain, and a `let-else`
+statement for `?T` was added once the `tools/lsp/server.l` `change_document`
+chain demonstrated the nesting pain. Payload-enum generalization stays parked.
+
+### Let-else statement
+**Resolution**: Adopted (S5). `let PAT = SCRUT else DIVERGES;` desugars to a
+match over a hygienic fresh temporary with single scrutinee evaluation, a
+`?T`-only pattern restriction, and a sufficient syntactic Diverges criterion
+for the `else` block. `?`-propagation, implicit `T -> ?T`, new runtime
+semantics, and new trap kinds were explicitly rejected.
 
 ### Result type
 **Resolution**: `Result[T, E]` is a portable library concern (`enum Result[T, E] { ok(T), err(E) }`), not Core. `?T` serves as the language-level optional primitive. Tag-only `is` sugar (`result is err`) reduces verbosity for library Result types.
@@ -108,4 +117,6 @@ Core intentionally specifies no OS environment. A future project may want one ca
 The RISC-V extension model (formalized in architecture docs) provides the foundation. A package registry and module resolver are post-v1 work.
 
 ### Error propagation sugar
-The `match` + explicit pattern approach can be verbose for sequential fallible operations. A `let-else` statement or similar sugar may be added after v1 if the pain is demonstrated in real code.
+Resolved (S5): the `let-else` statement covers the sequential-fallible-operation
+shape for `?T` (see Resolved above). Broader sugar (e.g. for library `Result`
+types or payload enums) still needs demonstrated pain before adoption.

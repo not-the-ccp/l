@@ -226,6 +226,16 @@ class CFGBuilder:
             self.connect(outs, m)
             return [(m, None)]
 
+        if k == "letelse":
+            pat, scrut, else_b = stmt.a
+            d = self.node("decision", f"let-else {self.text(scrut)}", stmt)
+            self.connect(frontier, d)
+            m = self.node("merge", "after let-else", synthetic=True)
+            self.edge(d, m, self.text(pat, pat.kind))
+            outs = self.block(list(else_b), [(d, "else")], loop, depth + 1)
+            self.connect(outs, m)
+            return [(m, None)]
+
         terminal = k in {"return", "trap", "break", "continue"}
         n = self.node("terminal" if terminal else "stmt", self.stmt_text(stmt), stmt)
         self.connect(frontier, n)

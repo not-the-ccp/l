@@ -112,7 +112,8 @@ head = some(new Node { ... });
 
 A `ref T` is intrinsically non-null. Optionality is always visible in the type as `?T`.
 
-There is no force-unwrap operator in Core. Use `if`, `while`, or `match` patterns.
+There is no force-unwrap operator in Core. Use `if`, `while`, `match`, or
+`let ... else` patterns to discharge an optional (see Control flow below).
 
 ## Managed references
 
@@ -275,6 +276,7 @@ while
 for (init; condition; step)
 for (name in array)
 match
+let PAT = expr else { ... };
 break
 continue
 return
@@ -290,6 +292,16 @@ element, not a place into the array: assigning to it affects only the copy.
 See `03-core-semantics.md` (Arrays) for the full rule.
 
 Braces are mandatory.
+
+`let PAT = expr else { ... };` discharges a `?T` scrutinee linearly: on
+`some`, the payload bindings join the current scope and execution continues
+with the following statements; otherwise the `else` block runs and must
+diverge (end with `return`, `break`, `continue`, `trap`, or a both-branch
+diverging `if`, possibly after leading statements). In v1 the pattern is
+`?T`-only (`some(x)`, `some(_)`, `none`); an empty `else` block is rejected,
+and the scrutinee is evaluated exactly once. Pattern bindings obey the
+no-shadow rule; the desugar's fresh temporary is hygienic and invisible to
+user code. Full rule: `03-core-semantics.md` (Optionals and patterns).
 
 `trap;` terminates the current execution in a host-defined uncatchable manner. There are no language exceptions.
 

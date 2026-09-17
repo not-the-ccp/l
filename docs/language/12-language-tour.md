@@ -347,6 +347,60 @@ trap
 
 `trap;` is an uncatchable execution failure. Exceptions are not part of Core.
 
+## Linear validation with let-else
+
+Sequential fallible lookups nest badly with `match`. The document-change
+handler in `tools/lsp/server.l`, for example, walks a
+uri/doc/changes/array chain where each step is optional:
+
+```l
+var uri_opt = lsp.get_uri(params);
+match (uri_opt) {
+    none { return; }
+    some(uri) {
+        var doc_opt = lsp.document_get(store, uri);
+        match (doc_opt) {
+            none { return; }
+            some(doc) {
+                // ... two more levels for contentChanges and its array
+            }
+        }
+    }
+}
+```
+
+`let PAT = expr else { ... };` flattens this into linear validation:
+
+```l
+let some(uri) = lsp.get_uri(params) else { return; };
+let some(doc) = lsp.document_get(store, uri) else { return; };
+let some(changes_json) = json.get(params, "contentChanges") else { return; };
+let some(changes) = json.as_array(changes_json) else { return; };
+```
+
+Each line discharges one optional: on `some`, the binding (`uri`, then
+`doc`, and so on) joins the current scope and the next line runs; on `none`,
+the `else` block runs instead. Every `else` here is `{ return; }`, which
+satisfies the divergence rule (see below), so a missing value exits early
+and the happy path stays at one indentation level.
+
+The rules, in short:
+
+- The scrutinee must be `?T` and is evaluated exactly once; the pattern is
+  `some(x)`, `some(_)`, or `none` (no enum-payload patterns in v1).
+- The `else` block must be non-empty and must diverge: end it with `return`,
+  `break`, `continue`, or `trap`, or with an `if`/`else` whose both branches
+  diverge. This is a sufficient syntactic check, not exact
+  divergence analysis, so exotic-but-diverging blocks (say, a `match` whose
+  every arm returns) are still rejected.
+- Success bindings obey the usual no-shadow rule and remain visible to the
+  code that follows; the `else` block cannot see them.
+
+There is deliberately no `?` propagation operator and no implicit `T -> ?T`
+conversion: each `let ... else { return; };` line is the explicit discharge.
+See `01-core-language.md` (Control flow) and `03-core-semantics.md`
+(Optionals and patterns) for the full rule.
+
 ## Assignment and evaluation order
 
 Assignment is a statement rather than an expression:

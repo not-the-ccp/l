@@ -19,6 +19,7 @@ STMT_KINDS = {
     "for",
     "forin",
     "match",
+    "letelse",
     "return",
     "break",
     "continue",
@@ -248,7 +249,7 @@ def metrics(body, max_nesting, bindings):
                 match_extra += max(0, len(n.a[1]) - 1)
             if n.kind == "binary" and n.a[0] in ("&&", "||"):
                 short += 1
-    decisions = c["if"] + c["while"] + c["for"] + c["forin"] + match_extra
+    decisions = c["if"] + c["while"] + c["for"] + c["forin"] + match_extra + c["letelse"]
     rebound = sum(x.reassignments > 0 for x in bindings)
     return {
         "statements": sum(c.values()),

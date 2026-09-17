@@ -39,6 +39,7 @@ statement       = var_stmt
                 | for_stmt
                 | for_in_stmt
                 | match_stmt
+                | let_else_stmt
                 | return_stmt
                 | "break", ";"
                 | "continue", ";"
@@ -58,6 +59,7 @@ for_in_stmt     = "for", "(", ident, "in", expression, ")", block ;
 
 match_stmt      = "match", "(", expression, ")", "{",
                   { pattern, block }, "}" ;
+let_else_stmt   = "let", pattern, "=", expression, "else", block, ";" ;
 return_stmt     = "return", [ expression ], ";" ;
 
 assignment      = expression, assign_op, expression ;

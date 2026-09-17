@@ -108,6 +108,14 @@ fn write_check_error(kind: slang_check.ErrorKind) {
     if (kind is slang_check.ErrorKind.generic_inference) { stdio.write("cannot infer generic type arguments"); return; }
     if (kind is slang_check.ErrorKind.duplicate_pattern) { stdio.write("duplicate match arm"); return; }
     if (kind is slang_check.ErrorKind.non_exhaustive_match) { stdio.write("non-exhaustive match"); return; }
+    if (kind is slang_check.ErrorKind.empty_let_else) {
+        stdio.write("let-else else block must not be empty");
+        return;
+    }
+    if (kind is slang_check.ErrorKind.diverging_else_required) {
+        stdio.write("let-else else block must diverge");
+        return;
+    }
     if (kind is slang_check.ErrorKind.literal_range) {
         stdio.write("integer literal does not fit contextual type");
         return;

@@ -848,5 +848,275 @@ compile_error(
     "expected []",
 )
 
+ok(
+    "let-else some success binds after",
+    r"""
+fn main() -> i64 {
+    var o = some(7);
+    let some(x) = o else { return -1; };
+    return x;
+}
+""",
+    7,
+)
+ok(
+    "let-else none takes else-return",
+    r"""
+fn main() -> i64 {
+    var o: ?i64 = none;
+    let some(x) = o else { return -1; };
+    return x;
+}
+""",
+    -1,
+)
+ok(
+    "let-else none pattern matches none",
+    r"""
+fn main() -> i64 {
+    var o: ?i64 = none;
+    let none = o else { return -1; };
+    return 42;
+}
+""",
+    42,
+)
+ok(
+    "let-else none pattern rejects some",
+    r"""
+fn main() -> i64 {
+    var o = some(7);
+    let none = o else { return -1; };
+    return 42;
+}
+""",
+    -1,
+)
+ok(
+    "let-else some wildcard binds nothing",
+    r"""
+fn main() -> i64 {
+    var o = some(7);
+    let some(_) = o else { return -1; };
+    return 3;
+}
+""",
+    3,
+)
+ok(
+    "let-else else-break in loop",
+    r"""
+fn main() -> i64 {
+    var xs: []?i64 = [some(1), none, some(3)];
+    var total: i64 = 0;
+    for (item in xs) {
+        let some(x) = item else { break; };
+        total += x;
+    }
+    return total;
+}
+""",
+    1,
+)
+ok(
+    "let-else else-continue in loop",
+    r"""
+fn main() -> i64 {
+    var xs: []?i64 = [some(1), none, some(3)];
+    var total: i64 = 0;
+    for (item in xs) {
+        let some(x) = item else { continue; };
+        total += x;
+    }
+    return total;
+}
+""",
+    4,
+)
+ok(
+    "let-else scrutinee evaluated once",
+    r"""
+fn main() -> i64 {
+    var xs: []?i64 = [some(5), some(6)];
+    let some(x) = pop(xs) else { return -1; };
+    return x + len(xs) as i64 * 100;
+}
+""",
+    106,
+)
+ok(
+    "let-else both-branch if else accepted",
+    r"""
+fn main() -> i64 {
+    var o: ?i64 = none;
+    var flag = true;
+    let some(x) = o else {
+        if (flag) { return 10; } else { return 20; }
+    };
+    return x;
+}
+""",
+    10,
+)
+ok(
+    "let-else leading-sequence else accepted",
+    r"""
+fn main() -> i64 {
+    var o: ?i64 = none;
+    let some(x) = o else {
+        var fallback: i64 = 11;
+        return fallback;
+    };
+    return x;
+}
+""",
+    11,
+)
+ok(
+    "let-else trap else accepted",
+    r"""
+fn main() -> i64 {
+    var o = some(7);
+    let some(x) = o else { trap; };
+    return x;
+}
+""",
+    7,
+)
+ok(
+    "let-else linear optional chain",
+    r"""
+fn pick(params: ?[]?i64, index: u64) -> i64 {
+    let some(arr) = params else { return -1; };
+    if (index >= len(arr)) { return -2; }
+    let some(value) = arr[index] else { return -3; };
+    return value;
+}
+fn main() -> i64 {
+    var params: ?[]?i64 = some([some(40), none]);
+    return pick(params, 0) * 10 + pick(params, 1) + pick(none, 0);
+}
+""",
+    400 - 3 - 1,
+)
+compile_error(
+    "let-else fallthrough else rejected",
+    r"""
+fn main() -> i64 {
+    var o = some(7);
+    let some(x) = o else { };
+    return x;
+}
+""",
+    "must not be empty",
+)
+compile_error(
+    "let-else non-diverging else rejected",
+    r"""
+fn main() -> i64 {
+    var o = some(7);
+    let some(x) = o else { o = none; };
+    return x;
+}
+""",
+    "must diverge",
+)
+compile_error(
+    "let-else bare binding rejected in v1",
+    r"""
+fn main() -> i64 {
+    var o = some(7);
+    let x = o else { return -1; };
+    return x;
+}
+""",
+    "must be some(_)",
+)
+compile_error(
+    "let-else wildcard rejected in v1",
+    r"""
+fn main() -> i64 {
+    var o = some(7);
+    let _ = o else { return -1; };
+    return 0;
+}
+""",
+    "must be some(_)",
+)
+compile_error(
+    "let-else non-optional scrutinee rejected",
+    r"""
+fn main() -> i64 {
+    var o: i64 = 7;
+    let some(x) = o else { return -1; };
+    return x;
+}
+""",
+    "requires ?T scrutinee",
+)
+compile_error(
+    "let-else enum pattern rejected in v1",
+    r"""
+enum E { a, b(i64), }
+fn main() -> i64 {
+    var e: ?E = some(E.b(7));
+    let E.b(x) = e else { return -1; };
+    return x;
+}
+""",
+    "must be some(_)",
+)
+compile_error(
+    "let-else binding shadows outer name",
+    r"""
+fn main() -> i64 {
+    var x: i64 = 1;
+    var o = some(7);
+    let some(x) = o else { return -1; };
+    return x;
+}
+""",
+    "shadow",
+)
+compile_error(
+    "let-else break outside loop rejected",
+    r"""
+fn main() -> i64 {
+    var o: ?i64 = none;
+    let some(x) = o else { break; };
+    return x;
+}
+""",
+    "outside loop",
+)
+compile_error(
+    "let-else while-true else conservatively rejected",
+    r"""
+fn main() -> i64 {
+    var o: ?i64 = none;
+    let some(x) = o else { while (true) { } };
+    return x;
+}
+""",
+    "must diverge",
+)
+compile_error(
+    "let-else diverging match else conservatively rejected",
+    r"""
+fn main() -> i64 {
+    var o: ?i64 = none;
+    var b = true;
+    let some(x) = o else {
+        match (b) {
+            true { return 1; }
+            false { return 2; }
+        }
+    };
+    return x;
+}
+""",
+    "must diverge",
+)
+
 print(f"\nCore-only conformance seed: {PASS} passed, {FAIL} failed")
 raise SystemExit(1 if FAIL else 0)

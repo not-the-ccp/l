@@ -56,6 +56,26 @@ Ordinary functions plus structs/enums/generics/function callbacks have been suff
 
 Tagged enums can represent recoverable errors in normal data. Convenience propagation syntax would either privilege a library `Result` type or introduce a new hidden early-return protocol. Real code is somewhat verbose here, but the implementation/semantic budget has not yet been justified.
 
+## Why let-else, and why `?T`-only with a sufficient Diverges check?
+
+The `change_document` chain in `tools/lsp/server.l` (uri/doc/changes/array)
+demonstrated the pain: sequential fallible lookups nest one `match` per
+level. `let-else` is that chain flattened, and nothing more. Three
+restrictions keep the budget closed. First, `?T`-only: generalizing the
+pattern to payload enums would drag in exhaustiveness-at-a-distance and
+turn a statement into half a `match`; enum work stays with `match`. Second,
+a sufficient (not exact) syntactic Diverges criterion: exact divergence is
+unprovable, so the checker recognizes terminals, both-branch diverging
+`if`s, and leading sequences, and conservatively rejects the rest. Third,
+desugar lowering with exactly one new bytecode operation, `MERGE_BINDINGS`:
+a pure desugar to existing `match` cannot work because arm bindings are
+arm-scoped while let-else success bindings must join the enclosing scope,
+and no existing operation declares pending bindings into the current scope.
+`MERGE_BINDINGS` carries no runtime semantics of its own, and the defensive
+fall-through reuses the `match-fallthrough` trap family, so the eight-family
+trap inventory is unchanged. `?`-propagation, implicit `T -> ?T`, and new
+runtime semantics were considered and explicitly rejected.
+
 ## Why line-independent lexing?
 
 It makes lexers, syntax highlighters, incremental editors, and range semantic-token requests unusually robust. This became a concrete performance/product benefit in Lace/LSP work.

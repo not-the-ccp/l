@@ -61,6 +61,7 @@ KEYWORDS = {
     "for",
     "in",
     "match",
+    "let",
     "return",
     "break",
     "continue",
@@ -857,6 +858,14 @@ class Parser:
                 arms.append((p, tuple(b)))
             en = self.take("}").span
             return self.node("match", e, tuple(arms), st=st, en=en)
+        if self.maybe("let"):
+            p = self.pattern()
+            self.take("=")
+            e = self.expr()
+            self.take("else")
+            b, _ = self.block()
+            en = self.take(";").span
+            return self.node("letelse", p, e, tuple(b), st=st, en=en)
         if self.maybe("return"):
             e = None if self.t(";") else self.expr()
             en = self.take(";").span
@@ -1700,6 +1709,40 @@ class Checker:
             if s.kind == "match":
                 if any(self.contains_break(b) for _, b in s.a[1]):
                     return True
+            if s.kind == "letelse":
+                if self.contains_break(s.a[2]):
+                    return True
+        return False
+
+    def stmt_diverges(self, s):
+        """Stmt diverges (Checker helper for the L Core frontend).
+
+        SUFFICIENT syntactic criterion only, used by let-else: True guarantees
+        the statement never falls through, but False proves nothing (exact
+        divergence is unprovable in general). In particular `while (true)`
+        without break and diverging `match` arms are NOT recognized, so some
+        genuinely diverging else-blocks are conservatively rejected.
+        """
+        if s.kind in ("return", "break", "continue", "trap"):
+            return True
+        if s.kind == "if":
+            return (
+                bool(s.a[2])
+                and self.block_diverges(s.a[1])
+                and self.block_diverges(s.a[2])
+            )
+        return False
+
+    def block_diverges(self, ss):
+        """Block diverges (Checker helper for the L Core frontend).
+
+        Leading-sequence rule: a block diverges when some statement in the
+        sequence diverges; statements after it are unreachable. An empty
+        block never diverges.
+        """
+        for s in ss:
+            if self.stmt_diverges(s):
+                return True
         return False
 
     def stmt_returns(self, s):
@@ -1826,6 +1869,36 @@ class Checker:
                 self.pop()
             if not wildcard:
                 self.check_exhaustive(st, seen, s)
+            return
+        if k == "letelse":
+            p, scrut, else_b = s.a
+            if not else_b:
+                self.err("let-else else block must not be empty", s)
+            st = self.expr(scrut)
+            if st.kind != "opt":
+                self.err(f"let-else requires ?T scrutinee, got {st}", scrut)
+            # v1 is ?T-only: some(x)/some(_)/none shapes. Payload-enum
+            # generalization is deferred (see docs/design/10-open-questions.md).
+            if p.kind not in ("p_some", "p_none"):
+                self.err("let-else pattern must be some(_) or none in v1", p)
+            binds, _ = self.pattern(p, st)
+            if not self.block_diverges(else_b):
+                self.err(
+                    "let-else else block must diverge: end it with return, "
+                    "break, continue, or trap (or a both-branch diverging if)",
+                    s,
+                )
+            # The desugar's fresh tmp is hygienic: it is never materialized
+            # as a user-visible name (tree keeps the value in a local,
+            # bytecode reuses the match-value slot without a scope entry), so
+            # the no-shadow ban below only ever sees the pattern bindings.
+            # The failure path runs before the success bindings exist, so it
+            # is checked without them in scope; they join the current scope
+            # only afterwards, staying visible to the statements that follow.
+            self.push()
+            self.block(else_b, False)
+            self.pop()
+            self.bindings(binds, p)
             return
         if k == "return":
             e = s.a[0]
@@ -3085,6 +3158,19 @@ class Interpreter:
                         self.popframe()
                     return
             raise TrapSig("non-exhaustive match reached at runtime")
+        if k == "letelse":
+            p, scrut, else_b = s.a
+            v = self.eval(scrut)
+            m = self.match(p, v, scrut.ty)
+            if m is not None:
+                # Success bindings join the current scope, staying visible to
+                # the statements that follow. The scrutinee is evaluated once
+                # into a local; no fresh tmp is materialized as a
+                # user-visible name, so the no-shadow ban never sees it.
+                self.frames[-1].update(m)
+                return
+            self.block(else_b)
+            raise TrapSig("match fell through")
         if k == "return":
             raise ReturnSig(UNITV if s.a[0] is None else self.eval(s.a[0]))
         if k == "break":
@@ -3726,6 +3812,16 @@ class Program:
                         )
                         for p, b in s.a[1]
                     ),
+                ),
+                s.span,
+            )
+        if k == "letelse":
+            return N(
+                k,
+                (
+                    self._pattern(m, s.a[0], gps),
+                    self._expr(m, s.a[1], gps),
+                    tuple(self._stmt(m, x, gps) for x in s.a[2]),
                 ),
                 s.span,
             )

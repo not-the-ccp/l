@@ -170,6 +170,41 @@ A tag-only pattern on a payload-carrying variant (payloads omitted) is equivalen
 
 `match` over optional/enum/bool must be exhaustive unless `_` covers the remainder. Integer/byte matches require `_` for exhaustiveness.
 
+`let PAT = SCRUT else DIVERGES;` desugars to a match over a fresh temporary:
+
+```text
+{ tmp = SCRUT; match (tmp) { PAT => bindings...; _ => DIVERGES } }
+```
+
+with the following rules:
+
+- Single evaluation: the scrutinee is evaluated exactly once into `tmp`
+  (duplicating a side-effecting scrutinee is forbidden). `tmp` is hygienic:
+  it is never materialized as a user-visible name (the tree interpreter keeps
+  the value in a local; bytecode reuses the match-value slot without creating
+  a scope entry), so the no-shadow ban applies only to the pattern bindings,
+  which join the enclosing scope on the success path and stay visible to the
+  statements that follow. The `else` block is checked without them in scope.
+- `?T`-only in v1: the pattern must be `some(x)`, `some(_)`, or `none`, and
+  the scrutinee must have type `?T`. There is no implicit `T -> ?T`, no
+  `?`-propagation, and no payload-enum generalization; those are explicitly
+  rejected and stay rejected.
+- The `else` block must satisfy a SUFFICIENT SYNTACTIC Diverges criterion:
+  a terminal `return`/`break`/`continue`/`trap`, an `if` with an `else` whose
+  both branches diverge, or a statement sequence containing ("leading") such
+  a diverging statement; an empty `else` block is rejected. Sufficiency is a
+  deliberate weakening: a True answer guarantees no fall-through, but False
+  proves nothing, because exact divergence is unprovable in general (a
+  `while (true)` without `break`, or a `match` whose every arm diverges, is
+  still rejected). The failure path needs no bindings, so no new runtime
+  semantics and no new trap kind are introduced: a statically unreachable
+  defensive fall-through reuses the `match-fallthrough` trap family.
+- Lowering reuses the existing match machinery on every backend (tree,
+  bytecode, native). The single new bytecode operation, `MERGE_BINDINGS`,
+  declares pending pattern bindings into the current scope instead of a fresh
+  arm scope; it exists because no prior operation does that, and it carries
+  no runtime semantics of its own (see `09-design-rationale.md`).
+
 Patterns are shallow; payload positions bind names or `_` rather than recursively destructuring nested constructors.
 
 ## Functions and capture

@@ -431,6 +431,24 @@ fn resolve_stmt(resolver: ref Resolver, stmt: ref slang_decls.Stmt) {
         return;
     }
 
+    if (stmt.kind is slang_decls.StmtKind.let_else) {
+        for (expr in stmt.expressions) { resolve_expr(resolver, expr); }
+        // The failure path runs before the success bindings exist, so the
+        // else block is resolved before they are bound (bootstrap order).
+        resolve_block(resolver, stmt.alternate, true);
+        match (stmt.pattern) {
+            none { }
+            some(pattern) {
+                // ?T-only mirror: only some-payloads bind. Anything else is
+                // rejected by the checker, so no names are introduced for it.
+                if (pattern.kind is slang_decls.PatternKind.some_value) {
+                    bind_pattern(resolver, pattern);
+                }
+            }
+        }
+        return;
+    }
+
     // break/continue/trap contain no value names.
 }
 

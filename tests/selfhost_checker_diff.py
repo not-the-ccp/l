@@ -355,6 +355,96 @@ fn main() -> i64 {
         "explicit type arguments on non-generic rejected",
         "fn plain(x: i64) -> i64 { return x; } fn main() -> i64 { return plain[i64](1); }",
     ),
+    (
+        "let-else some success",
+        "fn main() -> i64 { var o = some(7); let some(x) = o else { return -1; }; return x; }",
+    ),
+    (
+        "let-else none else-return",
+        "fn main() -> i64 { var o: ?i64 = none; let some(x) = o else { return -1; }; return x; }",
+    ),
+    (
+        "let-else none pattern",
+        "fn main() -> i64 { var o: ?i64 = none; let none = o else { return -1; }; return 42; }",
+    ),
+    (
+        "let-else some wildcard",
+        "fn main() -> i64 { var o = some(7); let some(_) = o else { return -1; }; return 3; }",
+    ),
+    (
+        "let-else else-break in loop",
+        "fn main() -> i64 { var xs: []?i64 = [some(1), none]; var t: i64 = 0;"
+        " for (item in xs) { let some(x) = item else { break; }; t += x; } return t; }",
+    ),
+    (
+        "let-else else-continue in loop",
+        "fn main() -> i64 { var xs: []?i64 = [some(1), none]; var t: i64 = 0;"
+        " for (item in xs) { let some(x) = item else { continue; }; t += x; } return t; }",
+    ),
+    (
+        "let-else both-branch if else",
+        "fn main() -> i64 { var o: ?i64 = none; var f = true;"
+        " let some(x) = o else { if (f) { return 1; } else { return 2; } }; return x; }",
+    ),
+    (
+        "let-else leading-sequence else",
+        "fn main() -> i64 { var o: ?i64 = none;"
+        " let some(x) = o else { var y: i64 = 1; return y; }; return x; }",
+    ),
+    (
+        "let-else trap else",
+        "fn main() -> i64 { var o = some(7); let some(x) = o else { trap; }; return x; }",
+    ),
+    (
+        "let-else linear chain",
+        "fn pick(p: ??i64) -> i64 { let some(o) = p else { return -1; };"
+        " let some(v) = o else { return -2; }; return v; }"
+        " fn main() -> i64 { return pick(some(some(5))); }",
+    ),
+    (
+        "let-else empty else rejected",
+        "fn main() -> i64 { var o = some(7); let some(x) = o else { }; return x; }",
+    ),
+    (
+        "let-else fallthrough else rejected",
+        "fn main() -> i64 { var o = some(7); let some(x) = o else { o = none; }; return x; }",
+    ),
+    (
+        "let-else bare binding rejected",
+        "fn main() -> i64 { var o = some(7); let x = o else { return -1; }; return x; }",
+    ),
+    (
+        "let-else wildcard rejected",
+        "fn main() -> i64 { var o = some(7); let _ = o else { return -1; }; return 0; }",
+    ),
+    (
+        "let-else non-optional scrutinee rejected",
+        "fn main() -> i64 { var o: i64 = 7; let some(x) = o else { return -1; }; return x; }",
+    ),
+    (
+        "let-else enum pattern rejected",
+        "enum E { a, b(i64), } fn main() -> i64 { var e: ?E = some(E.b(7));"
+        " let E.b(x) = e else { return -1; }; return x; }",
+    ),
+    (
+        "let-else shadowing rejected",
+        "fn main() -> i64 { var x: i64 = 1; var o = some(7);"
+        " let some(x) = o else { return -1; }; return x; }",
+    ),
+    (
+        "let-else success binding invisible in else rejected",
+        "fn main() -> i64 { var o = some(7);"
+        " let some(x) = o else { return x; }; return x; }",
+    ),
+    (
+        "let-else break outside loop rejected",
+        "fn main() -> i64 { var o: ?i64 = none; let some(x) = o else { break; }; return x; }",
+    ),
+    (
+        "let-else while-true else rejected",
+        "fn main() -> i64 { var o: ?i64 = none;"
+        " let some(x) = o else { while (true) { } }; return x; }",
+    ),
 ]
 
 

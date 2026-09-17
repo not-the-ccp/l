@@ -127,7 +127,7 @@ enum {
     OP_DECL, OP_LOAD, OP_LOCAL_PLACE, OP_FIELD_PLACE, OP_VALUE_FIELD_PLACE,
     OP_INDEX_PLACE, OP_DEREF_PLACE, OP_LOAD_PLACE, OP_STORE_PLACE,
     OP_DUP, OP_POP, OP_SCOPE_ENTER, OP_SCOPE_ENTER_BINDINGS, OP_SCOPE_EXIT,
-    OP_UNWIND, OP_NO_BINDINGS, OP_DROP_BINDINGS,
+    OP_UNWIND, OP_NO_BINDINGS, OP_DROP_BINDINGS, OP_MERGE_BINDINGS,
     OP_JUMP, OP_JUMP_IF_FALSE, OP_JUMP_IF_FALSE_KEEP, OP_JUMP_IF_TRUE_KEEP,
     OP_LEN, OP_LOCAL_INC_U64, OP_INDEX, OP_GET_FIELD, OP_DEREF,
     OP_UNARY, OP_BIN, OP_CAST, OP_NEW,
@@ -1618,6 +1618,12 @@ static int field_index(LObj *st, int field) {
         case OP_UNWIND: frame_unwind(&fr, in->a); break;
         case OP_NO_BINDINGS: pending_clear(vm); break;
         case OP_DROP_BINDINGS: pending_clear(vm); break;
+        case OP_MERGE_BINDINGS:
+            for (size_t i = 0; i < vm->pending_len; i++)
+                frame_decl(&fr, vm->pending[i].slot,
+                           value_copy(vm, vm->pending[i].value));
+            pending_clear(vm);
+            break;
         case OP_JUMP: fr.ip = in->a; break;
         case OP_JUMP_IF_FALSE: {
             LValue x = popv(vm);

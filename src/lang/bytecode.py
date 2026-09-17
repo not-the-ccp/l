@@ -296,6 +296,33 @@ class BCCompiler:
                 self.patch(j, end)
             self.emit("CLEAR_MATCH_VALUE")
             return
+        if k == "letelse":
+            # Desugar to existing match machinery: the scrutinee is evaluated
+            # once into the match-value slot (D-T4 forbids duplicating it),
+            # then TRY_PATTERN either merges the success bindings into the
+            # enclosing scope or jumps to the diverging else block. The slot
+            # is cleared eagerly so nested matches inside the else block see
+            # a clean slot. MERGE_BINDINGS is the one new opcode this needs
+            # (no existing op declares pending pattern bindings into the
+            # current scope instead of a fresh arm scope); TRAP_MATCH is
+            # reused for the defensive fall-through, so no new trap kind.
+            p, scrut, else_b = s.a
+            self.expr(scrut)
+            self.emit("SAVE_MATCH_VALUE")
+            self.emit("LOAD_MATCH_VALUE")
+            self.emit("TRY_PATTERN", p, scrut.ty)
+            self.emit("CLEAR_MATCH_VALUE")
+            jn = self.emit("JUMP_IF_NO_MATCH", None)
+            self.emit("MERGE_BINDINGS")
+            je = self.emit("JUMP", None)
+            self.patch(jn, self.mark())
+            self.enter_scope()
+            for x in else_b:
+                self.stmt(x)
+            self.exit_scope()
+            self.emit("TRAP_MATCH")
+            self.patch(je, self.mark())
+            return
         raise LangError("bytecode compiler missing stmt " + k, s.span)
 
     def condition(self, c):
@@ -689,6 +716,9 @@ class BCVM:
             elif op == "NO_BINDINGS":
                 self.pending_bind = {}
             elif op == "DROP_BINDINGS":
+                self.pending_bind = None
+            elif op == "MERGE_BINDINGS":
+                fr["scopes"][-1].update(self.pending_bind or {})
                 self.pending_bind = None
             elif op == "JUMP":
                 fr["ip"] = ins[1]

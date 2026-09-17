@@ -303,7 +303,7 @@ def audit_function(
         if isinstance(value, N):
             if value.kind in {
                 "assign", "return", "var", "for", "if", "while", "forin",
-                "match", "exprstmt", "break", "continue", "trap"
+                "match", "letelse", "exprstmt", "break", "continue", "trap"
             }:
                 walk_stmt(value)
             else:
