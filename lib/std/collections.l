@@ -3,6 +3,11 @@
 // This module deliberately uses only L Core mechanisms. No host modules are
 // required, and behavior such as hashing/comparison is supplied explicitly as
 // ordinary function values rather than through traits or generic constraints.
+//
+// Dedup-style needs stay closed to these modules: `algorithms.find_by`,
+// `contains_by`, `equal_by`, `sort_by` plus `map_new`/`set_new`-over-`map` with
+// caller-supplied fn values (see examples/portable/collections_demo.l and `set_new`
+// below); no extra helpers.
 
 pub struct Stack[T] {
     items: []T,
@@ -169,6 +174,11 @@ struct MapEntry[K, V] {
     next: ?ref MapEntry[K, V],
 }
 
+// Map-key ownership (convention only): `map_set` keeps the key handle as given and
+// never clones, so an array key must be owned-or-cloned at insert and never mutated
+// after; mutating a stored key is a logic bug (hash/lookup observe the new bytes).
+// var key: []u8 = bytes.clone(raw);
+// collections.map_set(m, key, value);  // do not touch `key` after this line.
 pub struct Map[K, V] {
     buckets: []?ref MapEntry[K, V],
     size: u64,

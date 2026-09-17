@@ -1,3 +1,8 @@
+// Text-ownership rule (convention only, unenforced): take `const []u8`, return owned
+// `[]u8`, clone (`bytes.clone`) whatever is kept past the call.
+// `str` in names/docs means UTF-8-by-convention `[]u8`; no `str` type exists, so text
+// keeps the `[]u8`/`const []u8` spelling (`json.put`, `collections.Map`, and the demo
+// in examples/portable/text_ownership_demo.l follow this rule).
 import arrays;
 
 pub fn clone(src: const []u8) -> []u8 {

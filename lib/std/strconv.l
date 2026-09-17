@@ -1,3 +1,5 @@
+// Ownership: `parse_*` take `const []u8`; `append_*` push into the caller-owned `out`
+// buffer and `format_*` return a fresh owned `[]u8`.
 const U64_MAX: u64 = 18446744073709551615;
 
 pub fn digit_value(value: u8) -> ?u8 {

@@ -1,3 +1,5 @@
+// Ownership: readers take `const []u8` and keep nothing; `append_codepoint` pushes
+// encoded bytes into the caller-owned `out` buffer.
 pub fn continuation(value: u8) -> bool {
     return (value & 0xc0) == 0x80;
 }

@@ -1,3 +1,5 @@
+// Ownership: `clone` takes `const []T` and returns a fresh owned `[]T`; the rest
+// mutate the caller's array in place (`remove` returns the removed element).
 pub fn clone[T](src: const []T) -> []T {
     var out: []T = [];
     for (item in src) {

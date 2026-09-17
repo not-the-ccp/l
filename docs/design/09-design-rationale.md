@@ -108,3 +108,13 @@ knows its burden in advance.
 ## Why no filesystem-defined module semantics?
 
 An embedded interpreter, browser runtime, archive-backed compiler, database-backed system, or build tool should be able to supply modules without pretending they are files. Filesystem mapping belongs in a hosted profile/toolchain.
+
+## Why text ownership is convention, not a type?
+
+There is no `str` type and no alias mechanism to add one with (declarations are
+import/const/struct/enum/fn only), so `str` stays a naming/docs convention for
+UTF-8-by-convention `[]u8`, and ownership (const-in, owned-out, clone-on-store) stays
+unenforced documentation in `lib/std/bytes.l`. A distinct text type would add checker,
+runtime, and tooling surface for guarantees no shipped code has needed. Revisit only on
+the `10-open-questions.md` Core-str trigger: a portable library showing text handling
+inexpressible over `const []u8` bytes.

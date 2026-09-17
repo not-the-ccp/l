@@ -25,6 +25,7 @@ export PYTHONPATH="$HERE/src${PYTHONPATH:+:$PYTHONPATH}"
 # native compiler without relying on host capabilities.
 "$HERE/scripts/lr" "$HERE/examples/portable/collections_demo.l" >/dev/null
 "$HERE/scripts/lr" "$HERE/examples/portable/bytes_demo.l" >/dev/null
+"$HERE/scripts/lr" "$HERE/examples/portable/text_ownership_demo.l" >/dev/null
 "$HERE/scripts/lr" "$HERE/examples/portable/const_readers_demo.l" >/dev/null
 
 # Lace kernel and editor semantics.

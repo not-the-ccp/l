@@ -110,6 +110,10 @@ Higher-level operations such as copying, sorting, searching, maps, sets, queues,
 
 A string is simply bytes. The language does not define Unicode characters, graphemes, case folding, normalization, or text encodings. Portable libraries may interpret a `[]u8` as UTF-8 when desired.
 
+Text is bytes with manners: the ownership rule (const-in, owned-out, clone-on-store)
+lives in `lib/std/bytes.l`, with the key-ownership form in `lib/std/json.l` and
+`lib/std/collections.l`, all exercised by `examples/portable/text_ownership_demo.l`.
+
 ## Structs
 
 Structs are nominal value types:

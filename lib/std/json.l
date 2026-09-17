@@ -2,11 +2,15 @@ import bytes;
 import strconv;
 import utf8;
 
+// Object keys are owned: `put` stores `bytes.clone(key)` (clone-on-store), and the
+// parser builds each key fresh, so a stored key never aliases caller bytes.
 pub struct Member {
     pub key: const []u8,
     pub value: Json,
 }
 
+// Payloads are owned bytes behind `const` handles: the parser builds `number` and
+// `string` fresh, and `stringify` reads them without keeping them.
 pub enum Json {
     null,
     boolean(bool),
